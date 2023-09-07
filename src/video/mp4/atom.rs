@@ -47,7 +47,7 @@ impl BoxHeader {
     reader.read_exact(&mut buffer)?;
 
     let size = u32::from_be_bytes((&buffer[..4]).try_into()?);
-    log!(info@"BOX {}", String::from_utf8_lossy(&buffer[4..]).to_string());
+    log!(info@"BOX {} {size}", String::from_utf8_lossy(&buffer[4..]).to_string());
     let box_type = match &buffer[4..] {
       b"ftyp" => BoxType::Ftyp,
       b"mvhd" => BoxType::Mvhd,
@@ -101,9 +101,13 @@ impl<'a, R: Read + Seek> Iterator for AtomBoxIter<'a, R> {
         let size = header.size - BOX_HEADER_SIZE;
         return match header.box_type {
           BoxType::Ftyp => FtypBox::new(self.reader, size).ok().map(AtomBox::Ftyp),
-          BoxType::Moov => MoovBox::new(self.reader, self.offset - header.size, size)
-            .ok()
-            .map(AtomBox::Moov),
+          BoxType::Moov => MoovBox::new(
+            self.reader,
+            self.offset - header.size + BOX_HEADER_SIZE,
+            size,
+          )
+          .ok()
+          .map(AtomBox::Moov),
           BoxType::Mvhd => MvhdBox::new(self.reader, size).ok().map(AtomBox::Mvhd),
           BoxType::Free => Some(AtomBox::Free),
         };
@@ -154,7 +158,7 @@ pub struct MoovBox {
 
 impl MoovBox {
   pub fn new<R: Read + Seek>(reader: &mut R, offset: u32, size: u32) -> BoxResult<Self> {
-    let mut atoms = AtomBoxIter::new(reader, size);
+    let mut atoms = AtomBoxIter::new(reader, offset + size);
     atoms.offset = offset;
     for atom in atoms {
       if let AtomBox::Mvhd(mvhd) = atom {
@@ -168,34 +172,50 @@ impl MoovBox {
 
 #[derive(Debug)]
 pub struct MvhdBox {
-  version: u8,
+  creation_time: u32,
+  modification_time: u32,
   timescale: u32,
   duration: u32,
-  rate: Fixed32,
-  volume: Fixed16,
+  // rate: Fixed32,
+  // volume: Fixed16,
+  matrix: [i32; 9],
+  next_track_id: u32,
 }
 
 impl MvhdBox {
   pub fn new<R: Read + Seek>(reader: &mut R, size: u32) -> BoxResult<Self> {
-    if size != 26 {
-      return Err(BoxError::Size(size));
-    }
-
-    let mut buffer = [0; 26];
+    let mut buffer = [0; 62];
     reader.read_exact(&mut buffer)?;
 
-    let version = buffer[0];
-    let timescale = u32::from_be_bytes((&buffer[12..16]).try_into()?);
-    let duration = u32::from_be_bytes((&buffer[16..20]).try_into()?);
-    let rate = Fixed32(bytes_to_i64(&buffer[20..24]));
-    let volume = Fixed16(bytes_to_i32(&buffer[24..26]));
+    println!("Ver: {buffer:?}");
+    let creation_time = u32::from_be_bytes((&buffer[..4]).try_into()?);
+    let modification_time = u32::from_be_bytes((&buffer[4..8]).try_into()?);
+    let timescale = u32::from_be_bytes((&buffer[8..12]).try_into()?);
+    let duration = u32::from_be_bytes((&buffer[12..16]).try_into()?);
+    // let rate = Fixed32(bytes_to_i64(&buffer[16..20]));
+    // let volume = Fixed16(bytes_to_i32(&buffer[20..22]));
+    let matrix: [i32; 9] = [
+      i32::from_be_bytes([buffer[22], buffer[23], buffer[24], buffer[25]]),
+      i32::from_be_bytes([buffer[26], buffer[27], buffer[28], buffer[29]]),
+      i32::from_be_bytes([buffer[30], buffer[31], buffer[32], buffer[33]]),
+      i32::from_be_bytes([buffer[34], buffer[35], buffer[36], buffer[37]]),
+      i32::from_be_bytes([buffer[38], buffer[39], buffer[40], buffer[41]]),
+      i32::from_be_bytes([buffer[42], buffer[43], buffer[44], buffer[45]]),
+      i32::from_be_bytes([buffer[46], buffer[47], buffer[48], buffer[49]]),
+      i32::from_be_bytes([buffer[50], buffer[51], buffer[52], buffer[53]]),
+      i32::from_be_bytes([buffer[54], buffer[55], buffer[56], buffer[57]]),
+    ];
+    let next_track_id = u32::from_be_bytes((&buffer[58..62]).try_into()?);
 
     Ok(Self {
-      version,
+      creation_time,
+      modification_time,
       timescale,
       duration,
-      rate,
-      volume,
+      // rate,
+      // volume,
+      matrix,
+      next_track_id,
     })
   }
 }
