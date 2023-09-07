@@ -4,7 +4,6 @@ mod video;
 
 use crate::cli::CLIArgs;
 use ascii::LogDisplay;
-use std::sync::atomic::AtomicPtr;
 use std::time::Instant;
 
 macro_rules! unwrap {
@@ -19,8 +18,6 @@ macro_rules! unwrap {
     }
   };
 }
-
-pub static MEDIA_FOLDER: AtomicPtr<String> = AtomicPtr::new(std::ptr::null_mut());
 
 fn main() {
   let args = unwrap!(Ok CLIArgs::read(), Err "Error");
