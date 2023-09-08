@@ -1,6 +1,10 @@
+mod mdat;
+mod meta;
 mod moov;
 mod trak;
 
+pub use mdat::*;
+pub use meta::*;
 pub use moov::*;
 pub use trak::*;
 
@@ -69,6 +73,10 @@ pub enum AtomBox {
   Ilst(IlstBox),
   Tool(ToolBox),
   Tkhd(TkhdBox),
+  Data(DataBox),
+  Mdat(MdatBox),
+  Edts(EdtsBox),
+  Elst(ElstBox),
   Free,
 }
 
@@ -101,6 +109,9 @@ impl<'a, R: Read + Seek> Iterator for AtomBoxIter<'a, R> {
         match btype {
           b"ftyp" => FtypBox::new(self.reader, size).map(AtomBox::Ftyp),
           b"moov" => MoovBox::new(self.reader, offset, size).map(AtomBox::Moov),
+          b"mdat" => MdatBox::new(self.reader, offset, size).map(AtomBox::Mdat),
+          b"edts" => EdtsBox::new(self.reader, offset, size).map(AtomBox::Edts),
+          b"elst" => ElstBox::new(self.reader, size).map(AtomBox::Elst),
           b"udta" => UdtaBox::new(self.reader, offset, size).map(AtomBox::Udta),
           b"meta" => MetaBox::new(self.reader, offset, size).map(AtomBox::Meta),
           b"mvhd" => MvhdBox::new(self.reader, size).map(AtomBox::Mvhd),
@@ -110,7 +121,8 @@ impl<'a, R: Read + Seek> Iterator for AtomBoxIter<'a, R> {
           b"hdlr" => HdlrBox::new(self.reader, size).map(AtomBox::Hdlr),
           b"ilst" => IlstBox::new(self.reader, offset, size).map(AtomBox::Ilst),
           b"tkhd" => TkhdBox::new(self.reader, size).map(AtomBox::Tkhd),
-          b"\xA9too" => ToolBox::new(self.reader, size).map(AtomBox::Tool),
+          b"data" => DataBox::new(self.reader, size).map(AtomBox::Data),
+          b"\xA9too" => ToolBox::new(self.reader, offset, size).map(AtomBox::Tool),
           b"free" => Ok(AtomBox::Free),
           e => Err(BoxError::UnknownType(
             String::from_utf8_lossy(e).to_string(),
