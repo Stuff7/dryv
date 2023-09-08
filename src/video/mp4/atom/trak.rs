@@ -4,10 +4,23 @@ use crate::math::fixed_point_to_f32;
 use crate::{ascii::LogDisplay, math::Matrix3x3};
 use std::io::{Read, Seek};
 
-/// Track Box
+/// The `TrakBox` struct represents a Track Box (trak) in an MP4 file.
+///
+/// A Track Box contains information about a specific track within an MP4 file, such as video,
+/// audio, or other types of media tracks. It typically includes a `TkhdBox` (Track Header Box)
+/// that provides detailed track-specific metadata.
+///
+/// The `TrakBox` struct is a fundamental building block for organizing and managing tracks within an MP4 file.
+/// It allows for the inclusion of track-specific metadata through the `TkhdBox`, which is often necessary for
+/// proper playback and synchronization of media content.
+/// # Structure
+///
+/// - `tkhd`: An optional `TkhdBox` struct that contains track-specific metadata. It may be absent
+///   if the track information is not available or not needed.
 #[derive(Debug)]
 pub struct TrakBox {
   tkhd: Option<TkhdBox>,
+  mdia: Option<MdiaBox>,
 }
 
 impl TrakBox {
@@ -15,21 +28,58 @@ impl TrakBox {
     let mut atoms = AtomBoxIter::new(reader, offset + size);
     atoms.offset = offset;
     let mut tkhd = None;
+    let mut mdia = None;
     for atom in atoms {
       match atom {
         Ok(atom) => match atom {
           AtomBox::Tkhd(atom) => tkhd = Some(atom),
+          AtomBox::Mdia(atom) => mdia = Some(atom),
           _ => log!(warn@"TRAK SUB-BOX: {atom:#?}"),
         },
         Err(e) => log!(err@"{e}"),
       }
     }
 
-    Ok(Self { tkhd })
+    Ok(Self { tkhd, mdia })
   }
 }
 
-/// Track Header Box
+/// The `TkhdBox` struct represents the Track Header Box (tkhd) in an MP4 file.
+///
+/// The Track Header Box contains metadata specific to an individual track within the movie,
+/// including information such as its duration, dimensions, and track ID.
+///
+/// The `TkhdBox` struct is an essential component for managing individual tracks within an MP4 file.
+/// It provides key details about each track's characteristics and presentation.
+///
+/// # Structure
+///
+/// - `version`: An 8-bit field that specifies the version of this box's format.
+///
+/// - `flags`: A 24-bit field that contains flags indicating how the box should be treated.
+///
+/// - `creation_time`: A 32-bit unsigned integer representing the creation time of the track.
+///
+/// - `modification_time`: A 32-bit unsigned integer representing the time when the track was last modified.
+///
+/// - `track_id`: A 32-bit unsigned integer representing the unique identifier for the track.
+///
+/// - `duration`: A 32-bit unsigned integer representing the duration of the track in time scale units.
+///
+/// - `layer`: A 16-bit integer that specifies the front-to-back ordering of video tracks. A lower value
+///   indicates a higher layer.
+///
+/// - `alternate_group`: A 16-bit integer that identifies a group of tracks that can be used as alternate
+///   representations of the same content. Tracks in the same alternate group are mutually exclusive.
+///
+/// - `volume`: A 32-bit floating-point number representing the audio volume. 1.0 is full volume.
+///
+/// - `matrix`: A `Matrix3x3` struct representing a 3x3 matrix that describes how to transform
+///   the track's visual presentation.
+///
+/// - `width`: A 32-bit floating-point number representing the width of the track's visual presentation.
+///
+/// - `height`: A 32-bit floating-point number representing the height of the track's visual presentation.
 #[derive(Debug)]
 pub struct TkhdBox {
   pub version: u8,
@@ -51,8 +101,7 @@ impl TkhdBox {
     let mut buffer = [0; 84];
     reader.read_exact(&mut buffer)?;
 
-    let version = buffer[0];
-    let flags = [buffer[1], buffer[2], buffer[3]];
+    let (version, flags) = decode_version_flags(&buffer);
     let creation_time = u32::from_be_bytes((&buffer[4..8]).try_into()?);
     let modification_time = u32::from_be_bytes((&buffer[8..12]).try_into()?);
     let track_id = u32::from_be_bytes((&buffer[12..16]).try_into()?);
@@ -80,6 +129,103 @@ impl TkhdBox {
       matrix,
       width,
       height,
+    })
+  }
+}
+
+#[derive(Debug)]
+pub struct MdiaBox {
+  mdhd: Option<MdhdBox>,
+  hdlr: Option<HdlrBox>,
+}
+
+impl MdiaBox {
+  pub fn new<R: Read + Seek>(reader: &mut R, offset: u32, size: u32) -> BoxResult<Self> {
+    let mut atoms = AtomBoxIter::new(reader, offset + size);
+    atoms.offset = offset;
+    let mut mdhd = None;
+    let mut hdlr = None;
+    for atom in atoms {
+      match atom {
+        Ok(atom) => match atom {
+          AtomBox::Mdhd(atom) => mdhd = Some(atom),
+          AtomBox::Hdlr(atom) => hdlr = Some(atom),
+          _ => log!(warn@"MDIA SUB-BOX: {atom:#?}"),
+        },
+        Err(e) => log!(err@"{e}"),
+      }
+    }
+
+    Ok(Self { mdhd, hdlr })
+  }
+}
+
+#[derive(Debug)]
+pub struct MdhdBox {
+  pub version: u8,
+  pub flags: [u8; 3],
+  pub creation_time: u32,
+  pub modification_time: u32,
+  pub timescale: u32,
+  pub duration: u32,
+  pub language: u16,
+}
+
+impl MdhdBox {
+  pub fn new<R: Read + Seek>(reader: &mut R, size: u32) -> BoxResult<Self> {
+    let mut buffer = [0; 22];
+    reader.read_exact(&mut buffer)?;
+
+    let (version, flags) = decode_version_flags(&buffer);
+    let creation_time = u32::from_be_bytes((&buffer[4..8]).try_into()?);
+    let modification_time = u32::from_be_bytes((&buffer[8..12]).try_into()?);
+    let timescale = u32::from_be_bytes((&buffer[12..16]).try_into()?);
+    let duration = u32::from_be_bytes((&buffer[16..20]).try_into()?);
+    let language = u16::from_be_bytes((&buffer[20..22]).try_into()?);
+
+    Ok(Self {
+      version,
+      flags,
+      creation_time,
+      timescale,
+      modification_time,
+      duration,
+      language,
+    })
+  }
+}
+
+#[derive(Debug)]
+pub struct HdlrBox {
+  pub version: u8,
+  pub flags: [u8; 3],
+  pub component_type: String,
+  pub component_name: String,
+}
+
+impl HdlrBox {
+  pub fn new<R: Read + Seek>(reader: &mut R, size: u32) -> BoxResult<Self> {
+    let mut buffer = [0; 24];
+    reader.read_exact(&mut buffer)?;
+
+    let (version, flags) = decode_version_flags(&buffer);
+    // __reserved__ 32 bit     (4 bytes)
+    let component_type = String::from_utf8_lossy(&buffer[8..12]).to_string();
+    // __reserved__ 32 bit [3] (12 bytes)
+    let component_name = match size - 25 {
+      s if s < 1 => String::new(),
+      s => {
+        let mut buffer = vec![0; s as usize];
+        reader.read_exact(&mut buffer)?;
+        String::from_utf8(buffer)?
+      }
+    };
+
+    Ok(Self {
+      version,
+      flags,
+      component_type,
+      component_name,
     })
   }
 }

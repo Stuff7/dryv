@@ -10,6 +10,7 @@ use crate::math::MathError;
 use std::{
   array::TryFromSliceError,
   io::{Read, Seek, SeekFrom},
+  string::FromUtf8Error,
 };
 use thiserror::Error;
 
@@ -21,10 +22,12 @@ pub enum BoxError {
   IO(#[from] std::io::Error),
   #[error(transparent)]
   SliceConversion(#[from] TryFromSliceError),
+  #[error(transparent)]
+  StringConversion(#[from] FromUtf8Error),
   #[error("Could not convert Vec to array\n{0:?}")]
   VecConversion(Vec<String>),
-  #[error("Invalid box type {0:?}")]
-  InvalidType(String),
+  #[error("Unknown box type {0:?}")]
+  UnknownType(String),
   #[error("Invalid {0:?} box size {1}")]
   Size(&'static str, u32),
   #[error("Math Error\n{0}")]
@@ -48,6 +51,10 @@ pub fn decode_header<'a, R: Read + Seek>(
   Ok((size, &buffer[4..]))
 }
 
+pub fn decode_version_flags(bytes: &[u8]) -> (u8, [u8; 3]) {
+  (bytes[0], [bytes[1], bytes[2], bytes[3]])
+}
+
 #[derive(Debug)]
 pub enum AtomBox {
   Ftyp(FtypBox),
@@ -56,6 +63,11 @@ pub enum AtomBox {
   Udta(UdtaBox),
   Meta(MetaBox),
   Trak(TrakBox),
+  Mdia(MdiaBox),
+  Mdhd(MdhdBox),
+  Hdlr(HdlrBox),
+  Ilst(IlstBox),
+  Tool(ToolBox),
   Tkhd(TkhdBox),
   Free,
 }
@@ -82,7 +94,7 @@ impl<'a, R: Read + Seek> Iterator for AtomBoxIter<'a, R> {
   type Item = BoxResult<AtomBox>;
 
   fn next(&mut self) -> Option<Self::Item> {
-    (self.offset < self.end).then_some(
+    (self.offset + BOX_HEADER_SIZE < self.end).then_some(
       decode_header(&mut self.buffer, self.reader, &mut self.offset).and_then(|(bsize, btype)| {
         let size = bsize - BOX_HEADER_SIZE;
         let offset = self.offset - bsize + BOX_HEADER_SIZE;
@@ -90,12 +102,17 @@ impl<'a, R: Read + Seek> Iterator for AtomBoxIter<'a, R> {
           b"ftyp" => FtypBox::new(self.reader, size).map(AtomBox::Ftyp),
           b"moov" => MoovBox::new(self.reader, offset, size).map(AtomBox::Moov),
           b"udta" => UdtaBox::new(self.reader, offset, size).map(AtomBox::Udta),
-          b"meta" => MetaBox::new(self.reader, size).map(AtomBox::Meta),
+          b"meta" => MetaBox::new(self.reader, offset, size).map(AtomBox::Meta),
           b"mvhd" => MvhdBox::new(self.reader, size).map(AtomBox::Mvhd),
           b"trak" => TrakBox::new(self.reader, offset, size).map(AtomBox::Trak),
+          b"mdia" => MdiaBox::new(self.reader, offset, size).map(AtomBox::Mdia),
+          b"mdhd" => MdhdBox::new(self.reader, size).map(AtomBox::Mdhd),
+          b"hdlr" => HdlrBox::new(self.reader, size).map(AtomBox::Hdlr),
+          b"ilst" => IlstBox::new(self.reader, offset, size).map(AtomBox::Ilst),
           b"tkhd" => TkhdBox::new(self.reader, size).map(AtomBox::Tkhd),
+          b"\xA9too" => ToolBox::new(self.reader, size).map(AtomBox::Tool),
           b"free" => Ok(AtomBox::Free),
-          e => Err(BoxError::InvalidType(
+          e => Err(BoxError::UnknownType(
             String::from_utf8_lossy(e).to_string(),
           )),
         }
@@ -104,19 +121,25 @@ impl<'a, R: Read + Seek> Iterator for AtomBoxIter<'a, R> {
   }
 }
 
-/// # File Type Box
-/// The File Type Box, often referred to as 'ftyp', is an essential component found in the Audio and Video initialization segments of MP4 files. It serves as the highest-level box within these initialization segments. The information contained within the 'ftyp' box provides vital initial details necessary for decoding the incoming segments, particularly for video elements.
+/// The `FtypBox` struct represents a File Type Box (ftyp) in an MP4 file.
 ///
-/// ## Usage
-/// - There can only be one 'ftyp' box per file.
-/// - The 'ftyp' box is mandatory within the initialization segments of an MP4 file, ensuring proper decoding of the media.
+/// A File Type Box specifies the major brand and compatible brands of an MP4 file, providing information
+/// about the file's format and compatibility. It helps media players identify whether they can handle
+/// the given MP4 file.
 ///
-/// ## Structure
-/// The 'FtypBox' struct represents the 'ftyp' box and contains the following fields:
+/// The `FtypBox` struct is essential for identifying the format and compatibility of an MP4 file,
+/// allowing media players to determine if they can correctly interpret and play the file.
 ///
-/// - `compatible_brands`: An array of four strings, specifying compatible brands or file types.
-/// - `major_brand`: A string representing the major brand of the file type.
-/// - `minor_version`: A 32-bit unsigned integer indicating the minor version of the file type.
+/// # Structure
+///
+/// - `compatible_brands`: An array of four strings representing the compatible brands. These brands
+///   indicate which brands can be used in the file for various features.
+///
+/// - `major_brand`: A string representing the major brand, which defines the core specification that
+///   the file adheres to. This brand is crucial for identifying the file's format.
+///
+/// - `minor_version`: A 32-bit unsigned integer representing the minor version of the major brand.
+///   It provides additional information about the version of the format.
 #[derive(Debug)]
 pub struct FtypBox {
   compatible_brands: [String; 4],

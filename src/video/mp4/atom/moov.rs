@@ -4,7 +4,21 @@ use crate::math::fixed_point_to_f32;
 use crate::{ascii::LogDisplay, math::Matrix3x3};
 use std::io::{Read, Seek};
 
-/// Movie Box
+/// The `MoovBox` struct represents a Movie Box (moov) in an MP4 file.
+///
+/// A Movie Box is a significant structural element in an MP4 file, containing essential metadata
+/// and information about the movie, including details about individual tracks and user-defined metadata.
+///
+/// # Structure
+///
+/// - `mvhd`: An optional `MvhdBox` struct that provides metadata about the entire movie, including its duration
+///   and creation time. This is a crucial component for describing the movie as a whole.
+///
+/// - `udta`: An optional `UdtaBox` struct that can store user-defined metadata associated with the movie.
+///   This allows for custom annotations or additional information to be included in the MP4 file.
+///
+/// - `traks`: A vector of `TrakBox` instances, each representing a track within the movie. These tracks can
+///   contain video, audio, or other types of media, each with its own specific characteristics.
 #[derive(Debug)]
 pub struct MoovBox {
   mvhd: Option<MvhdBox>,
@@ -35,22 +49,34 @@ impl MoovBox {
   }
 }
 
-/// # Movie Header Box
+/// The `MvhdBox` struct represents the Movie Header Box (mvhd) in an MP4 file.
 ///
-/// The Movie Header Box, represented by the `MvhdBox` struct, is a fundamental component in the structure of MPEG-4 (MP4) files. It contains essential metadata about the video, such as timing, duration, and playback characteristics.
+/// The Movie Header Box provides essential metadata about the entire movie, such as its
+/// duration, time scale, creation, and modification times, among other properties.
 ///
-/// ## Fields
+/// # Structure
 ///
-/// - `version`: An 8-bit unsigned integer representing the version of the movie header box.
-/// - `flags`: A 24-bit array of unsigned integers providing additional control and information flags.
-/// - `creation_time`: A 32-bit unsigned integer indicating the creation time of the media presentation.
-/// - `modification_time`: A 32-bit unsigned integer indicating the most recent modification time.
-/// - `timescale`: A 32-bit unsigned integer specifying the time scale for the media's time units.
-/// - `duration`: A 32-bit unsigned integer representing the duration of the media in time units.
-/// - `rate`: A 32-bit floating-point number representing the playback rate.
-/// - `volume`: A 32-bit floating-point number indicating the audio volume.
-/// - `matrix`: A `Matrix3x3` structure representing a 3x3 matrix used for transformation.
-/// - `next_track_id`: A 32-bit unsigned integer specifying the next available track ID.
+/// - `version`: An 8-bit field that specifies the version of this box's format.
+///
+/// - `flags`: A 24-bit field that contains flags indicating how the box should be treated.
+///
+/// - `creation_time`: A 32-bit unsigned integer representing the creation time of the movie.
+///
+/// - `modification_time`: A 32-bit unsigned integer representing the time when the movie was last modified.
+///
+/// - `timescale`: A 32-bit unsigned integer representing the time scale for the entire movie.
+///   The time scale is used to interpret the `duration` field, which is also a 32-bit unsigned integer.
+///
+/// - `duration`: A 32-bit unsigned integer representing the duration of the movie in the time scale units.
+///
+/// - `rate`: A 32-bit floating-point number representing the preferred playback rate for the movie.
+///
+/// - `volume`: A 16-bit fixed-point number representing the audio volume. 1.0 (0x0100) is full volume.
+///
+/// - `matrix`: A `Matrix3x3` struct representing a 3x3 matrix that describes how to transform
+///   the movie's visual presentation.
+///
+/// - `next_track_id`: A 32-bit unsigned integer specifying the next available track ID for new tracks.
 #[derive(Debug)]
 pub struct MvhdBox {
   version: u8,
@@ -73,8 +99,7 @@ impl MvhdBox {
     let mut buffer = [0; 100];
     reader.read_exact(&mut buffer)?;
 
-    let version = buffer[0];
-    let flags = [buffer[1], buffer[2], buffer[3]];
+    let (version, flags) = decode_version_flags(&buffer);
     let creation_time = u32::from_be_bytes((&buffer[4..8]).try_into()?);
     let modification_time = u32::from_be_bytes((&buffer[8..12]).try_into()?);
     let timescale = u32::from_be_bytes((&buffer[12..16]).try_into()?);
@@ -102,7 +127,22 @@ impl MvhdBox {
   }
 }
 
-/// User Data Box
+/// The `UdtaBox` struct represents a User Data Box (udta) in an MP4 file.
+///
+/// A User Data Box typically contains user-defined metadata or other custom data associated with
+/// the MP4 file. It can include a list of `MetaBox` instances, each of which may store various types
+/// of metadata.
+///
+/// The `UdtaBox` struct provides a container for user-defined metadata, which can be valuable for
+/// storing additional information or annotations related to an MP4 file.
+///
+/// # Structure
+///
+/// - `version`: An 8-bit field that specifies the version of this box's format.
+///
+/// - `flags`: A 24-bit field that contains flags indicating how the box should be treated.
+///
+/// - `metas`: A vector of `MetaBox` instances, each containing specific metadata associated with the MP4 file.
 #[derive(Debug)]
 pub struct UdtaBox {
   version: u8,
@@ -115,8 +155,7 @@ impl UdtaBox {
     let mut buffer = [0; 4];
     reader.read_exact(&mut buffer)?;
 
-    let version = buffer[0];
-    let flags = [buffer[1], buffer[2], buffer[3]];
+    let (version, flags) = decode_version_flags(&buffer);
     let mut metas = Vec::new();
 
     let mut atoms = AtomBoxIter::new(reader, offset + size);
@@ -142,15 +181,67 @@ impl UdtaBox {
 /// Metadata Box
 #[derive(Debug)]
 pub struct MetaBox {
-  data: String,
+  ilst: Option<IlstBox>,
+  hdlr: Option<HdlrBox>,
 }
 
 impl MetaBox {
+  pub fn new<R: Read + Seek>(reader: &mut R, offset: u32, size: u32) -> BoxResult<Self> {
+    let mut atoms = AtomBoxIter::new(reader, offset + 4 + size);
+    atoms.offset = offset + 4;
+    let mut ilst = None;
+    let mut hdlr = None;
+    for atom in atoms {
+      match atom {
+        Ok(atom) => match atom {
+          AtomBox::Ilst(atom) => ilst = Some(atom),
+          AtomBox::Hdlr(atom) => hdlr = Some(atom),
+          _ => log!(warn@"META SUB-BOX: {atom:#?}"),
+        },
+        Err(e) => log!(err@"{e}"),
+      }
+    }
+
+    Ok(Self { ilst, hdlr })
+  }
+}
+
+#[derive(Debug)]
+pub struct IlstBox {
+  tool: Option<ToolBox>,
+}
+
+impl IlstBox {
+  pub fn new<R: Read + Seek>(reader: &mut R, offset: u32, size: u32) -> BoxResult<Self> {
+    let mut atoms = AtomBoxIter::new(reader, offset + size);
+    atoms.offset = offset;
+    let mut tool = None;
+    for atom in atoms {
+      match atom {
+        Ok(atom) => match atom {
+          AtomBox::Tool(atom) => tool = Some(atom),
+          _ => log!(warn@"ILST SUB-BOX: {atom:#?}"),
+        },
+        Err(e) => log!(err@"{e}"),
+      }
+    }
+
+    Ok(Self { tool })
+  }
+}
+
+#[derive(Debug)]
+pub struct ToolBox {
+  tool: String,
+}
+
+impl ToolBox {
   pub fn new<R: Read + Seek>(reader: &mut R, size: u32) -> BoxResult<Self> {
     let mut buffer = vec![0; size as usize];
     reader.read_exact(&mut buffer)?;
-    let data = String::from_utf8_lossy(&buffer[..]).to_string();
+    let tool = String::from_utf8(buffer)?;
+    println!("TOOL {tool}");
 
-    Ok(Self { data })
+    Ok(Self { tool })
   }
 }
