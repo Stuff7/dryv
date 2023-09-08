@@ -1,5 +1,6 @@
 mod ascii;
 mod cli;
+mod math;
 mod video;
 
 use crate::cli::CLIArgs;

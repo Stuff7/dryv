@@ -1,3 +1,5 @@
+use crate::{ascii::LogDisplay, log};
+
 use super::atom::*;
 use thiserror::Error;
 
@@ -29,7 +31,10 @@ impl MP4Decoder {
     println!("FILE LEN: {}", self.size);
     let atoms = AtomBoxIter::new(&mut self.file, self.size as u32);
     for atom in atoms {
-      println!("Atom Box: {atom:#?}");
+      match atom {
+        Ok(atom) => log!("Atom Box: {atom:#?}"),
+        Err(e) => log!(err@"{e}"),
+      }
     }
     Ok(())
   }
