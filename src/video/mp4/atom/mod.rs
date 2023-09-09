@@ -88,7 +88,7 @@ pub enum AtomBox {
   Dinf(DinfBox),
   Dref(DrefBox),
   Stbl(StblBox),
-  DrefEntry(DrefEntry),
+  Stsd(StsdBox),
   Free,
 }
 
@@ -136,22 +136,64 @@ impl<'a, R: Read + Seek> Iterator for AtomBoxIter<'a, R> {
           b"data" => DataBox::new(self.reader, size).map(AtomBox::Data),
           b"minf" => MinfBox::new(self.reader, offset, size).map(AtomBox::Minf),
           b"stbl" => StblBox::new(self.reader, offset, size).map(AtomBox::Stbl),
+          b"stsd" => StsdBox::new(self.reader, offset, size).map(AtomBox::Stsd),
           b"vmhd" => VmhdBox::new(self.reader, size).map(AtomBox::Vmhd),
           b"smhd" => SmhdBox::new(self.reader, size).map(AtomBox::Smhd),
           b"dinf" => DinfBox::new(self.reader, offset, size).map(AtomBox::Dinf),
           b"dref" => DrefBox::new(self.reader, offset, size).map(AtomBox::Dref),
-          b"alis" | b"rsrc" | b"url " => DrefEntry::new(
-            self.reader,
-            String::from_utf8_lossy(btype).to_string(),
-            size,
-          )
-          .map(AtomBox::DrefEntry),
           b"\xA9too" => ToolBox::new(self.reader, offset, size).map(AtomBox::Tool),
           b"free" => Ok(AtomBox::Free),
           e => Err(BoxError::UnknownType(
             String::from_utf8_lossy(e).to_string(),
           )),
         }
+      })
+    })
+  }
+}
+
+#[derive(Debug)]
+pub struct BoxHeader {
+  size: u32,
+  name: String,
+  data: Vec<u8>,
+}
+
+pub struct BoxHeaderIter<'a, R: Read + Seek> {
+  buffer: [u8; BOX_HEADER_SIZE as usize],
+  reader: &'a mut R,
+  offset: u32,
+  end: u32,
+}
+
+impl<'a, R: Read + Seek> BoxHeaderIter<'a, R> {
+  pub fn new(reader: &'a mut R, offset: u32, end: u32) -> Self {
+    Self {
+      buffer: [0; BOX_HEADER_SIZE as usize],
+      reader,
+      offset,
+      end,
+    }
+  }
+}
+
+impl<'a, R: Read + Seek> Iterator for BoxHeaderIter<'a, R> {
+  type Item = BoxResult<BoxHeader>;
+
+  fn next(&mut self) -> Option<Self::Item> {
+    (self.offset + BOX_HEADER_SIZE < self.end).then(|| {
+      decode_header(&mut self.buffer, self.reader, &mut self.offset).and_then(|(bsize, btype)| {
+        let size = bsize - BOX_HEADER_SIZE;
+        let mut data = vec![0; size as usize];
+        self
+          .reader
+          .read_exact(&mut data)
+          .map(|_| BoxHeader {
+            size,
+            name: String::from_utf8_lossy(btype).to_string(),
+            data,
+          })
+          .map_err(BoxError::from)
       })
     })
   }

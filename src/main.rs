@@ -31,7 +31,9 @@ fn main() {
   let start_time = Instant::now();
   let atoms = mp4_parser.decode();
   let end_time = Instant::now();
-  log!("ATOMS => {atoms:#?}");
+  if args.debug {
+    log!("ATOMS => {atoms:#?}");
+  }
 
   log!(ok@"Done in {:?}", end_time - start_time);
 }

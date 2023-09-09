@@ -1,6 +1,6 @@
 use super::*;
-use crate::ascii::LogDisplay;
 use crate::log;
+use crate::{ascii::LogDisplay, math::unpack_language_code};
 use std::io::{Read, Seek};
 
 #[derive(Debug)]
@@ -41,12 +41,13 @@ pub struct MdhdBox {
   pub modification_time: u32,
   pub timescale: u32,
   pub duration: u32,
-  pub language: u16,
+  pub language: String,
+  pub quality: u16,
 }
 
 impl MdhdBox {
   pub fn new<R: Read + Seek>(reader: &mut R, size: u32) -> BoxResult<Self> {
-    let mut buffer = [0; 22];
+    let mut buffer = [0; 24];
     reader.read_exact(&mut buffer)?;
 
     let (version, flags) = decode_version_flags(&buffer);
@@ -54,7 +55,8 @@ impl MdhdBox {
     let modification_time = u32::from_be_bytes((&buffer[8..12]).try_into()?);
     let timescale = u32::from_be_bytes((&buffer[12..16]).try_into()?);
     let duration = u32::from_be_bytes((&buffer[16..20]).try_into()?);
-    let language = u16::from_be_bytes((&buffer[20..22]).try_into()?);
+    let language = unpack_language_code(u16::from_be_bytes((&buffer[20..22]).try_into()?));
+    let quality = u16::from_be_bytes((&buffer[22..24]).try_into()?);
 
     Ok(Self {
       version,
@@ -64,6 +66,7 @@ impl MdhdBox {
       modification_time,
       duration,
       language,
+      quality,
     })
   }
 }

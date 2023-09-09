@@ -5,6 +5,7 @@ use crate::video::SeekPosition;
 
 #[derive(Debug)]
 pub struct CLIArgs {
+  pub debug: bool,
   pub film: bool,
   pub filepath: String,
   pub height: i32,
@@ -18,6 +19,7 @@ impl CLIArgs {
   pub fn read() -> CLIResult<Self> {
     let args: Vec<String> = env::args().collect();
     Ok(Self {
+      debug: Self::find_flag(&args, "-d"),
       film: Self::find_flag(&args, "-f"),
       filepath: args.get(1).ok_or(CLIError::FilepathMissing)?.clone(),
       height: Self::find_arg(&args, "-h"),

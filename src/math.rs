@@ -99,3 +99,11 @@ impl Deref for Matrix3x3 {
 pub fn fixed_point_to_f32(x: f32, n: u8) -> f32 {
   x / (1 << n) as f32
 }
+
+pub fn unpack_language_code(code: u16) -> String {
+  let first_char = ((code >> 10) & 0x1F) as u8 + 0x60;
+  let second_char = ((code >> 5) & 0x1F) as u8 + 0x60;
+  let third_char = (code & 0x1F) as u8 + 0x60;
+
+  String::from_utf8_lossy(&[first_char, second_char, third_char]).to_string()
+}

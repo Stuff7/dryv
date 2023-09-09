@@ -99,25 +99,25 @@ impl SmhdBox {
 
 #[derive(Debug)]
 pub struct DinfBox {
-  pub data_ref_list: Option<DrefBox>,
+  pub dref: Option<DrefBox>,
 }
 
 impl DinfBox {
   pub fn new<R: Read + Seek>(reader: &mut R, offset: u32, size: u32) -> BoxResult<Self> {
     let mut atoms = AtomBoxIter::new(reader, offset + size);
     atoms.offset = offset;
-    let mut data_ref_list = None;
+    let mut dref = None;
     for atom in atoms {
       match atom {
         Ok(atom) => match atom {
-          AtomBox::Dref(atom) => data_ref_list = Some(atom),
+          AtomBox::Dref(atom) => dref = Some(atom),
           _ => log!(warn@"#[DINF] Misplaced atom {atom:#?}"),
         },
         Err(e) => log!(err@"#[DINF] {e}"),
       }
     }
 
-    Ok(Self { data_ref_list })
+    Ok(Self { dref })
   }
 }
 
@@ -137,18 +137,15 @@ impl DrefBox {
     let (version, flags) = decode_version_flags(&buffer);
     let number_of_entries = u32::from_be_bytes((&buffer[4..8]).try_into()?);
 
-    let mut atoms = AtomBoxIter::new(reader, offset + 8 + size);
-    atoms.offset = offset + 8;
-    let mut data_references = Vec::new();
-    for atom in atoms {
-      match atom {
-        Ok(atom) => match atom {
-          AtomBox::DrefEntry(atom) => data_references.push(atom),
-          _ => log!(warn@"#[DATA_REF_LIST] Misplaced atom {atom:#?}"),
-        },
-        Err(e) => log!(err@"#[DATA_REF_LIST] {e}"),
-      }
-    }
+    let data_references = BoxHeaderIter::new(reader, offset + 8, offset + size)
+      .filter_map(|res| match res {
+        Ok(header) => Some(DrefEntry::new(header)),
+        Err(e) => {
+          log!(err@"#[STSD] {e}");
+          None
+        }
+      })
+      .collect::<BoxResult<_>>()?;
 
     Ok(Self {
       version,
@@ -168,14 +165,12 @@ pub struct DrefEntry {
 }
 
 impl DrefEntry {
-  pub fn new<R: Read + Seek>(reader: &mut R, box_type: String, size: u32) -> BoxResult<Self> {
-    let mut buffer = vec![0; size as usize];
-    reader.read_exact(&mut buffer)?;
-    let (version, flags) = decode_version_flags(&buffer);
-    let data = String::from_utf8_lossy(&buffer[4..]).to_string();
+  pub fn new(header: BoxHeader) -> BoxResult<Self> {
+    let (version, flags) = decode_version_flags(&header.data);
+    let data = String::from_utf8_lossy(&header.data[4..]).to_string();
 
     Ok(Self {
-      box_type,
+      box_type: header.name,
       version,
       flags,
       data,
