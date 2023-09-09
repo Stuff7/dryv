@@ -51,7 +51,6 @@ pub fn decode_header<'a, R: Read + Seek>(
   let size = u32::from_be_bytes((&buffer[..4]).try_into()?);
   *offset += size;
 
-  log!(info@"BOX {} {size}", String::from_utf8_lossy(&buffer[4..]).to_string());
   Ok((size, &buffer[4..]))
 }
 
@@ -102,7 +101,7 @@ impl<'a, R: Read + Seek> Iterator for AtomBoxIter<'a, R> {
   type Item = BoxResult<AtomBox>;
 
   fn next(&mut self) -> Option<Self::Item> {
-    (self.offset + BOX_HEADER_SIZE < self.end).then_some(
+    (self.offset + BOX_HEADER_SIZE < self.end).then(|| {
       decode_header(&mut self.buffer, self.reader, &mut self.offset).and_then(|(bsize, btype)| {
         let size = bsize - BOX_HEADER_SIZE;
         let offset = self.offset - bsize + BOX_HEADER_SIZE;
@@ -128,8 +127,8 @@ impl<'a, R: Read + Seek> Iterator for AtomBoxIter<'a, R> {
             String::from_utf8_lossy(e).to_string(),
           )),
         }
-      }),
-    )
+      })
+    })
   }
 }
 

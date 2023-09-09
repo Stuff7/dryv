@@ -29,8 +29,9 @@ fn main() {
   );
 
   let start_time = Instant::now();
-  unwrap!(Ok mp4_parser.decode(), Err "Could not decode MP4 file");
+  let atoms = mp4_parser.decode();
   let end_time = Instant::now();
+  log!("ATOMS => {atoms:#?}");
 
   log!(ok@"Done in {:?}", end_time - start_time);
 }

@@ -39,9 +39,9 @@ impl MoovBox {
           AtomBox::Mvhd(atom) => mvhd = Some(atom),
           AtomBox::Udta(atom) => udta = Some(atom),
           AtomBox::Trak(trak) => traks.push(trak),
-          _ => log!(warn@"MOOV SUB-BOX: {atom:#?}"),
+          _ => log!(warn@"#[MOOV] {atom:#?}"),
         },
-        Err(e) => log!(err@"{e}"),
+        Err(e) => log!(err@"#[MOOV] {e}"),
       }
     }
 
@@ -164,9 +164,9 @@ impl UdtaBox {
       match atom {
         Ok(atom) => match atom {
           AtomBox::Meta(meta) => metas.push(meta),
-          _ => log!(warn@"UDTA SUB-BOX: {atom:#?}"),
+          _ => log!(warn@"#[UDTA] {atom:#?}"),
         },
-        Err(e) => log!(err@"{e}"),
+        Err(e) => log!(err@"#[UDTA] {e}"),
       }
     }
 

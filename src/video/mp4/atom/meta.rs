@@ -21,9 +21,9 @@ impl MetaBox {
         Ok(atom) => match atom {
           AtomBox::Ilst(atom) => ilst = Some(atom),
           AtomBox::Hdlr(atom) => hdlr = Some(atom),
-          _ => log!(warn@"META SUB-BOX: {atom:#?}"),
+          _ => log!(warn@"#[META] {atom:#?}"),
         },
-        Err(e) => log!(err@"{e}"),
+        Err(e) => log!(err@"#[META] {e}"),
       }
     }
 
@@ -44,7 +44,7 @@ impl IlstBox {
     for atom in atoms {
       match atom {
         Ok(atom) => items.push(atom),
-        Err(e) => log!(err@"{e}"),
+        Err(e) => log!(err@"#[ILST] {e}"),
       }
     }
 
@@ -67,9 +67,9 @@ impl ToolBox {
       match atom {
         Ok(atom) => match atom {
           AtomBox::Data(atom) => data = Some(atom),
-          _ => log!(warn@"TOOL SUB-BOX: {atom:#?}"),
+          _ => log!(warn@"#[TOOL] {atom:#?}"),
         },
-        Err(e) => log!(err@"{e}"),
+        Err(e) => log!(err@"#[TOOL] {e}"),
       }
     }
 

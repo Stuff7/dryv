@@ -19,9 +19,9 @@ use std::io::{Read, Seek};
 ///   if the track information is not available or not needed.
 #[derive(Debug)]
 pub struct TrakBox {
-  tkhd: Option<TkhdBox>,
-  mdia: Option<MdiaBox>,
-  edts: Vec<EdtsBox>,
+  pub tkhd: Option<TkhdBox>,
+  pub mdia: Option<MdiaBox>,
+  pub edts: Option<EdtsBox>,
 }
 
 impl TrakBox {
@@ -30,16 +30,16 @@ impl TrakBox {
     atoms.offset = offset;
     let mut tkhd = None;
     let mut mdia = None;
-    let mut edts = Vec::new();
+    let mut edts = None;
     for atom in atoms {
       match atom {
         Ok(atom) => match atom {
           AtomBox::Tkhd(atom) => tkhd = Some(atom),
           AtomBox::Mdia(atom) => mdia = Some(atom),
-          AtomBox::Edts(atom) => edts.push(atom),
-          _ => log!(warn@"TRAK SUB-BOX: {atom:#?}"),
+          AtomBox::Edts(atom) => edts = Some(atom),
+          _ => log!(warn@"#[TRAK] {atom:#?}"),
         },
-        Err(e) => log!(err@"{e}"),
+        Err(e) => log!(err@"#[TRAK] {e}"),
       }
     }
 
@@ -153,9 +153,9 @@ impl MdiaBox {
         Ok(atom) => match atom {
           AtomBox::Mdhd(atom) => mdhd = Some(atom),
           AtomBox::Hdlr(atom) => hdlr = Some(atom),
-          _ => log!(warn@"MDIA SUB-BOX: {atom:#?}"),
+          _ => log!(warn@"#[MDIA] {atom:#?}"),
         },
-        Err(e) => log!(err@"{e}"),
+        Err(e) => log!(err@"#[MDIA] {e}"),
       }
     }
 
@@ -247,9 +247,9 @@ impl EdtsBox {
       match atom {
         Ok(atom) => match atom {
           AtomBox::Elst(atom) => elst = Some(atom),
-          _ => log!(warn@"EDTS SUB-BOX: {atom:#?}"),
+          _ => log!(warn@"#[EDTS] {atom:#?}"),
         },
-        Err(e) => log!(err@"{e}"),
+        Err(e) => log!(err@"#[EDTS] {e}"),
       }
     }
 

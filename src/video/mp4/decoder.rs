@@ -27,15 +27,9 @@ impl MP4Decoder {
     })
   }
 
-  pub fn decode(&mut self) -> MP4Result {
+  pub fn decode(&mut self) -> Vec<BoxResult<AtomBox>> {
     println!("FILE LEN: {}", self.size);
     let atoms = AtomBoxIter::new(&mut self.file, self.size as u32);
-    for atom in atoms {
-      match atom {
-        Ok(atom) => log!("Atom Box: {atom:#?}"),
-        Err(e) => log!(err@"{e}"),
-      }
-    }
-    Ok(())
+    atoms.collect()
   }
 }

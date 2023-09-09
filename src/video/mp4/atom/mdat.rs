@@ -24,8 +24,8 @@ impl MdatBox {
     let mut data = Vec::new();
     for atom in atoms {
       match atom {
-        Ok(atom) => data.push(atom),
-        Err(e) => log!(err@"{e}"),
+        Ok(atom) => log!(warn@"#[MDAT] {atom:#?}"),
+        Err(e) => log!(err@"#[MDAT] {e}"),
       }
     }
 
