@@ -4,6 +4,7 @@ mod mdia;
 mod meta;
 mod minf;
 mod moov;
+mod stbl;
 mod trak;
 
 pub use edts::*;
@@ -12,6 +13,7 @@ pub use mdia::*;
 pub use meta::*;
 pub use minf::*;
 pub use moov::*;
+pub use stbl::*;
 pub use trak::*;
 
 use crate::ascii::LogDisplay;
