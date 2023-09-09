@@ -1,10 +1,16 @@
+mod edts;
 mod mdat;
+mod mdia;
 mod meta;
+mod minf;
 mod moov;
 mod trak;
 
+pub use edts::*;
 pub use mdat::*;
+pub use mdia::*;
 pub use meta::*;
+pub use minf::*;
 pub use moov::*;
 pub use trak::*;
 
@@ -76,6 +82,13 @@ pub enum AtomBox {
   Mdat(MdatBox),
   Edts(EdtsBox),
   Elst(ElstBox),
+  Minf(MinfBox),
+  Vmhd(VmhdBox),
+  Smhd(SmhdBox),
+  Dinf(DinfBox),
+  Dref(DrefBox),
+  Stbl(StblBox),
+  DrefEntry(DrefEntry),
   Free,
 }
 
@@ -121,6 +134,18 @@ impl<'a, R: Read + Seek> Iterator for AtomBoxIter<'a, R> {
           b"ilst" => IlstBox::new(self.reader, offset, size).map(AtomBox::Ilst),
           b"tkhd" => TkhdBox::new(self.reader, size).map(AtomBox::Tkhd),
           b"data" => DataBox::new(self.reader, size).map(AtomBox::Data),
+          b"minf" => MinfBox::new(self.reader, offset, size).map(AtomBox::Minf),
+          b"stbl" => StblBox::new(self.reader, offset, size).map(AtomBox::Stbl),
+          b"vmhd" => VmhdBox::new(self.reader, size).map(AtomBox::Vmhd),
+          b"smhd" => SmhdBox::new(self.reader, size).map(AtomBox::Smhd),
+          b"dinf" => DinfBox::new(self.reader, offset, size).map(AtomBox::Dinf),
+          b"dref" => DrefBox::new(self.reader, offset, size).map(AtomBox::Dref),
+          b"alis" | b"rsrc" | b"url " => DrefEntry::new(
+            self.reader,
+            String::from_utf8_lossy(btype).to_string(),
+            size,
+          )
+          .map(AtomBox::DrefEntry),
           b"\xA9too" => ToolBox::new(self.reader, offset, size).map(AtomBox::Tool),
           b"free" => Ok(AtomBox::Free),
           e => Err(BoxError::UnknownType(
