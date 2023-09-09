@@ -1,54 +1,35 @@
 mod atom;
-mod decoder;
 
-pub use decoder::*;
+use atom::*;
+use thiserror::Error;
 
-fn bytes_to_i32(bytes: &[u8]) -> i32 {
-  assert!(bytes.len() == 4, "Input slice must have exactly 4 bytes");
-
-  let mut result: i32 = 0;
-
-  for i in 0..4 {
-    result |= (bytes[i] as i32) << (i * 8);
-  }
-
-  result
+#[derive(Debug, Error)]
+pub enum MP4Error {
+  #[error("MP4 IO Error\n{0}")]
+  IO(#[from] std::io::Error),
+  #[error(transparent)]
+  Box(#[from] BoxError),
 }
 
-fn bytes_to_i64(bytes: &[u8]) -> i64 {
-  assert!(bytes.len() == 8, "Input slice must have exactly 8 bytes");
+pub type MP4Result<T = ()> = Result<T, MP4Error>;
 
-  let mut result: i64 = 0;
-
-  for i in 0..8 {
-    result |= (bytes[i] as i64) << (i * 8);
-  }
-
-  result
+pub struct MP4Decoder {
+  file: std::fs::File,
+  size: u64,
 }
 
-#[derive(Debug, Clone, Copy)]
-struct Fixed16(i32);
-
-impl Fixed16 {
-  fn from_float(value: f32) -> Self {
-    Fixed16((value * (1 << 16) as f32) as i32)
+impl MP4Decoder {
+  pub fn new(file_path: &str) -> MP4Result<Self> {
+    let file = std::fs::File::open(file_path)?;
+    Ok(MP4Decoder {
+      size: file.metadata()?.len(),
+      file,
+    })
   }
 
-  fn to_float(self) -> f32 {
-    self.0 as f32 / (1 << 16) as f32
-  }
-}
-
-#[derive(Debug, Clone, Copy)]
-struct Fixed32(i64);
-
-impl Fixed32 {
-  fn from_float(value: f64) -> Self {
-    Fixed32((value * (1i64 << 32) as f64) as i64)
-  }
-
-  fn to_float(self) -> f64 {
-    self.0 as f64 / (1i64 << 32) as f64
+  pub fn decode(&mut self) -> Vec<BoxResult<AtomBox>> {
+    println!("FILE LEN: {}", self.size);
+    let atoms = AtomBoxIter::new(&mut self.file, self.size as u32);
+    atoms.collect()
   }
 }

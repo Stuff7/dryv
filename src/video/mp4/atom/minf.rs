@@ -24,7 +24,7 @@ impl MinfBox {
           AtomBox::Smhd(atom) => media_header = Some(MediaHeader::Sound(atom)),
           AtomBox::Dinf(atom) => dinf = Some(atom),
           AtomBox::Stbl(atom) => stbl = Some(atom),
-          _ => log!(warn@"#[MINF] {atom:#?}"),
+          _ => log!(warn@"#[MINF] Misplaced atom {atom:#?}"),
         },
         Err(e) => log!(err@"#[MINF] {e}"),
       }
@@ -111,7 +111,7 @@ impl DinfBox {
       match atom {
         Ok(atom) => match atom {
           AtomBox::Dref(atom) => data_ref_list = Some(atom),
-          _ => log!(warn@"#[DINF] {atom:#?}"),
+          _ => log!(warn@"#[DINF] Misplaced atom {atom:#?}"),
         },
         Err(e) => log!(err@"#[DINF] {e}"),
       }
@@ -144,7 +144,7 @@ impl DrefBox {
       match atom {
         Ok(atom) => match atom {
           AtomBox::DrefEntry(atom) => data_references.push(atom),
-          _ => log!(warn@"#[DATA_REF_LIST] {atom:#?}"),
+          _ => log!(warn@"#[DATA_REF_LIST] Misplaced atom {atom:#?}"),
         },
         Err(e) => log!(err@"#[DATA_REF_LIST] {e}"),
       }

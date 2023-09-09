@@ -37,7 +37,7 @@ impl TrakBox {
           AtomBox::Tkhd(atom) => tkhd = Some(atom),
           AtomBox::Mdia(atom) => mdia = Some(atom),
           AtomBox::Edts(atom) => edts = Some(atom),
-          _ => log!(warn@"#[TRAK] {atom:#?}"),
+          _ => log!(warn@"#[TRAK] Misplaced atom {atom:#?}"),
         },
         Err(e) => log!(err@"#[TRAK] {e}"),
       }

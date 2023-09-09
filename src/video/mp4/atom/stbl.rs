@@ -23,7 +23,7 @@ impl StblBox {
           AtomBox::Vmhd(atom) => vmhd = Some(atom),
           AtomBox::Hdlr(atom) => hdlr = Some(atom),
           AtomBox::Dinf(atom) => dinf = Some(atom),
-          _ => log!(warn@"#[STBL] {atom:#?}"),
+          _ => log!(warn@"#[STBL] Misplaced atom {atom:#?}"),
         },
         Err(e) => log!(err@"#[STBL] {e}"),
       }

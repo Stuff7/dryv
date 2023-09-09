@@ -6,8 +6,8 @@ use std::io::{Read, Seek};
 // Metadata Box
 #[derive(Debug)]
 pub struct MetaBox {
-  ilst: Option<IlstBox>,
-  hdlr: Option<HdlrBox>,
+  pub ilst: Option<IlstBox>,
+  pub hdlr: Option<HdlrBox>,
 }
 
 impl MetaBox {
@@ -21,7 +21,7 @@ impl MetaBox {
         Ok(atom) => match atom {
           AtomBox::Ilst(atom) => ilst = Some(atom),
           AtomBox::Hdlr(atom) => hdlr = Some(atom),
-          _ => log!(warn@"#[META] {atom:#?}"),
+          _ => log!(warn@"#[META] Misplaced atom {atom:#?}"),
         },
         Err(e) => log!(err@"#[META] {e}"),
       }
@@ -44,7 +44,7 @@ impl IlstBox {
     for atom in atoms {
       match atom {
         Ok(atom) => items.push(atom),
-        Err(e) => log!(err@"#[ILST] {e}"),
+        Err(e) => log!(err@"#[ILST] Misplaced atom {e}"),
       }
     }
 
@@ -55,7 +55,7 @@ impl IlstBox {
 /// ©too Encoder tag
 #[derive(Debug)]
 pub struct ToolBox {
-  data: Option<DataBox>,
+  pub data: Option<DataBox>,
 }
 
 impl ToolBox {
@@ -67,7 +67,7 @@ impl ToolBox {
       match atom {
         Ok(atom) => match atom {
           AtomBox::Data(atom) => data = Some(atom),
-          _ => log!(warn@"#[TOOL] {atom:#?}"),
+          _ => log!(warn@"#[TOOL] Misplaced atom {atom:#?}"),
         },
         Err(e) => log!(err@"#[TOOL] {e}"),
       }
@@ -79,9 +79,9 @@ impl ToolBox {
 
 #[derive(Debug)]
 pub struct DataBox {
-  type_indicator: [u8; 4],
-  locale_indicator: [u8; 4],
-  value: String,
+  pub type_indicator: [u8; 4],
+  pub locale_indicator: [u8; 4],
+  pub value: String,
 }
 
 impl DataBox {

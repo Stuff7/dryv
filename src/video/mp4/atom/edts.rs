@@ -18,7 +18,7 @@ impl EdtsBox {
       match atom {
         Ok(atom) => match atom {
           AtomBox::Elst(atom) => elst = Some(atom),
-          _ => log!(warn@"#[EDTS] {atom:#?}"),
+          _ => log!(warn@"#[EDTS] Misplaced atom {atom:#?}"),
         },
         Err(e) => log!(err@"#[EDTS] {e}"),
       }

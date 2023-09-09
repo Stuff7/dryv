@@ -16,8 +16,6 @@ pub use moov::*;
 pub use stbl::*;
 pub use trak::*;
 
-use crate::ascii::LogDisplay;
-use crate::log;
 use crate::math::MathError;
 use std::{
   array::TryFromSliceError,
@@ -180,9 +178,9 @@ impl<'a, R: Read + Seek> Iterator for AtomBoxIter<'a, R> {
 ///   It provides additional information about the version of the format.
 #[derive(Debug)]
 pub struct FtypBox {
-  compatible_brands: [String; 4],
-  major_brand: String,
-  minor_version: u32,
+  pub compatible_brands: [String; 4],
+  pub major_brand: String,
+  pub minor_version: u32,
 }
 
 impl FtypBox {

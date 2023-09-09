@@ -1,13 +1,13 @@
 use super::*;
+use crate::ascii::LogDisplay;
 use crate::log;
-use crate::{ascii::LogDisplay, math::fixed_point_to_f32};
 use std::io::{Read, Seek};
 
 // Metadata Box
 #[derive(Debug)]
 pub struct MdatBox {
-  extended_size: i64,
-  data: Vec<AtomBox>,
+  pub extended_size: i64,
+  pub data: Vec<AtomBox>,
 }
 
 impl MdatBox {
@@ -24,7 +24,7 @@ impl MdatBox {
     let mut data = Vec::new();
     for atom in atoms {
       match atom {
-        Ok(atom) => log!(warn@"#[MDAT] {atom:#?}"),
+        Ok(atom) => log!(warn@"#[MDAT] Misplaced atom {atom:#?}"),
         Err(e) => log!(err@"#[MDAT] {e}"),
       }
     }

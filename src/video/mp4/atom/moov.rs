@@ -21,9 +21,9 @@ use std::io::{Read, Seek};
 ///   contain video, audio, or other types of media, each with its own specific characteristics.
 #[derive(Debug)]
 pub struct MoovBox {
-  mvhd: Option<MvhdBox>,
-  udta: Option<UdtaBox>,
-  traks: Vec<TrakBox>,
+  pub mvhd: Option<MvhdBox>,
+  pub udta: Option<UdtaBox>,
+  pub traks: Vec<TrakBox>,
 }
 
 impl MoovBox {
@@ -39,7 +39,7 @@ impl MoovBox {
           AtomBox::Mvhd(atom) => mvhd = Some(atom),
           AtomBox::Udta(atom) => udta = Some(atom),
           AtomBox::Trak(trak) => traks.push(trak),
-          _ => log!(warn@"#[MOOV] {atom:#?}"),
+          _ => log!(warn@"#[MOOV] Misplaced atom {atom:#?}"),
         },
         Err(e) => log!(err@"#[MOOV] {e}"),
       }
@@ -79,16 +79,16 @@ impl MoovBox {
 /// - `next_track_id`: A 32-bit unsigned integer specifying the next available track ID for new tracks.
 #[derive(Debug)]
 pub struct MvhdBox {
-  version: u8,
-  flags: [u8; 3],
-  creation_time: u32,
-  modification_time: u32,
-  timescale: u32,
-  duration: u32,
-  rate: f32,
-  volume: f32,
-  matrix: Matrix3x3,
-  next_track_id: u32,
+  pub version: u8,
+  pub flags: [u8; 3],
+  pub creation_time: u32,
+  pub modification_time: u32,
+  pub timescale: u32,
+  pub duration: u32,
+  pub rate: f32,
+  pub volume: f32,
+  pub matrix: Matrix3x3,
+  pub next_track_id: u32,
 }
 
 impl MvhdBox {
@@ -145,9 +145,9 @@ impl MvhdBox {
 /// - `metas`: A vector of `MetaBox` instances, each containing specific metadata associated with the MP4 file.
 #[derive(Debug)]
 pub struct UdtaBox {
-  version: u8,
-  flags: [u8; 3],
-  metas: Vec<MetaBox>,
+  pub version: u8,
+  pub flags: [u8; 3],
+  pub metas: Vec<MetaBox>,
 }
 
 impl UdtaBox {
@@ -164,7 +164,7 @@ impl UdtaBox {
       match atom {
         Ok(atom) => match atom {
           AtomBox::Meta(meta) => metas.push(meta),
-          _ => log!(warn@"#[UDTA] {atom:#?}"),
+          _ => log!(warn@"#[UDTA] Misplaced atom {atom:#?}"),
         },
         Err(e) => log!(err@"#[UDTA] {e}"),
       }

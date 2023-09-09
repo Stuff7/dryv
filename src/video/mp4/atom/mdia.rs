@@ -5,9 +5,9 @@ use std::io::{Read, Seek};
 
 #[derive(Debug)]
 pub struct MdiaBox {
-  mdhd: Option<MdhdBox>,
-  hdlr: Option<HdlrBox>,
-  minf: Option<MinfBox>,
+  pub mdhd: Option<MdhdBox>,
+  pub hdlr: Option<HdlrBox>,
+  pub minf: Option<MinfBox>,
 }
 
 impl MdiaBox {
@@ -23,7 +23,7 @@ impl MdiaBox {
           AtomBox::Mdhd(atom) => mdhd = Some(atom),
           AtomBox::Hdlr(atom) => hdlr = Some(atom),
           AtomBox::Minf(atom) => minf = Some(atom),
-          _ => log!(warn@"#[MDIA] {atom:#?}"),
+          _ => log!(warn@"#[MDIA] Misplaced atom {atom:#?}"),
         },
         Err(e) => log!(err@"#[MDIA] {e}"),
       }
