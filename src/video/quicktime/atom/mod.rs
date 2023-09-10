@@ -34,8 +34,6 @@ pub enum BoxError {
   IO(#[from] std::io::Error),
   #[error(transparent)]
   SliceConversion(#[from] TryFromSliceError),
-  #[error("Not enough chunks")]
-  ChunkConversion,
   #[error(transparent)]
   StringConversion(#[from] FromUtf8Error),
   #[error(transparent)]
@@ -230,6 +228,12 @@ pub fn unpack_language_code(bytes: &[u8]) -> BoxResult<[u8; 3]> {
 }
 
 pub struct Str<const N: usize>(pub [u8; N]);
+
+impl<const N: usize> Default for Str<N> {
+  fn default() -> Self {
+    Self([0; N])
+  }
+}
 
 impl<const N: usize> Str<N> {
   pub fn as_string(&self) -> String {
