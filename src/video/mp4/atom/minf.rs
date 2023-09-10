@@ -141,7 +141,7 @@ impl DrefBox {
       .filter_map(|res| match res {
         Ok(header) => Some(DrefEntry::new(header)),
         Err(e) => {
-          log!(err@"#[STSD] {e}");
+          log!(err@"#[DREF] {e}");
           None
         }
       })
@@ -158,7 +158,7 @@ impl DrefBox {
 
 #[derive(Debug)]
 pub struct DrefEntry {
-  pub box_type: String,
+  pub box_type: Str<4>,
   pub version: u8,
   pub flags: [u8; 3],
   pub data: String,

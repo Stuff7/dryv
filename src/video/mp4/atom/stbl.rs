@@ -63,7 +63,7 @@ impl StsdBox {
 
 #[derive(Debug)]
 pub struct StsdEntry {
-  pub data_format: String,
+  pub data_format: Str<4>,
   pub dref_index: u16,
   pub extra_data: Vec<u8>,
 }

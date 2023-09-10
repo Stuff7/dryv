@@ -1,6 +1,6 @@
 use super::*;
+use crate::ascii::LogDisplay;
 use crate::log;
-use crate::{ascii::LogDisplay, math::unpack_language_code};
 use std::io::{Read, Seek};
 
 #[derive(Debug)]
@@ -41,7 +41,7 @@ pub struct MdhdBox {
   pub modification_time: u32,
   pub timescale: u32,
   pub duration: u32,
-  pub language: String,
+  pub language: Str<3>,
   pub quality: u16,
 }
 
@@ -55,7 +55,7 @@ impl MdhdBox {
     let modification_time = u32::from_be_bytes((&buffer[8..12]).try_into()?);
     let timescale = u32::from_be_bytes((&buffer[12..16]).try_into()?);
     let duration = u32::from_be_bytes((&buffer[16..20]).try_into()?);
-    let language = unpack_language_code(u16::from_be_bytes((&buffer[20..22]).try_into()?));
+    let language = Str(unpack_language_code(&buffer[20..22])?);
     let quality = u16::from_be_bytes((&buffer[22..24]).try_into()?);
 
     Ok(Self {
@@ -75,7 +75,7 @@ impl MdhdBox {
 pub struct HdlrBox {
   pub version: u8,
   pub flags: [u8; 3],
-  pub component_type: String,
+  pub component_type: Str<4>,
   pub component_name: String,
 }
 
@@ -86,7 +86,7 @@ impl HdlrBox {
 
     let (version, flags) = decode_version_flags(&buffer);
     // __reserved__ 32 bit     (4 bytes)
-    let component_type = String::from_utf8_lossy(&buffer[8..12]).to_string();
+    let component_type = Str::try_from(&buffer[8..12])?;
     // __reserved__ 32 bit [3] (12 bytes)
     let component_name = match size - 25 {
       s if s < 1 => String::new(),

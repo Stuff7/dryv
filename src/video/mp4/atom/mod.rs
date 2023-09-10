@@ -20,6 +20,8 @@ use crate::math::MathError;
 use std::{
   array::TryFromSliceError,
   io::{Read, Seek, SeekFrom},
+  ops::Deref,
+  str::Utf8Error,
   string::FromUtf8Error,
 };
 use thiserror::Error;
@@ -32,10 +34,12 @@ pub enum BoxError {
   IO(#[from] std::io::Error),
   #[error(transparent)]
   SliceConversion(#[from] TryFromSliceError),
+  #[error("Not enough chunks")]
+  ChunkConversion,
   #[error(transparent)]
   StringConversion(#[from] FromUtf8Error),
-  #[error("Could not convert Vec to array\n{0:?}")]
-  VecConversion(Vec<String>),
+  #[error(transparent)]
+  Utf8Conversion(#[from] Utf8Error),
   #[error("Unknown box type {0:?}")]
   UnknownType(String),
   #[error("Invalid {0:?} box size {1}")]
@@ -155,7 +159,7 @@ impl<'a, R: Read + Seek> Iterator for AtomBoxIter<'a, R> {
 #[derive(Debug)]
 pub struct BoxHeader {
   size: u32,
-  name: String,
+  name: Str<4>,
   data: Vec<u8>,
 }
 
@@ -185,15 +189,13 @@ impl<'a, R: Read + Seek> Iterator for BoxHeaderIter<'a, R> {
       decode_header(&mut self.buffer, self.reader, &mut self.offset).and_then(|(bsize, btype)| {
         let size = bsize - BOX_HEADER_SIZE;
         let mut data = vec![0; size as usize];
-        self
-          .reader
-          .read_exact(&mut data)
-          .map(|_| BoxHeader {
-            size,
-            name: String::from_utf8_lossy(btype).to_string(),
-            data,
-          })
-          .map_err(BoxError::from)
+        Str::<4>::try_from(btype).and_then(|name| {
+          self
+            .reader
+            .read_exact(&mut data)
+            .map(|_| BoxHeader { size, name, data })
+            .map_err(BoxError::from)
+        })
       })
     })
   }
@@ -220,8 +222,8 @@ impl<'a, R: Read + Seek> Iterator for BoxHeaderIter<'a, R> {
 ///   It provides additional information about the version of the format.
 #[derive(Debug)]
 pub struct FtypBox {
-  pub compatible_brands: [String; 4],
-  pub major_brand: String,
+  pub compatible_brands: Vec<Str<4>>,
+  pub major_brand: Str<4>,
   pub minor_version: u32,
 }
 
@@ -234,19 +236,54 @@ impl FtypBox {
     let mut buffer = [0; 24];
     reader.read_exact(&mut buffer)?;
 
-    let major_brand = String::from_utf8_lossy(&buffer[..4]).to_string();
+    let major_brand = Str::try_from(&buffer[..4])?;
     let minor_version = u32::from_be_bytes((&buffer[4..8]).try_into()?);
-    let compatible_brands: [String; 4] = buffer[8..]
+    let compatible_brands: Vec<Str<4>> = buffer[8..]
       .chunks_exact(4)
-      .map(|bytes| String::from_utf8_lossy(bytes).to_string())
-      .collect::<Vec<_>>()
-      .try_into()
-      .map_err(BoxError::VecConversion)?;
+      .map(Str::<4>::try_from)
+      .collect::<BoxResult<_>>()?;
 
     Ok(Self {
       compatible_brands,
       major_brand,
       minor_version,
     })
+  }
+}
+
+pub fn unpack_language_code(bytes: &[u8]) -> BoxResult<[u8; 3]> {
+  let code = u16::from_be_bytes((bytes).try_into()?);
+  let char1 = ((code >> 10) & 0x1F) as u8 + 0x60;
+  let char2 = ((code >> 5) & 0x1F) as u8 + 0x60;
+  let char3 = (code & 0x1F) as u8 + 0x60;
+  Ok([char1, char2, char3])
+}
+
+pub struct Str<const N: usize>(pub [u8; N]);
+
+impl<const N: usize> TryFrom<&[u8]> for Str<N> {
+  type Error = BoxError;
+  fn try_from(slice: &[u8]) -> Result<Self, Self::Error> {
+    Ok(Self(slice.try_into()?))
+  }
+}
+
+impl<const N: usize> Deref for Str<N> {
+  type Target = [u8; N];
+
+  fn deref(&self) -> &Self::Target {
+    &self.0
+  }
+}
+
+impl<const N: usize> std::fmt::Display for Str<N> {
+  fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    unsafe { write!(f, "{}", std::str::from_utf8_unchecked(&self.0)) }
+  }
+}
+
+impl<const N: usize> std::fmt::Debug for Str<N> {
+  fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    unsafe { write!(f, "{:?}", std::str::from_utf8_unchecked(&self.0)) }
   }
 }
