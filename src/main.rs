@@ -23,13 +23,13 @@ macro_rules! unwrap {
 fn main() {
   let args = unwrap!(Ok CLIArgs::read(), Err "Error");
 
-  let mut mp4_parser = unwrap!(
-    Ok video::mp4::MP4Decoder::new(&args.filepath),
-    Err "MP4Decoder could not open file"
+  let mut decoder = unwrap!(
+    Ok video::quicktime::QTDecoder::new(&args.filepath),
+    Err "QTDecoder could not open file"
   );
 
   let start_time = Instant::now();
-  let atoms = mp4_parser.decode();
+  let atoms = decoder.decode();
   let end_time = Instant::now();
   if args.debug {
     log!("ATOMS => {atoms:#?}");

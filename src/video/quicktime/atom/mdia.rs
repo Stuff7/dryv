@@ -81,21 +81,14 @@ pub struct HdlrBox {
 
 impl HdlrBox {
   pub fn new<R: Read + Seek>(reader: &mut R, size: u32) -> BoxResult<Self> {
-    let mut buffer = [0; 24];
+    let mut buffer = vec![0; size as usize];
     reader.read_exact(&mut buffer)?;
 
     let (version, flags) = decode_version_flags(&buffer);
     // __reserved__ 32 bit     (4 bytes)
     let component_type = Str::try_from(&buffer[8..12])?;
     // __reserved__ 32 bit [3] (12 bytes)
-    let component_name = match size - 25 {
-      s if s < 1 => String::new(),
-      s => {
-        let mut buffer = vec![0; s as usize];
-        reader.read_exact(&mut buffer)?;
-        String::from_utf8(buffer)?
-      }
-    };
+    let component_name = String::from_utf8_lossy(&buffer[24..]).to_string();
 
     Ok(Self {
       version,

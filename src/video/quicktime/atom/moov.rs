@@ -4,21 +4,6 @@ use crate::math::fixed_point_to_f32;
 use crate::{ascii::LogDisplay, math::Matrix3x3};
 use std::io::{Read, Seek};
 
-/// The `MoovBox` struct represents a Movie Box (moov) in an MP4 file.
-///
-/// A Movie Box is a significant structural element in an MP4 file, containing essential metadata
-/// and information about the movie, including details about individual tracks and user-defined metadata.
-///
-/// # Structure
-///
-/// - `mvhd`: An optional `MvhdBox` struct that provides metadata about the entire movie, including its duration
-///   and creation time. This is a crucial component for describing the movie as a whole.
-///
-/// - `udta`: An optional `UdtaBox` struct that can store user-defined metadata associated with the movie.
-///   This allows for custom annotations or additional information to be included in the MP4 file.
-///
-/// - `traks`: A vector of `TrakBox` instances, each representing a track within the movie. These tracks can
-///   contain video, audio, or other types of media, each with its own specific characteristics.
 #[derive(Debug)]
 pub struct MoovBox {
   pub mvhd: Option<MvhdBox>,
@@ -49,34 +34,6 @@ impl MoovBox {
   }
 }
 
-/// The `MvhdBox` struct represents the Movie Header Box (mvhd) in an MP4 file.
-///
-/// The Movie Header Box provides essential metadata about the entire movie, such as its
-/// duration, time scale, creation, and modification times, among other properties.
-///
-/// # Structure
-///
-/// - `version`: An 8-bit field that specifies the version of this box's format.
-///
-/// - `flags`: A 24-bit field that contains flags indicating how the box should be treated.
-///
-/// - `creation_time`: A 32-bit unsigned integer representing the creation time of the movie.
-///
-/// - `modification_time`: A 32-bit unsigned integer representing the time when the movie was last modified.
-///
-/// - `timescale`: A 32-bit unsigned integer representing the time scale for the entire movie.
-///   The time scale is used to interpret the `duration` field, which is also a 32-bit unsigned integer.
-///
-/// - `duration`: A 32-bit unsigned integer representing the duration of the movie in the time scale units.
-///
-/// - `rate`: A 32-bit floating-point number representing the preferred playback rate for the movie.
-///
-/// - `volume`: A 16-bit fixed-point number representing the audio volume. 1.0 (0x0100) is full volume.
-///
-/// - `matrix`: A `Matrix3x3` struct representing a 3x3 matrix that describes how to transform
-///   the movie's visual presentation.
-///
-/// - `next_track_id`: A 32-bit unsigned integer specifying the next available track ID for new tracks.
 #[derive(Debug)]
 pub struct MvhdBox {
   pub version: u8,
@@ -127,22 +84,6 @@ impl MvhdBox {
   }
 }
 
-/// The `UdtaBox` struct represents a User Data Box (udta) in an MP4 file.
-///
-/// A User Data Box typically contains user-defined metadata or other custom data associated with
-/// the MP4 file. It can include a list of `MetaBox` instances, each of which may store various types
-/// of metadata.
-///
-/// The `UdtaBox` struct provides a container for user-defined metadata, which can be valuable for
-/// storing additional information or annotations related to an MP4 file.
-///
-/// # Structure
-///
-/// - `version`: An 8-bit field that specifies the version of this box's format.
-///
-/// - `flags`: A 24-bit field that contains flags indicating how the box should be treated.
-///
-/// - `metas`: A vector of `MetaBox` instances, each containing specific metadata associated with the MP4 file.
 #[derive(Debug)]
 pub struct UdtaBox {
   pub version: u8,

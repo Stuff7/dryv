@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-pub mod mp4;
+pub mod quicktime;
 
 #[derive(Debug, Clone, Copy)]
 pub enum SeekPosition {

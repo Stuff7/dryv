@@ -4,24 +4,24 @@ use atom::*;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum MP4Error {
-  #[error("MP4 IO Error\n{0}")]
+pub enum QTError {
+  #[error("QuickTime Decoder IO Error\n{0}")]
   IO(#[from] std::io::Error),
   #[error(transparent)]
   Box(#[from] BoxError),
 }
 
-pub type MP4Result<T = ()> = Result<T, MP4Error>;
+pub type QTResult<T = ()> = Result<T, QTError>;
 
-pub struct MP4Decoder {
+pub struct QTDecoder {
   file: std::fs::File,
   size: u64,
 }
 
-impl MP4Decoder {
-  pub fn new(file_path: &str) -> MP4Result<Self> {
+impl QTDecoder {
+  pub fn new(file_path: &str) -> QTResult<Self> {
     let file = std::fs::File::open(file_path)?;
-    Ok(MP4Decoder {
+    Ok(QTDecoder {
       size: file.metadata()?.len(),
       file,
     })

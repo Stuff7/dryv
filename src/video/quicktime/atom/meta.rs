@@ -33,66 +33,67 @@ impl MetaBox {
 
 #[derive(Debug)]
 pub struct IlstBox {
-  items: Vec<AtomBox>,
+  items: Vec<DataBox>,
 }
 
 impl IlstBox {
   pub fn new<R: Read + Seek>(reader: &mut R, offset: u32, size: u32) -> BoxResult<Self> {
-    let mut atoms = AtomBoxIter::new(reader, offset + size);
-    atoms.offset = offset;
-    let mut items = Vec::new();
-    for atom in atoms {
-      match atom {
-        Ok(atom) => items.push(atom),
-        Err(e) => log!(err@"#[ILST] Misplaced atom {e}"),
-      }
-    }
-
+    let items = BoxHeaderIter::new(reader, offset, offset + size)
+      .filter_map(|res| match res {
+        Ok(header) => Some(DataBox::new(header)),
+        Err(e) => {
+          log!(err@"#[ILST] {e}");
+          None
+        }
+      })
+      .collect::<BoxResult<_>>()?;
     Ok(Self { items })
   }
 }
 
 /// ©too Encoder tag
 #[derive(Debug)]
-pub struct ToolBox {
-  pub data: Option<DataBox>,
+pub struct DataBox {
+  pub name: Str<4>,
+  pub data: Vec<DataItem>,
 }
 
-impl ToolBox {
-  pub fn new<R: Read + Seek>(reader: &mut R, offset: u32, size: u32) -> BoxResult<Self> {
-    let mut atoms = AtomBoxIter::new(reader, offset + size);
-    atoms.offset = offset;
-    let mut data = None;
-    for atom in atoms {
-      match atom {
-        Ok(atom) => match atom {
-          AtomBox::Data(atom) => data = Some(atom),
-          _ => log!(warn@"#[TOOL] Misplaced atom {atom:#?}"),
-        },
-        Err(e) => log!(err@"#[TOOL] {e}"),
-      }
+impl DataBox {
+  pub fn new(header: BoxHeader) -> BoxResult<Self> {
+    let mut data = Vec::new();
+    let mut offset = 0;
+    while offset < header.size as usize {
+      let (size, name) = decode_header(&header.data)?;
+      let size = size as usize;
+      data.push(DataItem::new(
+        &header.data[offset + 8..size],
+        Str::try_from(name)?,
+      )?);
+      offset += size;
     }
-
-    Ok(Self { data })
+    Ok(Self {
+      name: header.name,
+      data,
+    })
   }
 }
 
 #[derive(Debug)]
-pub struct DataBox {
+pub struct DataItem {
+  pub name: Str<4>,
   pub type_indicator: [u8; 4],
   pub locale_indicator: [u8; 4],
   pub value: String,
 }
 
-impl DataBox {
-  pub fn new<R: Read + Seek>(reader: &mut R, size: u32) -> BoxResult<Self> {
-    let mut buffer = vec![0; size as usize];
-    reader.read_exact(&mut buffer)?;
-    let type_indicator = (&buffer[..4]).try_into()?;
-    let locale_indicator = (&buffer[4..8]).try_into()?;
-    let value = String::from_utf8_lossy(&buffer[8..]).to_string();
+impl DataItem {
+  pub fn new(data: &[u8], name: Str<4>) -> BoxResult<Self> {
+    let type_indicator = (&data[..4]).try_into()?;
+    let locale_indicator = (&data[4..8]).try_into()?;
+    let value = String::from_utf8_lossy(&data[8..]).to_string();
 
     Ok(Self {
+      name,
       type_indicator,
       locale_indicator,
       value,
