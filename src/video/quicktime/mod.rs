@@ -1,7 +1,9 @@
-mod atom;
+pub mod atom;
 
 use atom::*;
 use thiserror::Error;
+
+use crate::{ascii::LogDisplay, log};
 
 #[derive(Debug, Error)]
 pub enum QTError {
@@ -14,8 +16,8 @@ pub enum QTError {
 pub type QTResult<T = ()> = Result<T, QTError>;
 
 pub struct QTDecoder {
-  file: std::fs::File,
-  size: u64,
+  pub file: std::fs::File,
+  pub size: u64,
 }
 
 impl QTDecoder {
@@ -27,9 +29,15 @@ impl QTDecoder {
     })
   }
 
-  pub fn decode(&mut self) -> Vec<BoxResult<AtomBox>> {
+  pub fn decode(&mut self) -> Vec<AtomBox> {
     println!("FILE LEN: {}", self.size);
-    let atoms = AtomBoxIter::new(&mut self.file, self.size as u32);
+    let atoms = AtomBoxIter::new(&mut self.file, self.size as u32).filter_map(|a| match a {
+      Ok(a) => Some(a),
+      Err(e) => {
+        log!(err@"#[ROOT] {e}");
+        None
+      }
+    });
     atoms.collect()
   }
 }
