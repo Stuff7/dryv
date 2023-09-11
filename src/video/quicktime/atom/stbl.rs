@@ -7,6 +7,7 @@ use std::io::{Read, Seek};
 pub struct StblAtom {
   pub stsd: EncodedAtom<StsdAtom>,
   pub stts: EncodedAtom<SttsAtom>,
+  pub stss: Option<EncodedAtom<StssAtom>>,
 }
 
 impl AtomDecoder for StblAtom {
@@ -18,6 +19,7 @@ impl AtomDecoder for StblAtom {
         Ok(atom) => match &*atom.name {
           b"stsd" => stbl.stsd = EncodedAtom::Encoded(atom),
           b"stts" => stbl.stts = EncodedAtom::Encoded(atom),
+          b"stss" => stbl.stss = Some(EncodedAtom::Encoded(atom)),
           _ => log!(warn@"#[stbl] Unused atom {atom:#?}"),
         },
         Err(e) => log!(err@"#[stbl] {e}"),
@@ -131,6 +133,42 @@ impl SttsItem {
     Ok(Self {
       sample_count,
       sample_duration,
+    })
+  }
+}
+
+#[derive(Debug)]
+pub struct StssAtom {
+  pub atom: Atom,
+  pub version: u8,
+  pub flags: [u8; 3],
+  pub number_of_entries: u32,
+  pub sync_sample_table: Vec<u32>,
+}
+
+impl AtomDecoder for StssAtom {
+  const NAME: [u8; 4] = *b"stss";
+  fn decode_unchecked<R: Read + Seek>(mut atom: Atom, reader: &mut R) -> AtomResult<Self> {
+    let data = atom.read_data(reader)?;
+
+    let (version, flags) = decode_version_flags(&data);
+    let number_of_entries = u32::from_be_bytes((&data[4..8]).try_into()?);
+
+    let sync_sample_table = data[8..]
+      .chunks(4)
+      .map(|b| {
+        b.try_into()
+          .map(u32::from_be_bytes)
+          .map_err(AtomError::from)
+      })
+      .collect::<AtomResult<_>>()?;
+
+    Ok(Self {
+      atom,
+      version,
+      flags,
+      number_of_entries,
+      sync_sample_table,
     })
   }
 }

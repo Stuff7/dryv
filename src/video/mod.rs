@@ -65,6 +65,9 @@ impl Video {
       let stbl = minf.stbl.decode(&mut decoder.file)?;
       stbl.stsd.decode(&mut decoder.file)?;
       stbl.stts.decode(&mut decoder.file)?;
+      if let Some(stss) = &mut stbl.stss {
+        stss.decode(&mut decoder.file)?;
+      }
 
       if *hdlr.component_type == *b"vide" {
         let tkhd = trak.tkhd.decode(&mut decoder.file)?;
