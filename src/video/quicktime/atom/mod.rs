@@ -42,8 +42,8 @@ pub enum AtomError {
   Size(&'static str, u32),
   #[error("Math Error\n{0}")]
   Math(#[from] MathError),
-  #[error("Atom not found")]
-  AtomNotFound,
+  #[error("Atom not found {:?}", Str(*(.0)))]
+  AtomNotFound([u8; 4]),
   #[error("Unknown atom {0:?}")]
   UnknownAtom(Atom),
   #[error("Atom type mismatch, expected {0:?} got {1:?}")]
@@ -107,7 +107,7 @@ impl<const N: usize> std::fmt::Display for Str<N> {
 
 impl<const N: usize> std::fmt::Debug for Str<N> {
   fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-    write!(f, "{:?}", self.as_string())
+    write!(f, "b{:?}", self.as_string())
   }
 }
 
@@ -230,9 +230,9 @@ impl RootAtom {
     }
 
     Ok(Self {
-      ftyp: ftyp.ok_or(AtomError::AtomNotFound)?,
-      mdat: mdat.ok_or(AtomError::AtomNotFound)?,
-      moov: moov.ok_or(AtomError::AtomNotFound)?,
+      ftyp: ftyp.ok_or(AtomError::AtomNotFound(*b"ftyp"))?,
+      mdat: mdat.ok_or(AtomError::AtomNotFound(*b"mdat"))?,
+      moov: moov.ok_or(AtomError::AtomNotFound(*b"moov"))?,
       rest,
     })
   }
@@ -266,10 +266,10 @@ impl<T: AtomDecoder> EncodedAtom<T> {
         if let EncodedAtom::Decoded(decoded) = self {
           Ok(decoded)
         } else {
-          Err(AtomError::AtomNotFound)
+          Err(AtomError::AtomNotFound(T::NAME))
         }
       }
-      EncodedAtom::None => Err(AtomError::AtomNotFound),
+      EncodedAtom::None => Err(AtomError::AtomNotFound(T::NAME)),
     }
   }
 }
