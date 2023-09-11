@@ -3,76 +3,71 @@ use crate::ascii::LogDisplay;
 use crate::log;
 use std::io::{Read, Seek};
 
-// Metadata Box
-#[derive(Debug)]
-pub struct MetaBox {
-  pub ilst: Option<IlstBox>,
-  pub hdlr: Option<HdlrBox>,
+#[derive(Debug, Default)]
+pub struct MetaAtom {
+  pub ilst: EncodedAtom<IlstAtom>,
+  pub hdlr: EncodedAtom<HdlrAtom>,
 }
 
-impl MetaBox {
-  pub fn new<R: Read + Seek>(reader: &mut R, offset: u32, size: u32) -> BoxResult<Self> {
-    let mut atoms = AtomBoxIter::new(reader, offset + 4 + size);
-    atoms.offset = offset + 4;
-    let mut ilst = None;
-    let mut hdlr = None;
-    for atom in atoms {
+impl AtomDecoder for MetaAtom {
+  const NAME: [u8; 4] = *b"meta";
+  fn decode_unchecked<R: Read + Seek>(mut atom: Atom, reader: &mut R) -> AtomResult<Self> {
+    atom.offset += 4;
+    let mut meta = Self::default();
+    for atom in atom.atoms(reader) {
       match atom {
-        Ok(atom) => match atom {
-          AtomBox::Ilst(atom) => ilst = Some(atom),
-          AtomBox::Hdlr(atom) => hdlr = Some(atom),
-          _ => log!(warn@"#[META] Misplaced atom {atom:#?}"),
+        Ok(atom) => match &*atom.name {
+          b"ilst" => meta.ilst = EncodedAtom::Encoded(atom),
+          b"hdlr" => meta.hdlr = EncodedAtom::Encoded(atom),
+          _ => log!(warn@"#[meta] Misplaced atom {atom:#?}"),
         },
-        Err(e) => log!(err@"#[META] {e}"),
+        Err(e) => log!(err@"#[meta] {e}"),
       }
     }
 
-    Ok(Self { ilst, hdlr })
+    Ok(meta)
   }
 }
 
-#[derive(Debug)]
-pub struct IlstBox {
-  items: Vec<DataBox>,
+#[derive(Debug, Default)]
+pub struct IlstAtom {
+  pub items: Vec<DataAtom>,
 }
 
-impl IlstBox {
-  pub fn new<R: Read + Seek>(reader: &mut R, offset: u32, size: u32) -> BoxResult<Self> {
-    let items = BoxHeaderIter::new(reader, offset, offset + size)
-      .filter_map(|res| match res {
-        Ok(header) => Some(DataBox::new(header)),
-        Err(e) => {
-          log!(err@"#[ILST] {e}");
-          None
-        }
-      })
-      .collect::<BoxResult<_>>()?;
+impl AtomDecoder for IlstAtom {
+  const NAME: [u8; 4] = *b"ilst";
+  fn decode_unchecked<R: Read + Seek>(atom: Atom, reader: &mut R) -> AtomResult<Self> {
+    let mut items = Vec::new();
+    let mut atoms = atom.atoms(reader);
+    while let Some(atom) = atoms.next() {
+      match atom {
+        Ok(atom) => items.push(DataAtom::decode_unchecked(atom, atoms.reader)?), // TODO: use decode
+        Err(e) => log!(err@"#[ilst] {e}"),
+      }
+    }
     Ok(Self { items })
   }
 }
 
-/// ©too Encoder tag
-#[derive(Debug)]
-pub struct DataBox {
+#[derive(Debug, Default)]
+pub struct DataAtom {
   pub name: Str<4>,
   pub data: Vec<DataItem>,
 }
 
-impl DataBox {
-  pub fn new(header: BoxHeader) -> BoxResult<Self> {
+impl AtomDecoder for DataAtom {
+  const NAME: [u8; 4] = *b"data";
+  fn decode_unchecked<R: Read + Seek>(atom: Atom, reader: &mut R) -> AtomResult<Self> {
     let mut data = Vec::new();
-    let mut offset = 0;
-    while offset < header.size as usize {
-      let (size, name) = decode_header(&header.data)?;
-      let size = size as usize;
-      data.push(DataItem::new(
-        &header.data[offset + 8..size],
-        Str::try_from(name)?,
-      )?);
-      offset += size;
+    let mut atoms = atom.atoms(reader);
+    while let Some(atom) = atoms.next() {
+      match atom {
+        Ok(mut atom) => data.push(DataItem::new(&atom.read_data(atoms.reader)?, atom.name)?),
+        Err(e) => log!(err@"#[data] {e}"),
+      }
     }
     Ok(Self {
-      name: header.name,
+      name: atom.name,
       data,
     })
   }
@@ -87,7 +82,7 @@ pub struct DataItem {
 }
 
 impl DataItem {
-  pub fn new(data: &[u8], name: Str<4>) -> BoxResult<Self> {
+  pub fn new(data: &[u8], name: Str<4>) -> AtomResult<Self> {
     let type_indicator = (&data[..4]).try_into()?;
     let locale_indicator = (&data[4..8]).try_into()?;
     let value = String::from_utf8_lossy(&data[8..]).to_string();

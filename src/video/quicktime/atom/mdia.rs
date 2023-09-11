@@ -3,38 +3,40 @@ use crate::ascii::LogDisplay;
 use crate::log;
 use std::io::{Read, Seek};
 
-#[derive(Debug)]
-pub struct MdiaBox {
-  pub mdhd: Option<MdhdBox>,
-  pub hdlr: Option<HdlrBox>,
-  pub minf: Option<MinfBox>,
+#[derive(Debug, Default)]
+pub struct MdiaAtom {
+  pub atom: Atom,
+  pub mdhd: EncodedAtom<MdhdAtom>,
+  pub hdlr: EncodedAtom<HdlrAtom>,
+  pub minf: EncodedAtom<MinfAtom>,
 }
 
-impl MdiaBox {
-  pub fn new<R: Read + Seek>(reader: &mut R, offset: u32, size: u32) -> BoxResult<Self> {
-    let mut atoms = AtomBoxIter::new(reader, offset + size);
-    atoms.offset = offset;
-    let mut mdhd = None;
-    let mut hdlr = None;
-    let mut minf = None;
-    for atom in atoms {
+impl AtomDecoder for MdiaAtom {
+  const NAME: [u8; 4] = *b"mdia";
+  fn decode_unchecked<R: Read + Seek>(atom: Atom, reader: &mut R) -> AtomResult<Self> {
+    let mut mdia = Self {
+      atom,
+      ..Default::default()
+    };
+    for atom in mdia.atom.atoms(reader) {
       match atom {
-        Ok(atom) => match atom {
-          AtomBox::Mdhd(atom) => mdhd = Some(atom),
-          AtomBox::Hdlr(atom) => hdlr = Some(atom),
-          AtomBox::Minf(atom) => minf = Some(atom),
-          _ => log!(warn@"#[MDIA] Misplaced atom {atom:#?}"),
+        Ok(atom) => match &*atom.name {
+          b"mdhd" => mdia.mdhd = EncodedAtom::Encoded(atom),
+          b"hdlr" => mdia.hdlr = EncodedAtom::Encoded(atom),
+          b"minf" => mdia.minf = EncodedAtom::Encoded(atom),
+          _ => log!(warn@"#[mdia] Misplaced atom {atom:#?}"),
         },
-        Err(e) => log!(err@"#[MDIA] {e}"),
+        Err(e) => log!(err@"#[mdia] {e}"),
       }
     }
 
-    Ok(Self { mdhd, hdlr, minf })
+    Ok(mdia)
   }
 }
 
-#[derive(Debug)]
-pub struct MdhdBox {
+#[derive(Debug, Default)]
+pub struct MdhdAtom {
+  pub atom: Atom,
   pub version: u8,
   pub flags: [u8; 3],
   pub creation_time: u32,
@@ -45,20 +47,21 @@ pub struct MdhdBox {
   pub quality: u16,
 }
 
-impl MdhdBox {
-  pub fn new<R: Read + Seek>(reader: &mut R, size: u32) -> BoxResult<Self> {
-    let mut buffer = [0; 24];
-    reader.read_exact(&mut buffer)?;
+impl AtomDecoder for MdhdAtom {
+  const NAME: [u8; 4] = *b"mdhd";
+  fn decode_unchecked<R: Read + Seek>(mut atom: Atom, reader: &mut R) -> AtomResult<Self> {
+    let data = atom.read_data(reader)?;
 
-    let (version, flags) = decode_version_flags(&buffer);
-    let creation_time = u32::from_be_bytes((&buffer[4..8]).try_into()?);
-    let modification_time = u32::from_be_bytes((&buffer[8..12]).try_into()?);
-    let timescale = u32::from_be_bytes((&buffer[12..16]).try_into()?);
-    let duration = u32::from_be_bytes((&buffer[16..20]).try_into()?);
-    let language = Str(unpack_language_code(&buffer[20..22])?);
-    let quality = u16::from_be_bytes((&buffer[22..24]).try_into()?);
+    let (version, flags) = decode_version_flags(&data);
+    let creation_time = u32::from_be_bytes((&data[4..8]).try_into()?);
+    let modification_time = u32::from_be_bytes((&data[8..12]).try_into()?);
+    let timescale = u32::from_be_bytes((&data[12..16]).try_into()?);
+    let duration = u32::from_be_bytes((&data[16..20]).try_into()?);
+    let language = Str(unpack_language_code(&data[20..22])?);
+    let quality = u16::from_be_bytes((&data[22..24]).try_into()?);
 
     Ok(Self {
+      atom,
       version,
       flags,
       creation_time,
@@ -71,26 +74,28 @@ impl MdhdBox {
   }
 }
 
-#[derive(Debug)]
-pub struct HdlrBox {
+#[derive(Debug, Default)]
+pub struct HdlrAtom {
+  pub atom: Atom,
   pub version: u8,
   pub flags: [u8; 3],
   pub component_type: Str<4>,
   pub component_name: String,
 }
 
-impl HdlrBox {
-  pub fn new<R: Read + Seek>(reader: &mut R, size: u32) -> BoxResult<Self> {
-    let mut buffer = vec![0; size as usize];
-    reader.read_exact(&mut buffer)?;
+impl AtomDecoder for HdlrAtom {
+  const NAME: [u8; 4] = *b"hdlr";
+  fn decode_unchecked<R: Read + Seek>(mut atom: Atom, reader: &mut R) -> AtomResult<Self> {
+    let data = atom.read_data(reader)?;
 
-    let (version, flags) = decode_version_flags(&buffer);
+    let (version, flags) = decode_version_flags(&data);
     // __reserved__ 32 bit     (4 bytes)
-    let component_type = Str::try_from(&buffer[8..12])?;
+    let component_type = Str::try_from(&data[8..12])?;
     // __reserved__ 32 bit [3] (12 bytes)
-    let component_name = String::from_utf8_lossy(&buffer[24..]).to_string();
+    let component_name = String::from_utf8_lossy(&data[24..]).to_string();
 
     Ok(Self {
+      atom,
       version,
       flags,
       component_type,

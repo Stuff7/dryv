@@ -4,53 +4,49 @@ use crate::log;
 use crate::math::fixed_point_to_f32;
 use std::io::{Read, Seek};
 
-#[derive(Debug)]
-pub struct EdtsBox {
-  pub elst: Option<ElstBox>,
+#[derive(Debug, Default)]
+pub struct EdtsAtom {
+  pub elst: EncodedAtom<ElstAtom>,
 }
 
-impl EdtsBox {
-  pub fn new<R: Read + Seek>(reader: &mut R, offset: u32, size: u32) -> BoxResult<Self> {
-    let mut atoms = AtomBoxIter::new(reader, offset + size);
-    atoms.offset = offset;
-    let mut elst = None;
-    for atom in atoms {
+impl AtomDecoder for EdtsAtom {
+  const NAME: [u8; 4] = *b"edts";
+  fn decode_unchecked<R: Read + Seek>(atom: Atom, reader: &mut R) -> AtomResult<Self> {
+    let mut edts = Self::default();
+    for atom in atom.atoms(reader) {
       match atom {
-        Ok(atom) => match atom {
-          AtomBox::Elst(atom) => elst = Some(atom),
-          _ => log!(warn@"#[EDTS] Misplaced atom {atom:#?}"),
+        Ok(atom) => match &*atom.name {
+          b"elst" => edts.elst = EncodedAtom::Encoded(atom),
+          _ => log!(warn@"#[edts] Misplaced atom {atom:#?}"),
         },
-        Err(e) => log!(err@"#[EDTS] {e}"),
+        Err(e) => log!(err@"#[edts] {e}"),
       }
     }
 
-    Ok(Self { elst })
+    Ok(edts)
   }
 }
 
-#[derive(Debug)]
-pub struct ElstBox {
+#[derive(Debug, Default)]
+pub struct ElstAtom {
   pub version: u8,
   pub flags: [u8; 3],
   pub number_of_entries: u32,
-  pub edit_list_table: Vec<ElstEntry>,
+  pub edit_list_table: Vec<ElstItem>,
 }
 
-impl ElstBox {
-  pub fn new<R: Read + Seek>(reader: &mut R, size: u32) -> BoxResult<Self> {
-    let mut buffer = [0; 8];
-    reader.read_exact(&mut buffer)?;
+impl AtomDecoder for ElstAtom {
+  const NAME: [u8; 4] = *b"elst";
+  fn decode_unchecked<R: Read + Seek>(mut atom: Atom, reader: &mut R) -> AtomResult<Self> {
+    let data = atom.read_data(reader)?;
 
-    let (version, flags) = decode_version_flags(&buffer);
-    let number_of_entries = u32::from_be_bytes((&buffer[4..8]).try_into()?);
+    let (version, flags) = decode_version_flags(&data);
+    let number_of_entries = u32::from_be_bytes((&data[4..8]).try_into()?);
 
-    let mut buffer = vec![0; number_of_entries as usize * 12];
-    reader.read_exact(&mut buffer)?;
-
-    let edit_list_table = buffer
+    let edit_list_table = data[8..]
       .chunks(12)
-      .map(ElstEntry::from_bytes)
-      .collect::<BoxResult<_>>()?;
+      .map(ElstItem::from_bytes)
+      .collect::<AtomResult<_>>()?;
 
     Ok(Self {
       version,
@@ -61,15 +57,15 @@ impl ElstBox {
   }
 }
 
-#[derive(Debug)]
-pub struct ElstEntry {
+#[derive(Debug, Default)]
+pub struct ElstItem {
   pub track_duration: u32,
   pub media_time: i32,
   pub media_rate: f32,
 }
 
-impl ElstEntry {
-  pub fn from_bytes(bytes: &[u8]) -> BoxResult<Self> {
+impl ElstItem {
+  pub fn from_bytes(bytes: &[u8]) -> AtomResult<Self> {
     Ok(Self {
       track_duration: u32::from_be_bytes((&bytes[..4]).try_into()?),
       media_time: i32::from_be_bytes((&bytes[4..8]).try_into()?),

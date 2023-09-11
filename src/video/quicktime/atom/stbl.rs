@@ -3,54 +3,56 @@ use crate::ascii::LogDisplay;
 use crate::log;
 use std::io::{Read, Seek};
 
-#[derive(Debug)]
-pub struct StblBox {
-  pub stsd: Option<StsdBox>,
+#[derive(Debug, Default)]
+pub struct StblAtom {
+  pub stsd: EncodedAtom<StsdAtom>,
 }
 
-impl StblBox {
-  pub fn new<R: Read + Seek>(reader: &mut R, offset: u32, size: u32) -> BoxResult<Self> {
-    let mut atoms = AtomBoxIter::new(reader, offset + size);
-    atoms.offset = offset;
-    let mut stsd = None;
-    for atom in atoms {
+impl AtomDecoder for StblAtom {
+  const NAME: [u8; 4] = *b"stbl";
+  fn decode_unchecked<R: Read + Seek>(atom: Atom, reader: &mut R) -> AtomResult<Self> {
+    let mut stbl = Self::default();
+    for atom in atom.atoms(reader) {
       match atom {
-        Ok(atom) => match atom {
-          AtomBox::Stsd(atom) => stsd = Some(atom),
-          _ => log!(warn@"#[STBL] Misplaced atom {atom:#?}"),
+        Ok(atom) => match &*atom.name {
+          b"stsd" => stbl.stsd = EncodedAtom::Encoded(atom),
+          _ => log!(warn@"#[stsd] Misplaced atom {atom:#?}"),
         },
-        Err(e) => log!(err@"#[STBL] {e}"),
+        Err(e) => log!(err@"#[stsd] {e}"),
       }
     }
 
-    Ok(Self { stsd })
+    Ok(stbl)
   }
 }
+
 #[derive(Debug)]
-pub struct StsdBox {
+pub struct StsdAtom {
   pub version: u8,
   pub flags: [u8; 3],
   pub number_of_entries: u32,
-  pub sample_description_table: Vec<StsdEntry>,
+  pub sample_description_table: Vec<StsdItem>,
 }
 
-impl StsdBox {
-  pub fn new<R: Read + Seek>(reader: &mut R, offset: u32, size: u32) -> BoxResult<Self> {
-    let mut buffer = [0; 8];
-    reader.read_exact(&mut buffer)?;
+impl AtomDecoder for StsdAtom {
+  const NAME: [u8; 4] = *b"stsd";
+  fn decode_unchecked<R: Read + Seek>(mut atom: Atom, reader: &mut R) -> AtomResult<Self> {
+    let data = atom.read_data(reader)?;
 
-    let (version, flags) = decode_version_flags(&buffer);
-    let number_of_entries = u32::from_be_bytes((&buffer[4..8]).try_into()?);
+    let (version, flags) = decode_version_flags(&data);
+    let number_of_entries = u32::from_be_bytes((&data[4..8]).try_into()?);
 
-    let sample_description_table = BoxHeaderIter::new(reader, offset + 8, offset + size)
-      .filter_map(|res| match res {
-        Ok(header) => Some(StsdEntry::new(header)),
-        Err(e) => {
-          log!(err@"#[STSD] {e}");
-          None
+    atom.offset += 8;
+    let mut sample_description_table = Vec::new();
+    let mut atoms = atom.atoms(reader);
+    while let Some(atom) = atoms.next() {
+      match atom {
+        Ok(mut atom) => {
+          sample_description_table.push(StsdItem::new(&atom.read_data(atoms.reader)?, atom.name)?)
         }
-      })
-      .collect::<BoxResult<_>>()?;
+        Err(e) => log!(err@"#[dref] {e}"),
+      }
+    }
 
     Ok(Self {
       version,
@@ -62,19 +64,19 @@ impl StsdBox {
 }
 
 #[derive(Debug)]
-pub struct StsdEntry {
+pub struct StsdItem {
   pub data_format: Str<4>,
   pub dref_index: u16,
   pub extra_data: Vec<u8>,
 }
 
-impl StsdEntry {
-  pub fn new(header: BoxHeader) -> BoxResult<Self> {
-    let dref_index = u16::from_be_bytes((&header.data[6..8]).try_into()?);
-    let extra_data = (&header.data[8..]).into();
+impl StsdItem {
+  pub fn new(data: &[u8], data_format: Str<4>) -> AtomResult<Self> {
+    let dref_index = u16::from_be_bytes((&data[6..8]).try_into()?);
+    let extra_data = (&data[8..]).into();
 
     Ok(Self {
-      data_format: header.name,
+      data_format,
       dref_index,
       extra_data,
     })

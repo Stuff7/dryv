@@ -3,59 +3,63 @@ use crate::ascii::LogDisplay;
 use crate::log;
 use std::io::{Read, Seek};
 
-#[derive(Debug)]
-pub struct MinfBox {
-  pub media_header: Option<MediaHeader>,
-  pub dinf: Option<DinfBox>,
-  pub stbl: Option<StblBox>,
+#[derive(Debug, Default)]
+pub struct MinfAtom {
+  pub media_header: Option<MediaHeaderAtom>,
+  pub dinf: EncodedAtom<DinfAtom>,
+  pub stbl: EncodedAtom<StblAtom>,
 }
 
-impl MinfBox {
-  pub fn new<R: Read + Seek>(reader: &mut R, offset: u32, size: u32) -> BoxResult<Self> {
-    let mut atoms = AtomBoxIter::new(reader, offset + size);
-    atoms.offset = offset;
-    let mut media_header = None;
-    let mut dinf = None;
-    let mut stbl = None;
-    for atom in atoms {
+impl AtomDecoder for MinfAtom {
+  const NAME: [u8; 4] = *b"minf";
+  fn decode_unchecked<R: Read + Seek>(atom: Atom, reader: &mut R) -> AtomResult<Self> {
+    let mut minf = Self::default();
+    let mut atoms = atom.atoms(reader);
+    while let Some(atom) = atoms.next() {
       match atom {
-        Ok(atom) => match atom {
-          AtomBox::Vmhd(atom) => media_header = Some(MediaHeader::Video(atom)),
-          AtomBox::Smhd(atom) => media_header = Some(MediaHeader::Sound(atom)),
-          AtomBox::Dinf(atom) => dinf = Some(atom),
-          AtomBox::Stbl(atom) => stbl = Some(atom),
-          _ => log!(warn@"#[MINF] Misplaced atom {atom:#?}"),
+        Ok(atom) => match &*atom.name {
+          b"vmhd" => {
+            minf.media_header = Some(MediaHeaderAtom::Video(VmhdAtom::decode_unchecked(
+              atom,
+              atoms.reader,
+            )?))
+          }
+          b"smhd" => {
+            minf.media_header = Some(MediaHeaderAtom::Sound(SmhdAtom::decode_unchecked(
+              atom,
+              atoms.reader,
+            )?))
+          }
+          b"dinf" => minf.dinf = EncodedAtom::Encoded(atom),
+          b"stbl" => minf.stbl = EncodedAtom::Encoded(atom),
+          _ => log!(warn@"#[minf] Misplaced atom {atom:#?}"),
         },
-        Err(e) => log!(err@"#[MINF] {e}"),
+        Err(e) => log!(err@"#[minf] {e}"),
       }
     }
 
-    Ok(Self {
-      media_header,
-      dinf,
-      stbl,
-    })
+    Ok(minf)
   }
 }
 
 #[derive(Debug)]
-pub enum MediaHeader {
-  Video(VmhdBox),
-  Sound(SmhdBox),
+pub enum MediaHeaderAtom {
+  Video(VmhdAtom),
+  Sound(SmhdAtom),
 }
 
 #[derive(Debug)]
-pub struct VmhdBox {
+pub struct VmhdAtom {
   pub version: u8,
   pub flags: [u8; 3],
   pub graphics_mode: u16,
   pub opcolor: [u16; 3],
 }
 
-impl VmhdBox {
-  pub fn new<R: Read + Seek>(reader: &mut R, size: u32) -> BoxResult<Self> {
-    let mut buffer = [0; 12];
-    reader.read_exact(&mut buffer)?;
+impl AtomDecoder for VmhdAtom {
+  const NAME: [u8; 4] = *b"vmhd";
+  fn decode_unchecked<R: Read + Seek>(mut atom: Atom, reader: &mut R) -> AtomResult<Self> {
+    let buffer = atom.read_data(reader)?;
 
     let (version, flags) = decode_version_flags(&buffer);
     let graphics_mode = u16::from_be_bytes((&buffer[4..6]).try_into()?);
@@ -75,16 +79,16 @@ impl VmhdBox {
 }
 
 #[derive(Debug)]
-pub struct SmhdBox {
+pub struct SmhdAtom {
   pub version: u8,
   pub flags: [u8; 3],
   pub balance: u16,
 }
 
-impl SmhdBox {
-  pub fn new<R: Read + Seek>(reader: &mut R, size: u32) -> BoxResult<Self> {
-    let mut buffer = [0; 6];
-    reader.read_exact(&mut buffer)?;
+impl AtomDecoder for SmhdAtom {
+  const NAME: [u8; 4] = *b"smhd";
+  fn decode_unchecked<R: Read + Seek>(mut atom: Atom, reader: &mut R) -> AtomResult<Self> {
+    let buffer = atom.read_data(reader)?;
 
     let (version, flags) = decode_version_flags(&buffer);
     let balance = u16::from_be_bytes((&buffer[4..6]).try_into()?);
@@ -97,55 +101,56 @@ impl SmhdBox {
   }
 }
 
-#[derive(Debug)]
-pub struct DinfBox {
-  pub dref: Option<DrefBox>,
+#[derive(Debug, Default)]
+pub struct DinfAtom {
+  pub dref: EncodedAtom<DrefAtom>,
 }
 
-impl DinfBox {
-  pub fn new<R: Read + Seek>(reader: &mut R, offset: u32, size: u32) -> BoxResult<Self> {
-    let mut atoms = AtomBoxIter::new(reader, offset + size);
-    atoms.offset = offset;
-    let mut dref = None;
-    for atom in atoms {
+impl AtomDecoder for DinfAtom {
+  const NAME: [u8; 4] = *b"dinf";
+  fn decode_unchecked<R: Read + Seek>(atom: Atom, reader: &mut R) -> AtomResult<Self> {
+    let mut dinf = Self::default();
+    for atom in atom.atoms(reader) {
       match atom {
-        Ok(atom) => match atom {
-          AtomBox::Dref(atom) => dref = Some(atom),
-          _ => log!(warn@"#[DINF] Misplaced atom {atom:#?}"),
+        Ok(atom) => match &*atom.name {
+          b"dref" => dinf.dref = EncodedAtom::Encoded(atom),
+          _ => log!(warn@"#[dinf] Misplaced atom {atom:#?}"),
         },
-        Err(e) => log!(err@"#[DINF] {e}"),
+        Err(e) => log!(err@"#[dinf] {e}"),
       }
     }
 
-    Ok(Self { dref })
+    Ok(dinf)
   }
 }
 
-#[derive(Debug)]
-pub struct DrefBox {
+#[derive(Debug, Default)]
+pub struct DrefAtom {
   pub version: u8,
   pub flags: [u8; 3],
   pub number_of_entries: u32,
-  pub data_references: Vec<DrefEntry>,
+  pub data_references: Vec<DrefItem>,
 }
 
-impl DrefBox {
-  pub fn new<R: Read + Seek>(reader: &mut R, offset: u32, size: u32) -> BoxResult<Self> {
-    let mut buffer = [0; 8];
-    reader.read_exact(&mut buffer)?;
+impl AtomDecoder for DrefAtom {
+  const NAME: [u8; 4] = *b"dref";
+  fn decode_unchecked<R: Read + Seek>(mut atom: Atom, reader: &mut R) -> AtomResult<Self> {
+    let buffer = atom.read_data(reader)?;
 
     let (version, flags) = decode_version_flags(&buffer);
     let number_of_entries = u32::from_be_bytes((&buffer[4..8]).try_into()?);
 
-    let data_references = BoxHeaderIter::new(reader, offset + 8, offset + size)
-      .filter_map(|res| match res {
-        Ok(header) => Some(DrefEntry::new(header)),
-        Err(e) => {
-          log!(err@"#[DREF] {e}");
-          None
+    atom.offset += 8;
+    let mut data_references = Vec::new();
+    let mut atoms = atom.atoms(reader);
+    while let Some(atom) = atoms.next() {
+      match atom {
+        Ok(mut atom) => {
+          data_references.push(DrefItem::new(&atom.read_data(atoms.reader)?, atom.name)?)
         }
-      })
-      .collect::<BoxResult<_>>()?;
+        Err(e) => log!(err@"#[dref] {e}"),
+      }
+    }
 
     Ok(Self {
       version,
@@ -156,21 +161,21 @@ impl DrefBox {
   }
 }
 
-#[derive(Debug)]
-pub struct DrefEntry {
-  pub box_type: Str<4>,
+#[derive(Debug, Default)]
+pub struct DrefItem {
+  pub atom_type: Str<4>,
   pub version: u8,
   pub flags: [u8; 3],
   pub data: String,
 }
 
-impl DrefEntry {
-  pub fn new(header: BoxHeader) -> BoxResult<Self> {
-    let (version, flags) = decode_version_flags(&header.data);
-    let data = String::from_utf8_lossy(&header.data[4..]).to_string();
+impl DrefItem {
+  pub fn new(data: &[u8], atom_type: Str<4>) -> AtomResult<Self> {
+    let (version, flags) = decode_version_flags(data);
+    let data = String::from_utf8_lossy(&data[4..]).to_string();
 
     Ok(Self {
-      box_type: header.name,
+      atom_type,
       version,
       flags,
       data,

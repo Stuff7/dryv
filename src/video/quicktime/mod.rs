@@ -1,43 +1,33 @@
 pub mod atom;
 
 use atom::*;
+use std::fs::File;
+use std::path::Path;
 use thiserror::Error;
-
-use crate::{ascii::LogDisplay, log};
 
 #[derive(Debug, Error)]
 pub enum QTError {
   #[error("QuickTime Decoder IO Error\n{0}")]
   IO(#[from] std::io::Error),
   #[error(transparent)]
-  Box(#[from] BoxError),
+  Atom(#[from] AtomError),
 }
 
 pub type QTResult<T = ()> = Result<T, QTError>;
 
 pub struct QTDecoder {
-  pub file: std::fs::File,
+  pub file: File,
   pub size: u64,
 }
 
 impl QTDecoder {
-  pub fn new(file_path: &str) -> QTResult<Self> {
-    let file = std::fs::File::open(file_path)?;
-    Ok(QTDecoder {
-      size: file.metadata()?.len(),
-      file,
-    })
+  pub fn open<P: AsRef<Path>>(path: P) -> QTResult<Self> {
+    let file = File::open(path)?;
+    let size = file.metadata()?.len();
+    Ok(QTDecoder { size, file })
   }
 
-  pub fn decode(&mut self) -> Vec<AtomBox> {
-    println!("FILE LEN: {}", self.size);
-    let atoms = AtomBoxIter::new(&mut self.file, self.size as u32).filter_map(|a| match a {
-      Ok(a) => Some(a),
-      Err(e) => {
-        log!(err@"#[ROOT] {e}");
-        None
-      }
-    });
-    atoms.collect()
+  pub fn decode(&mut self) -> QTResult<RootAtom> {
+    RootAtom::new(&mut self.file, self.size as u32).map_err(QTError::from)
   }
 }

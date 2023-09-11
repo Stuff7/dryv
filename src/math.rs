@@ -20,6 +20,12 @@ pub struct Matrix3x3 {
 }
 
 impl Matrix3x3 {
+  pub fn identity() -> Self {
+    Self {
+      data: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+    }
+  }
+
   pub fn from_bytes(bytes: &[u8]) -> MathResult<Self> {
     let mut matrix = [0_f32; 9];
     for (i, matrix_value) in matrix.iter_mut().enumerate() {
