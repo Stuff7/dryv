@@ -12,6 +12,7 @@ pub struct StblAtom {
   pub stsc: EncodedAtom<StscAtom>,
   pub stsz: EncodedAtom<StszAtom>,
   pub stco: EncodedAtom<StcoAtom>,
+  pub sgpd: Option<EncodedAtom<SgpdAtom>>,
 }
 
 impl AtomDecoder for StblAtom {
@@ -28,6 +29,7 @@ impl AtomDecoder for StblAtom {
           b"stsc" => stbl.stsc = EncodedAtom::Encoded(atom),
           b"stsz" => stbl.stsz = EncodedAtom::Encoded(atom),
           b"stco" => stbl.stco = EncodedAtom::Encoded(atom),
+          b"sgpd" => stbl.sgpd = Some(EncodedAtom::Encoded(atom)),
           _ => log!(warn@"#[stbl] Unused atom {atom:#?}"),
         },
         Err(e) => log!(err@"#[stbl] {e}"),
@@ -330,6 +332,48 @@ impl AtomDecoder for StcoAtom {
       flags,
       number_of_entries,
       chunk_offset_table,
+    })
+  }
+}
+
+#[derive(Debug)]
+pub struct SgpdAtom {
+  pub atom: Atom,
+  pub version: u8,
+  pub flags: [u8; 3],
+  pub grouping_table: u32,
+  pub default_length: u32,
+  pub entry_count: u32,
+  pub payload_data: Vec<u16>,
+}
+
+impl AtomDecoder for SgpdAtom {
+  const NAME: [u8; 4] = *b"sgpd";
+  fn decode_unchecked<R: Read + Seek>(mut atom: Atom, reader: &mut R) -> AtomResult<Self> {
+    let data = atom.read_data(reader)?;
+
+    let (version, flags) = decode_version_flags(&data);
+    let grouping_table = u32::from_be_bytes((&data[4..8]).try_into()?);
+    let default_length = u32::from_be_bytes((&data[8..12]).try_into()?);
+    let entry_count = u32::from_be_bytes((&data[12..16]).try_into()?);
+
+    let payload_data = data[16..]
+      .chunks(2)
+      .map(|b| {
+        b.try_into()
+          .map(u16::from_be_bytes)
+          .map_err(AtomError::from)
+      })
+      .collect::<AtomResult<_>>()?;
+
+    Ok(Self {
+      atom,
+      version,
+      flags,
+      grouping_table,
+      default_length,
+      entry_count,
+      payload_data,
     })
   }
 }
