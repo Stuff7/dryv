@@ -11,6 +11,7 @@ pub struct StblAtom {
   pub ctts: Option<EncodedAtom<CttsAtom>>,
   pub stsc: EncodedAtom<StscAtom>,
   pub stsz: EncodedAtom<StszAtom>,
+  pub stco: EncodedAtom<StcoAtom>,
 }
 
 impl AtomDecoder for StblAtom {
@@ -26,6 +27,7 @@ impl AtomDecoder for StblAtom {
           b"ctts" => stbl.ctts = Some(EncodedAtom::Encoded(atom)),
           b"stsc" => stbl.stsc = EncodedAtom::Encoded(atom),
           b"stsz" => stbl.stsz = EncodedAtom::Encoded(atom),
+          b"stco" => stbl.stco = EncodedAtom::Encoded(atom),
           _ => log!(warn@"#[stbl] Unused atom {atom:#?}"),
         },
         Err(e) => log!(err@"#[stbl] {e}"),
@@ -292,6 +294,42 @@ impl AtomDecoder for StszAtom {
       sample_size,
       number_of_entries,
       sample_size_table,
+    })
+  }
+}
+
+#[derive(Debug)]
+pub struct StcoAtom {
+  pub atom: Atom,
+  pub version: u8,
+  pub flags: [u8; 3],
+  pub number_of_entries: u32,
+  pub chunk_offset_table: Vec<u32>,
+}
+
+impl AtomDecoder for StcoAtom {
+  const NAME: [u8; 4] = *b"stco";
+  fn decode_unchecked<R: Read + Seek>(mut atom: Atom, reader: &mut R) -> AtomResult<Self> {
+    let data = atom.read_data(reader)?;
+
+    let (version, flags) = decode_version_flags(&data);
+    let number_of_entries = u32::from_be_bytes((&data[4..8]).try_into()?);
+
+    let chunk_offset_table = data[8..]
+      .chunks(4)
+      .map(|b| {
+        b.try_into()
+          .map(u32::from_be_bytes)
+          .map_err(AtomError::from)
+      })
+      .collect::<AtomResult<_>>()?;
+
+    Ok(Self {
+      atom,
+      version,
+      flags,
+      number_of_entries,
+      chunk_offset_table,
     })
   }
 }

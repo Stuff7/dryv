@@ -73,7 +73,8 @@ impl Video {
       }
       stbl.stsc.decode(&mut decoder.file)?;
       stbl.stsz.decode(&mut decoder.file)?;
-      println!("{} {:#?}", hdlr.component_type, stbl.stsz);
+      stbl.stco.decode(&mut decoder.file)?;
+      println!("{} {:#?}", hdlr.component_type, stbl.stco);
 
       if *hdlr.component_type == *b"vide" {
         let tkhd = trak.tkhd.decode(&mut decoder.file)?;
