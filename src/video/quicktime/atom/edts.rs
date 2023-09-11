@@ -17,7 +17,7 @@ impl AtomDecoder for EdtsAtom {
       match atom {
         Ok(atom) => match &*atom.name {
           b"elst" => edts.elst = EncodedAtom::Encoded(atom),
-          _ => log!(warn@"#[edts] Misplaced atom {atom:#?}"),
+          _ => log!(warn@"#[edts] Unused atom {atom:#?}"),
         },
         Err(e) => log!(err@"#[edts] {e}"),
       }

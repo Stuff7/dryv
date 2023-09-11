@@ -44,7 +44,7 @@ impl AtomDecoder for TrakAtom {
           b"imap" => trak.imap = EncodedAtom::Encoded(atom),
           b"mdia" => trak.mdia = EncodedAtom::Encoded(atom),
           b"udta" => trak.udta = EncodedAtom::Encoded(atom),
-          _ => log!(warn@"#[trak] Misplaced atom {atom:#?}"),
+          _ => log!(warn@"#[trak] Unused atom {atom:#?}"),
         },
         Err(e) => log!(err@"#[trak] {e}"),
       }

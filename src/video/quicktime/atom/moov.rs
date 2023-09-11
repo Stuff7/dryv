@@ -35,7 +35,7 @@ impl AtomDecoder for MoovAtom {
           b"ctab" => moov.ctab = EncodedAtom::Encoded(atom),
           b"cmov" => moov.cmov = EncodedAtom::Encoded(atom),
           b"rmra" => moov.rmra = EncodedAtom::Encoded(atom),
-          _ => log!(warn@"#[moov] Misplaced atom {atom:#?}"),
+          _ => log!(warn@"#[moov] Unused atom {atom:#?}"),
         },
         Err(e) => log!(err@"#[moov] {e}"),
       }
@@ -113,7 +113,7 @@ impl AtomDecoder for UdtaAtom {
       match atom {
         Ok(atom) => match &*atom.name {
           b"meta" => metas.push(EncodedAtom::Encoded(atom)),
-          _ => log!(warn@"#[meta] Misplaced atom {atom:#?}"),
+          _ => log!(warn@"#[meta] Unused atom {atom:#?}"),
         },
         Err(e) => log!(err@"#[meta] {e}"),
       }

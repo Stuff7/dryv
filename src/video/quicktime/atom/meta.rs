@@ -19,7 +19,7 @@ impl AtomDecoder for MetaAtom {
         Ok(atom) => match &*atom.name {
           b"ilst" => meta.ilst = EncodedAtom::Encoded(atom),
           b"hdlr" => meta.hdlr = EncodedAtom::Encoded(atom),
-          _ => log!(warn@"#[meta] Misplaced atom {atom:#?}"),
+          _ => log!(warn@"#[meta] Unused atom {atom:#?}"),
         },
         Err(e) => log!(err@"#[meta] {e}"),
       }

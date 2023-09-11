@@ -16,7 +16,7 @@ impl AtomDecoder for StblAtom {
       match atom {
         Ok(atom) => match &*atom.name {
           b"stsd" => stbl.stsd = EncodedAtom::Encoded(atom),
-          _ => log!(warn@"#[stsd] Misplaced atom {atom:#?}"),
+          _ => log!(warn@"#[stsd] Unused atom {atom:#?}"),
         },
         Err(e) => log!(err@"#[stsd] {e}"),
       }

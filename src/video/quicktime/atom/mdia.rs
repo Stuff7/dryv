@@ -24,7 +24,7 @@ impl AtomDecoder for MdiaAtom {
           b"mdhd" => mdia.mdhd = EncodedAtom::Encoded(atom),
           b"hdlr" => mdia.hdlr = EncodedAtom::Encoded(atom),
           b"minf" => mdia.minf = EncodedAtom::Encoded(atom),
-          _ => log!(warn@"#[mdia] Misplaced atom {atom:#?}"),
+          _ => log!(warn@"#[mdia] Unused atom {atom:#?}"),
         },
         Err(e) => log!(err@"#[mdia] {e}"),
       }

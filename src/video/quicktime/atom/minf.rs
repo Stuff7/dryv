@@ -32,7 +32,7 @@ impl AtomDecoder for MinfAtom {
           }
           b"dinf" => minf.dinf = EncodedAtom::Encoded(atom),
           b"stbl" => minf.stbl = EncodedAtom::Encoded(atom),
-          _ => log!(warn@"#[minf] Misplaced atom {atom:#?}"),
+          _ => log!(warn@"#[minf] Unused atom {atom:#?}"),
         },
         Err(e) => log!(err@"#[minf] {e}"),
       }
@@ -114,7 +114,7 @@ impl AtomDecoder for DinfAtom {
       match atom {
         Ok(atom) => match &*atom.name {
           b"dref" => dinf.dref = EncodedAtom::Encoded(atom),
-          _ => log!(warn@"#[dinf] Misplaced atom {atom:#?}"),
+          _ => log!(warn@"#[dinf] Unused atom {atom:#?}"),
         },
         Err(e) => log!(err@"#[dinf] {e}"),
       }
