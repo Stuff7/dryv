@@ -13,6 +13,7 @@ pub struct StblAtom {
   pub stsz: EncodedAtom<StszAtom>,
   pub stco: EncodedAtom<StcoAtom>,
   pub sgpd: Option<EncodedAtom<SgpdAtom>>,
+  pub sbgp: Option<EncodedAtom<SbgpAtom>>,
 }
 
 impl AtomDecoder for StblAtom {
@@ -30,6 +31,7 @@ impl AtomDecoder for StblAtom {
           b"stsz" => stbl.stsz = EncodedAtom::Encoded(atom),
           b"stco" => stbl.stco = EncodedAtom::Encoded(atom),
           b"sgpd" => stbl.sgpd = Some(EncodedAtom::Encoded(atom)),
+          b"sbgp" => stbl.sbgp = Some(EncodedAtom::Encoded(atom)),
           _ => log!(warn@"#[stbl] Unused atom {atom:#?}"),
         },
         Err(e) => log!(err@"#[stbl] {e}"),
@@ -374,6 +376,41 @@ impl AtomDecoder for SgpdAtom {
       default_length,
       entry_count,
       payload_data,
+    })
+  }
+}
+
+#[derive(Debug)]
+pub struct SbgpAtom {
+  pub atom: Atom,
+  pub version: u8,
+  pub flags: [u8; 3],
+  pub grouping_type: Str<4>,
+  pub entry_count: u32,
+  pub sample_count: u32,
+  pub group_description_index: u32,
+}
+
+impl AtomDecoder for SbgpAtom {
+  const NAME: [u8; 4] = *b"sbgp";
+  fn decode_unchecked<R: Read + Seek>(mut atom: Atom, reader: &mut R) -> AtomResult<Self> {
+    let data = atom.read_data(reader)?;
+
+    let (version, flags) = decode_version_flags(&data);
+    let grouping_type = Str::try_from(&data[4..8])?;
+    let entry_count = u32::from_be_bytes((&data[8..12]).try_into()?);
+    let sample_count = u32::from_be_bytes((&data[12..16]).try_into()?);
+
+    let group_description_index = u32::from_be_bytes((&data[16..20]).try_into()?);
+
+    Ok(Self {
+      atom,
+      version,
+      flags,
+      grouping_type,
+      entry_count,
+      sample_count,
+      group_description_index,
     })
   }
 }
