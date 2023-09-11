@@ -9,6 +9,7 @@ pub struct StblAtom {
   pub stts: EncodedAtom<SttsAtom>,
   pub stss: Option<EncodedAtom<StssAtom>>,
   pub ctts: Option<EncodedAtom<CttsAtom>>,
+  pub stsc: EncodedAtom<StscAtom>,
 }
 
 impl AtomDecoder for StblAtom {
@@ -22,6 +23,7 @@ impl AtomDecoder for StblAtom {
           b"stts" => stbl.stts = EncodedAtom::Encoded(atom),
           b"stss" => stbl.stss = Some(EncodedAtom::Encoded(atom)),
           b"ctts" => stbl.ctts = Some(EncodedAtom::Encoded(atom)),
+          b"stsc" => stbl.stsc = EncodedAtom::Encoded(atom),
           _ => log!(warn@"#[stbl] Unused atom {atom:#?}"),
         },
         Err(e) => log!(err@"#[stbl] {e}"),
@@ -196,6 +198,59 @@ impl AtomDecoder for CttsAtom {
       version,
       flags,
       entry_count,
+    })
+  }
+}
+
+#[derive(Debug)]
+pub struct StscAtom {
+  pub atom: Atom,
+  pub version: u8,
+  pub flags: [u8; 3],
+  pub number_of_entries: u32,
+  pub sample_to_chunk_table: Vec<StscItem>,
+}
+
+impl AtomDecoder for StscAtom {
+  const NAME: [u8; 4] = *b"stsc";
+  fn decode_unchecked<R: Read + Seek>(mut atom: Atom, reader: &mut R) -> AtomResult<Self> {
+    let data = atom.read_data(reader)?;
+
+    let (version, flags) = decode_version_flags(&data);
+    let number_of_entries = u32::from_be_bytes((&data[4..8]).try_into()?);
+
+    let sample_to_chunk_table = data[8..]
+      .chunks(8)
+      .map(StscItem::from_bytes)
+      .collect::<AtomResult<_>>()?;
+
+    Ok(Self {
+      atom,
+      version,
+      flags,
+      number_of_entries,
+      sample_to_chunk_table,
+    })
+  }
+}
+
+#[derive(Debug)]
+pub struct StscItem {
+  pub first_chunk: u32,
+  pub samples_per_chunk: u32,
+  pub sample_description_id: u32,
+}
+
+impl StscItem {
+  pub fn from_bytes(data: &[u8]) -> AtomResult<Self> {
+    let first_chunk = u32::from_be_bytes((&data[..4]).try_into()?);
+    let samples_per_chunk = u32::from_be_bytes((&data[..4]).try_into()?);
+    let sample_description_id = u32::from_be_bytes((&data[4..8]).try_into()?);
+
+    Ok(Self {
+      first_chunk,
+      samples_per_chunk,
+      sample_description_id,
     })
   }
 }
