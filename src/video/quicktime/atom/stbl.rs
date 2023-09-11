@@ -8,6 +8,7 @@ pub struct StblAtom {
   pub stsd: EncodedAtom<StsdAtom>,
   pub stts: EncodedAtom<SttsAtom>,
   pub stss: Option<EncodedAtom<StssAtom>>,
+  pub ctts: Option<EncodedAtom<CttsAtom>>,
 }
 
 impl AtomDecoder for StblAtom {
@@ -20,6 +21,7 @@ impl AtomDecoder for StblAtom {
           b"stsd" => stbl.stsd = EncodedAtom::Encoded(atom),
           b"stts" => stbl.stts = EncodedAtom::Encoded(atom),
           b"stss" => stbl.stss = Some(EncodedAtom::Encoded(atom)),
+          b"ctts" => stbl.ctts = Some(EncodedAtom::Encoded(atom)),
           _ => log!(warn@"#[stbl] Unused atom {atom:#?}"),
         },
         Err(e) => log!(err@"#[stbl] {e}"),
@@ -169,6 +171,31 @@ impl AtomDecoder for StssAtom {
       flags,
       number_of_entries,
       sync_sample_table,
+    })
+  }
+}
+
+#[derive(Debug)]
+pub struct CttsAtom {
+  pub atom: Atom,
+  pub version: u8,
+  pub flags: [u8; 3],
+  pub entry_count: u32,
+}
+
+impl AtomDecoder for CttsAtom {
+  const NAME: [u8; 4] = *b"ctts";
+  fn decode_unchecked<R: Read + Seek>(mut atom: Atom, reader: &mut R) -> AtomResult<Self> {
+    let data = atom.read_data(reader)?;
+
+    let (version, flags) = decode_version_flags(&data);
+    let entry_count = u32::from_be_bytes((&data[4..8]).try_into()?);
+
+    Ok(Self {
+      atom,
+      version,
+      flags,
+      entry_count,
     })
   }
 }
