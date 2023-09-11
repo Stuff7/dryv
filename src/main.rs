@@ -30,7 +30,7 @@ fn main() {
   );
   let end_time = Instant::now();
   if args.debug {
-    log!("{video}");
+    println!("{video}");
   }
 
   log!(ok@"Done in {:?}", end_time - start_time);
