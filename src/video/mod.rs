@@ -41,10 +41,30 @@ impl Video {
       matrix: Matrix3x3::identity(),
     };
 
+    if let Some(mut udta) = root.moov.udta {
+      let udta = udta.decode(&mut decoder.file)?;
+      for meta in &mut udta.metas {
+        meta
+          .decode(&mut decoder.file)?
+          .ilst
+          .decode(&mut decoder.file)?;
+      }
+    }
     for ref mut trak in root.moov.trak {
       let trak = trak.decode(&mut decoder.file)?;
       let mdia = trak.mdia.decode(&mut decoder.file)?;
       let hdlr = mdia.hdlr.decode(&mut decoder.file)?;
+      let edts = trak.edts.decode(&mut decoder.file)?;
+      edts.elst.decode(&mut decoder.file)?;
+      let minf = mdia.minf.decode(&mut decoder.file)?;
+      minf
+        .dinf
+        .decode(&mut decoder.file)?
+        .dref
+        .decode(&mut decoder.file)?;
+      let stbl = minf.stbl.decode(&mut decoder.file)?;
+      stbl.stsd.decode(&mut decoder.file)?;
+      stbl.stts.decode(&mut decoder.file)?;
 
       if *hdlr.component_type == *b"vide" {
         let tkhd = trak.tkhd.decode(&mut decoder.file)?;

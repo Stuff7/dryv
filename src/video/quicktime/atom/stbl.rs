@@ -6,6 +6,7 @@ use std::io::{Read, Seek};
 #[derive(Debug, Default)]
 pub struct StblAtom {
   pub stsd: EncodedAtom<StsdAtom>,
+  pub stts: EncodedAtom<SttsAtom>,
 }
 
 impl AtomDecoder for StblAtom {
@@ -16,9 +17,10 @@ impl AtomDecoder for StblAtom {
       match atom {
         Ok(atom) => match &*atom.name {
           b"stsd" => stbl.stsd = EncodedAtom::Encoded(atom),
-          _ => log!(warn@"#[stsd] Unused atom {atom:#?}"),
+          b"stts" => stbl.stts = EncodedAtom::Encoded(atom),
+          _ => log!(warn@"#[stbl] Unused atom {atom:#?}"),
         },
-        Err(e) => log!(err@"#[stsd] {e}"),
+        Err(e) => log!(err@"#[stbl] {e}"),
       }
     }
 
@@ -50,7 +52,7 @@ impl AtomDecoder for StsdAtom {
         Ok(mut atom) => {
           sample_description_table.push(StsdItem::new(&atom.read_data(atoms.reader)?, atom.name)?)
         }
-        Err(e) => log!(err@"#[dref] {e}"),
+        Err(e) => log!(err@"#[stsd] {e}"),
       }
     }
 
@@ -79,6 +81,56 @@ impl StsdItem {
       data_format,
       dref_index,
       extra_data,
+    })
+  }
+}
+
+#[derive(Debug)]
+pub struct SttsAtom {
+  pub atom: Atom,
+  pub version: u8,
+  pub flags: [u8; 3],
+  pub number_of_entries: u32,
+  pub time_to_sample_table: Vec<SttsItem>,
+}
+
+impl AtomDecoder for SttsAtom {
+  const NAME: [u8; 4] = *b"stts";
+  fn decode_unchecked<R: Read + Seek>(mut atom: Atom, reader: &mut R) -> AtomResult<Self> {
+    let data = atom.read_data(reader)?;
+
+    let (version, flags) = decode_version_flags(&data);
+    let number_of_entries = u32::from_be_bytes((&data[4..8]).try_into()?);
+
+    let time_to_sample_table = data[8..]
+      .chunks(8)
+      .map(SttsItem::from_bytes)
+      .collect::<AtomResult<_>>()?;
+
+    Ok(Self {
+      atom,
+      version,
+      flags,
+      number_of_entries,
+      time_to_sample_table,
+    })
+  }
+}
+
+#[derive(Debug)]
+pub struct SttsItem {
+  pub sample_count: u32,
+  pub sample_duration: u32,
+}
+
+impl SttsItem {
+  pub fn from_bytes(data: &[u8]) -> AtomResult<Self> {
+    let sample_count = u32::from_be_bytes((&data[..4]).try_into()?);
+    let sample_duration = u32::from_be_bytes((&data[4..8]).try_into()?);
+
+    Ok(Self {
+      sample_count,
+      sample_duration,
     })
   }
 }
