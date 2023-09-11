@@ -13,7 +13,7 @@ use thiserror::Error;
 pub enum VideoError {
   #[error("Could not decode video\n{0}")]
   Decoding(#[from] QTError),
-  #[error("Could not decode video\n{0}")]
+  #[error("Could not decode atom\n{0}")]
   AtomDecoding(#[from] AtomError),
 }
 

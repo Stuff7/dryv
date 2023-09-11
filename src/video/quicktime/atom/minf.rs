@@ -59,14 +59,14 @@ pub struct VmhdAtom {
 impl AtomDecoder for VmhdAtom {
   const NAME: [u8; 4] = *b"vmhd";
   fn decode_unchecked<R: Read + Seek>(mut atom: Atom, reader: &mut R) -> AtomResult<Self> {
-    let buffer = atom.read_data(reader)?;
+    let data = atom.read_data(reader)?;
 
-    let (version, flags) = decode_version_flags(&buffer);
-    let graphics_mode = u16::from_be_bytes((&buffer[4..6]).try_into()?);
+    let (version, flags) = decode_version_flags(&data);
+    let graphics_mode = u16::from_be_bytes((&data[4..6]).try_into()?);
     let opcolor = [
-      u16::from_be_bytes((&buffer[6..8]).try_into()?),
-      u16::from_be_bytes((&buffer[8..10]).try_into()?),
-      u16::from_be_bytes((&buffer[10..12]).try_into()?),
+      u16::from_be_bytes((&data[6..8]).try_into()?),
+      u16::from_be_bytes((&data[8..10]).try_into()?),
+      u16::from_be_bytes((&data[10..12]).try_into()?),
     ];
 
     Ok(Self {
@@ -88,10 +88,10 @@ pub struct SmhdAtom {
 impl AtomDecoder for SmhdAtom {
   const NAME: [u8; 4] = *b"smhd";
   fn decode_unchecked<R: Read + Seek>(mut atom: Atom, reader: &mut R) -> AtomResult<Self> {
-    let buffer = atom.read_data(reader)?;
+    let data = atom.read_data(reader)?;
 
-    let (version, flags) = decode_version_flags(&buffer);
-    let balance = u16::from_be_bytes((&buffer[4..6]).try_into()?);
+    let (version, flags) = decode_version_flags(&data);
+    let balance = u16::from_be_bytes((&data[4..6]).try_into()?);
 
     Ok(Self {
       version,
@@ -135,10 +135,10 @@ pub struct DrefAtom {
 impl AtomDecoder for DrefAtom {
   const NAME: [u8; 4] = *b"dref";
   fn decode_unchecked<R: Read + Seek>(mut atom: Atom, reader: &mut R) -> AtomResult<Self> {
-    let buffer = atom.read_data(reader)?;
+    let data = atom.read_data(reader)?;
 
-    let (version, flags) = decode_version_flags(&buffer);
-    let number_of_entries = u32::from_be_bytes((&buffer[4..8]).try_into()?);
+    let (version, flags) = decode_version_flags(&data);
+    let number_of_entries = u32::from_be_bytes((&data[4..8]).try_into()?);
 
     atom.offset += 8;
     let mut data_references = Vec::new();
