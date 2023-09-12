@@ -4,6 +4,7 @@ mod mdia;
 mod meta;
 mod minf;
 mod moov;
+mod root;
 mod stbl;
 mod trak;
 
@@ -13,14 +14,14 @@ pub use mdia::*;
 pub use meta::*;
 pub use minf::*;
 pub use moov::*;
+pub use root::*;
 pub use stbl::*;
 pub use trak::*;
 
-use crate::{ascii::LogDisplay, log, math::MathError};
+use crate::{byte::Str, math::MathError};
 use std::{
   array::TryFromSliceError,
   io::{Read, Seek, SeekFrom},
-  ops::Deref,
   str::Utf8Error,
   string::FromUtf8Error,
 };
@@ -67,48 +68,6 @@ pub fn unpack_language_code(bytes: &[u8]) -> AtomResult<[u8; 3]> {
   let char2 = ((code >> 5) & 0x1F) as u8 + 0x60;
   let char3 = (code & 0x1F) as u8 + 0x60;
   Ok([char1, char2, char3])
-}
-
-#[derive(Clone, Copy)]
-pub struct Str<const N: usize>(pub [u8; N]);
-
-impl<const N: usize> Default for Str<N> {
-  fn default() -> Self {
-    Self([0; N])
-  }
-}
-
-impl<const N: usize> Str<N> {
-  pub fn as_string(&self) -> String {
-    self.0.map(|c| c as char).iter().collect()
-  }
-}
-
-impl<const N: usize> TryFrom<&[u8]> for Str<N> {
-  type Error = AtomError;
-  fn try_from(slice: &[u8]) -> Result<Self, Self::Error> {
-    Ok(Self(slice.try_into()?))
-  }
-}
-
-impl<const N: usize> Deref for Str<N> {
-  type Target = [u8; N];
-
-  fn deref(&self) -> &Self::Target {
-    &self.0
-  }
-}
-
-impl<const N: usize> std::fmt::Display for Str<N> {
-  fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-    write!(f, "{}", self.as_string())
-  }
-}
-
-impl<const N: usize> std::fmt::Debug for Str<N> {
-  fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-    write!(f, "b{:?}", self.as_string())
-  }
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -162,78 +121,14 @@ impl<'a, R: Read + Seek> Iterator for AtomIter<'a, R> {
       decode_header(&self.buffer).and_then(|(atom_size, atom_type)| {
         let offset = self.start;
         self.start += atom_size;
-        Str::<4>::try_from(atom_type).map(|name| Atom {
-          size: atom_size,
-          name,
-          offset,
-        })
+        Str::<4>::try_from(atom_type)
+          .map(|name| Atom {
+            size: atom_size,
+            name,
+            offset,
+          })
+          .map_err(AtomError::from)
       })
-    })
-  }
-}
-
-#[derive(Debug, Default)]
-pub struct FtypAtom {
-  pub atom: Atom,
-  pub compatible_brands: Vec<Str<4>>,
-  pub major_brand: Str<4>,
-  pub minor_version: u32,
-}
-
-impl AtomDecoder for FtypAtom {
-  const NAME: [u8; 4] = *b"ftyp";
-  fn decode_unchecked<R: Read + Seek>(mut atom: Atom, reader: &mut R) -> AtomResult<Self> {
-    let data = atom.read_data(reader)?;
-
-    let major_brand = Str::try_from(&data[..4])?;
-    let minor_version = u32::from_be_bytes((&data[4..8]).try_into()?);
-    let compatible_brands: Vec<Str<4>> = data[8..]
-      .chunks_exact(4)
-      .map(Str::<4>::try_from)
-      .collect::<AtomResult<_>>()?;
-
-    Ok(Self {
-      atom,
-      compatible_brands,
-      major_brand,
-      minor_version,
-    })
-  }
-}
-
-#[derive(Debug, Default)]
-pub struct RootAtom {
-  pub ftyp: FtypAtom,
-  pub mdat: MdatAtom,
-  pub moov: MoovAtom,
-  pub rest: Vec<Atom>,
-}
-
-impl RootAtom {
-  pub fn new<R: Read + Seek>(reader: &mut R, size: u32) -> AtomResult<Self> {
-    let mut ftyp = None;
-    let mut mdat = None;
-    let mut moov = None;
-    let mut rest = Vec::new();
-    let mut atoms = AtomIter::new(reader, 0, size);
-
-    while let Some(atom) = atoms.next() {
-      match atom {
-        Ok(atom) => match &*atom.name {
-          b"ftyp" => ftyp = Some(FtypAtom::decode_unchecked(atom, atoms.reader)?),
-          b"mdat" => mdat = Some(MdatAtom::decode_unchecked(atom, atoms.reader)?),
-          b"moov" => moov = Some(MoovAtom::decode_unchecked(atom, atoms.reader)?),
-          _ => rest.push(atom),
-        },
-        Err(e) => log!(err@"#[root] {e}"),
-      }
-    }
-
-    Ok(Self {
-      ftyp: ftyp.ok_or(AtomError::AtomNotFound(*b"ftyp"))?,
-      mdat: mdat.ok_or(AtomError::AtomNotFound(*b"mdat"))?,
-      moov: moov.ok_or(AtomError::AtomNotFound(*b"moov"))?,
-      rest,
     })
   }
 }
