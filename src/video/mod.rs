@@ -106,7 +106,7 @@ impl Video {
         video.matrix = tkhd.matrix;
       }
       log!(File@"{:-^100}", hdlr.component_subtype.as_string());
-      log!(File@"TRAK {:#?}", trak);
+      log!(File@"TRAK.MDIA.MDHD {:#?}", mdia.mdhd);
     }
     log!(File@"MOOV.META {:#?}", root.moov.meta);
     Ok(video)
