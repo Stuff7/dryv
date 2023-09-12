@@ -127,7 +127,7 @@ impl AtomDecoder for IlstAtom {
     let mut atoms = atom.atoms(reader);
     while let Some(atom) = atoms.next() {
       match atom {
-        Ok(atom) => items.push(IlstItem::new(atom, atoms.reader)?), // TODO: use decode
+        Ok(atom) => items.push(IlstItem::new(atom, atoms.reader)?),
         Err(e) => log!(err@"#[ilst] {e}"),
       }
     }
