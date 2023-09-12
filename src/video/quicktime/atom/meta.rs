@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use super::*;
 use crate::ascii::LogDisplay;
 use crate::log;
@@ -36,6 +38,46 @@ impl AtomDecoder for MetaAtom {
     }
 
     Ok(meta)
+  }
+}
+
+impl MetaAtom {
+  pub fn tags(&mut self, decoder: &mut Decoder) -> AtomResult<HashMap<String, String>> {
+    match &*self.hdlr.decode(decoder)?.handler_type {
+      b"mdta" => {
+        let Ok(keys) = self.keys.decode(decoder) else {
+          return Ok(HashMap::new())
+        };
+        let Ok(values) = self.ilst.decode(decoder) else {
+          return Ok(HashMap::new())
+        };
+        values
+          .items
+          .iter()
+          .map(|item| {
+            let index = (item.index - 1) as usize;
+            keys
+              .key_values
+              .get(index)
+              .ok_or_else(|| AtomError::MetaKeyValue(index, format!("{:?}", keys.key_values)))
+              .map(|key| (key.value.to_string(), item.data.value.to_string()))
+          })
+          .collect::<AtomResult<_>>()
+      }
+      b"mdir" => {
+        let Ok(values) = self.ilst.decode(decoder) else {
+          return Ok(HashMap::new())
+        };
+        Ok(
+          values
+            .items
+            .iter()
+            .map(|item| (item.atom.name.as_string(), item.data.value.to_string()))
+            .collect(),
+        )
+      }
+      hdlr => Err(AtomError::MetaHandler(Str(*hdlr))),
+    }
   }
 }
 
@@ -147,19 +189,13 @@ impl AtomDecoder for IlstAtom {
 pub struct IlstItem {
   pub atom: Atom,
   pub index: u32,
-  pub data: Vec<DataAtom>,
+  pub data: DataAtom,
 }
 
 impl IlstItem {
   fn new(atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
-    let mut data = Vec::new();
     let mut atoms = atom.atoms(decoder);
-    while let Some(atom) = atoms.next() {
-      match atom {
-        Ok(atom) => data.push(DataAtom::decode(atom, atoms.reader)?),
-        Err(e) => log!(err@"#[data] {e}"),
-      }
-    }
+    let data = DataAtom::decode(atoms.next().ok_or(AtomError::IlstData)??, decoder)?;
     Ok(Self {
       atom,
       index: u32::from_be_bytes(*atom.name),
@@ -168,7 +204,7 @@ impl IlstItem {
   }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct DataAtom {
   pub type_indicator: [u8; 4],
   pub locale_indicator: [u8; 4],

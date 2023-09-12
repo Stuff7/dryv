@@ -9,8 +9,8 @@ use thiserror::Error;
 use crate::byte::Str;
 
 #[derive(Debug, Error)]
-pub enum QTError {
-  #[error("QuickTime Decoder IO Error\n{0}")]
+pub enum DecoderError {
+  #[error("Decoder IO Error\n{0}")]
   IO(#[from] std::io::Error),
   #[error(transparent)]
   Atom(#[from] AtomError),
@@ -18,11 +18,12 @@ pub enum QTError {
   Unsupported(Str<4>),
 }
 
-pub type QTResult<T = ()> = Result<T, QTError>;
+pub type DecoderResult<T = ()> = Result<T, DecoderError>;
 
 pub enum DecoderBrand {
   QuickTime,
   Isom,
+  None,
 }
 
 impl DecoderBrand {
@@ -32,12 +33,12 @@ impl DecoderBrand {
 }
 
 impl TryFrom<Str<4>> for DecoderBrand {
-  type Error = QTError;
+  type Error = DecoderError;
   fn try_from(brand: Str<4>) -> Result<Self, Self::Error> {
     match &*brand {
       b"qt  " => Ok(Self::QuickTime),
       b"isom" => Ok(Self::Isom),
-      _ => Err(QTError::Unsupported(brand)),
+      _ => Err(DecoderError::Unsupported(brand)),
     }
   }
 }
@@ -45,16 +46,23 @@ impl TryFrom<Str<4>> for DecoderBrand {
 pub struct Decoder {
   pub file: File,
   pub size: u64,
-  pub root: RootAtom,
   pub brand: DecoderBrand,
 }
 
 impl Decoder {
-  pub fn open<P: AsRef<Path>>(path: P) -> QTResult<Self> {
-    let mut file = File::open(path)?;
+  pub fn open<P: AsRef<Path>>(path: P) -> DecoderResult<Self> {
+    let file = File::open(path)?;
     let size = file.metadata()?.len();
-    let root = RootAtom::new(&mut file, size as u32)?;
-    let brand = DecoderBrand::try_from(root.ftyp.major_brand).or_else(|e| {
+    Ok(Self {
+      size,
+      file,
+      brand: DecoderBrand::None,
+    })
+  }
+
+  pub fn decode_root(&mut self) -> DecoderResult<RootAtom> {
+    let root = RootAtom::new(&mut self.file, self.size as u32)?;
+    self.brand = DecoderBrand::try_from(root.ftyp.major_brand).or_else(|e| {
       root
         .ftyp
         .compatible_brands
@@ -62,16 +70,7 @@ impl Decoder {
         .find_map(|b| DecoderBrand::try_from(*b).ok())
         .ok_or(e)
     })?;
-    Ok(Self {
-      size,
-      file,
-      root,
-      brand,
-    })
-  }
-
-  pub fn decode(&mut self) -> QTResult<RootAtom> {
-    RootAtom::new(&mut self.file, self.size as u32).map_err(QTError::from)
+    Ok(root)
   }
 }
 

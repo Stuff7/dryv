@@ -51,6 +51,12 @@ pub enum AtomError {
   UnknownAtom(Atom),
   #[error("Atom type mismatch, expected {0:?} got {1:?}")]
   AtomType(Str<4>, Str<4>),
+  #[error("Unsupported meta handler {0:?}")]
+  MetaHandler(Str<4>),
+  #[error("Meta value index {0} not found in keys {1:?}")]
+  MetaKeyValue(usize, String),
+  #[error("Meta item has no data")]
+  IlstData,
 }
 
 pub type AtomResult<T = ()> = Result<T, AtomError>;

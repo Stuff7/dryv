@@ -13,7 +13,7 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum VideoError {
   #[error("Could not decode video\n{0}")]
-  Decoding(#[from] QTError),
+  Decoding(#[from] DecoderError),
   #[error("Could not decode atom\n{0}")]
   AtomDecoding(#[from] AtomError),
 }
@@ -32,7 +32,7 @@ pub struct Video {
 impl Video {
   pub fn open<P: AsRef<Path>>(path: P) -> VideoResult<Self> {
     let mut decoder = Decoder::open(path)?;
-    let mut root = decoder.decode()?;
+    let mut root = decoder.decode_root()?;
     log!(File@"FTYP {:#?}", root.ftyp);
 
     let mut video = Self {
@@ -43,17 +43,24 @@ impl Video {
       matrix: Matrix3x3::identity(),
     };
 
+    log!(File@"{:-^100}", "meta");
     if let Some(udta) = &mut root.moov.udta {
       let udta = udta.decode(&mut decoder)?;
       for meta in &mut udta.metas {
-        meta.decode(&mut decoder)?.ilst.decode(&mut decoder)?;
+        let meta = meta.decode(&mut decoder)?;
+        meta.ilst.decode(&mut decoder)?;
+        meta.hdlr.decode(&mut decoder)?;
+        log!(File@"MOOV.UDTA.META TAGS {:#?}", meta.tags(&mut decoder));
       }
+      log!(File@"MOOV.UDTA {:#?}", udta);
     }
     if let Some(meta) = &mut root.moov.meta {
       let meta = meta.decode(&mut decoder)?;
+      log!(File@"MOOV.META TAGS {:#?}", meta.tags(&mut decoder));
       meta.ilst.decode(&mut decoder)?;
       meta.hdlr.decode(&mut decoder)?;
       meta.keys.decode(&mut decoder)?;
+      log!(File@"MOOV.META {:#?}", meta);
     }
     for trak in &mut root.moov.trak {
       let trak = trak.decode(&mut decoder)?;
@@ -98,8 +105,6 @@ impl Video {
       log!(File@"{:-^100}", hdlr.component_subtype.as_string());
       log!(File@"TRAK.MDIA.MDHD {:#?}", mdia.mdhd);
     }
-    log!(File@"MOOV.UDTA {:#?}", root.moov.udta);
-    log!(File@"MOOV.META {:#?}", root.moov.meta);
     Ok(video)
   }
 }
