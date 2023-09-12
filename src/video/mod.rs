@@ -96,7 +96,7 @@ impl Video {
         }
       }
 
-      if *hdlr.component_type == *b"vide" {
+      if *hdlr.component_subtype == *b"vide" {
         let tkhd = trak.tkhd.decode(&mut decoder.file)?;
         let mdhd = mdia.mdhd.decode(&mut decoder.file)?;
         video.timescale = mdhd.timescale;
@@ -105,8 +105,8 @@ impl Video {
         video.height = tkhd.height;
         video.matrix = tkhd.matrix;
       }
-      log!(File@"{:-^100}", hdlr.component_type.as_string());
-      log!(File@"TRAK.MEDIA.HDLR {:#?}", hdlr);
+      log!(File@"{:-^100}", hdlr.component_subtype.as_string());
+      log!(File@"TRAK {:#?}", trak);
     }
     log!(File@"MOOV.META {:#?}", root.moov.meta);
     Ok(video)
