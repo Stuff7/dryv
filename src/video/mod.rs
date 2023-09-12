@@ -3,6 +3,7 @@ pub mod quicktime;
 use self::quicktime::atom::AtomError;
 use crate::{
   ascii::{Color, RESET},
+  log,
   math::Matrix3x3,
 };
 use quicktime::*;
@@ -31,7 +32,8 @@ pub struct Video {
 impl Video {
   pub fn open<P: AsRef<Path>>(path: P) -> VideoResult<Self> {
     let mut decoder = QTDecoder::open(path)?;
-    let root = decoder.decode()?;
+    let mut root = decoder.decode()?;
+    log!(File@"FTYP {:#?}", root.ftyp);
 
     let mut video = Self {
       timescale: 0,
@@ -41,7 +43,7 @@ impl Video {
       matrix: Matrix3x3::identity(),
     };
 
-    if let Some(mut udta) = root.moov.udta {
+    if let Some(udta) = &mut root.moov.udta {
       let udta = udta.decode(&mut decoder.file)?;
       for meta in &mut udta.metas {
         meta
@@ -50,37 +52,49 @@ impl Video {
           .decode(&mut decoder.file)?;
       }
     }
-    for ref mut trak in root.moov.trak {
+    if let Some(meta) = &mut root.moov.meta {
+      let meta = meta.decode(&mut decoder.file)?;
+      meta.ilst.decode(&mut decoder.file)?;
+      meta.hdlr.decode(&mut decoder.file)?;
+      meta.keys.decode(&mut decoder.file)?;
+    }
+    for trak in &mut root.moov.trak {
       let trak = trak.decode(&mut decoder.file)?;
       let mdia = trak.mdia.decode(&mut decoder.file)?;
       let hdlr = mdia.hdlr.decode(&mut decoder.file)?;
-      let edts = trak.edts.decode(&mut decoder.file)?;
-      edts.elst.decode(&mut decoder.file)?;
+      if let Some(edts) = &mut trak.edts {
+        edts
+          .decode(&mut decoder.file)?
+          .elst
+          .decode(&mut decoder.file)?;
+      }
       let minf = mdia.minf.decode(&mut decoder.file)?;
       minf
         .dinf
         .decode(&mut decoder.file)?
         .dref
         .decode(&mut decoder.file)?;
-      let stbl = minf.stbl.decode(&mut decoder.file)?;
-      stbl.stsd.decode(&mut decoder.file)?;
-      stbl.stts.decode(&mut decoder.file)?;
-      if let Some(stss) = &mut stbl.stss {
-        stss.decode(&mut decoder.file)?;
+
+      {
+        let stbl = minf.stbl.decode(&mut decoder.file)?;
+        stbl.stsd.decode(&mut decoder.file)?;
+        stbl.stts.decode(&mut decoder.file)?;
+        if let Some(stss) = &mut stbl.stss {
+          stss.decode(&mut decoder.file)?;
+        }
+        if let Some(ctts) = &mut stbl.ctts {
+          ctts.decode(&mut decoder.file)?;
+        }
+        stbl.stsc.decode(&mut decoder.file)?;
+        stbl.stsz.decode(&mut decoder.file)?;
+        stbl.stco.decode(&mut decoder.file)?;
+        if let Some(sgpd) = &mut stbl.sgpd {
+          sgpd.decode(&mut decoder.file)?;
+        }
+        if let Some(sbgp) = &mut stbl.sbgp {
+          sbgp.decode(&mut decoder.file)?;
+        }
       }
-      if let Some(ctts) = &mut stbl.ctts {
-        ctts.decode(&mut decoder.file)?;
-      }
-      stbl.stsc.decode(&mut decoder.file)?;
-      stbl.stsz.decode(&mut decoder.file)?;
-      stbl.stco.decode(&mut decoder.file)?;
-      if let Some(sgpd) = &mut stbl.sgpd {
-        sgpd.decode(&mut decoder.file)?;
-      }
-      if let Some(sbgp) = &mut stbl.sbgp {
-        sbgp.decode(&mut decoder.file)?;
-      }
-      println!("{} {:#?}", hdlr.component_type, stbl.sbgp);
 
       if *hdlr.component_type == *b"vide" {
         let tkhd = trak.tkhd.decode(&mut decoder.file)?;
@@ -91,7 +105,10 @@ impl Video {
         video.height = tkhd.height;
         video.matrix = tkhd.matrix;
       }
+      log!(File@"{:-^100}", hdlr.component_type.as_string());
+      log!(File@"TRAK.MEDIA.HDLR {:#?}", hdlr);
     }
+    log!(File@"MOOV.META {:#?}", root.moov.meta);
     Ok(video)
   }
 }

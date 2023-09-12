@@ -80,6 +80,10 @@ pub struct HdlrAtom {
   pub version: u8,
   pub flags: [u8; 3],
   pub component_type: Str<4>,
+  pub component_subtype: Str<4>,
+  pub component_manufacturer: Str<4>,
+  pub component_flags: [u8; 4],
+  pub component_flags_mask: [u8; 4],
   pub component_name: String,
 }
 
@@ -89,16 +93,23 @@ impl AtomDecoder for HdlrAtom {
     let data = atom.read_data(reader)?;
 
     let (version, flags) = decode_version_flags(&data);
-    // __reserved__ 32 bit     (4 bytes)
-    let component_type = Str::try_from(&data[8..12])?;
-    // __reserved__ 32 bit [3] (12 bytes)
-    let component_name = String::from_utf8_lossy(&data[24..]).to_string();
+    let component_type = Str::try_from(&data[4..8])?;
+    let component_subtype = Str::try_from(&data[8..12])?;
+    let component_manufacturer = Str::try_from(&data[12..16])?;
+    let component_flags = (&data[16..20]).try_into()?;
+    let component_flags_mask = (&data[20..24]).try_into()?;
+    // 24th byte is the size of the string
+    let component_name = String::from_utf8_lossy(&data[25..]).to_string();
 
     Ok(Self {
       atom,
       version,
       flags,
       component_type,
+      component_subtype,
+      component_manufacturer,
+      component_flags,
+      component_flags_mask,
       component_name,
     })
   }

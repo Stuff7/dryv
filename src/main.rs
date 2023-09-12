@@ -5,7 +5,12 @@ mod video;
 
 use crate::cli::CLIArgs;
 use ascii::LogDisplay;
-use std::time::Instant;
+use std::{
+  fs::File,
+  ptr,
+  sync::atomic::{AtomicPtr, Ordering},
+  time::Instant,
+};
 
 macro_rules! unwrap {
   (Ok $wrapped: expr, Err $( $err: expr ),*) => {
@@ -20,8 +25,13 @@ macro_rules! unwrap {
   };
 }
 
+static LOG_FILE_PTR: AtomicPtr<File> = AtomicPtr::new(ptr::null_mut());
+
 fn main() {
   let args = unwrap!(Ok CLIArgs::read(), Err "Error");
+
+  let mut log_file = unwrap!(Ok File::create("debug.log"), Err "Could not create log file");
+  LOG_FILE_PTR.store(&mut log_file as *mut _, Ordering::SeqCst);
 
   let start_time = Instant::now();
   let video = unwrap!(

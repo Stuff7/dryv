@@ -5,7 +5,8 @@ use std::io::{Read, Seek};
 
 #[derive(Debug, Default)]
 pub struct MinfAtom {
-  pub media_header: Option<MediaHeaderAtom>,
+  pub kind: Option<MdiaAtomKind>,
+  pub hdlr: EncodedAtom,
   pub dinf: EncodedAtom<DinfAtom>,
   pub stbl: EncodedAtom<StblAtom>,
 }
@@ -19,17 +20,24 @@ impl AtomDecoder for MinfAtom {
       match atom {
         Ok(atom) => match &*atom.name {
           b"vmhd" => {
-            minf.media_header = Some(MediaHeaderAtom::Video(VmhdAtom::decode_unchecked(
+            minf.kind = Some(MdiaAtomKind::Vmhd(VmhdAtom::decode_unchecked(
               atom,
               atoms.reader,
             )?))
           }
           b"smhd" => {
-            minf.media_header = Some(MediaHeaderAtom::Sound(SmhdAtom::decode_unchecked(
+            minf.kind = Some(MdiaAtomKind::Smhd(SmhdAtom::decode_unchecked(
               atom,
               atoms.reader,
             )?))
           }
+          b"gmhd" => {
+            minf.kind = Some(MdiaAtomKind::Gmhd(GmhdAtom::decode_unchecked(
+              atom,
+              atoms.reader,
+            )?))
+          }
+          b"hdlr" => minf.hdlr = EncodedAtom::Encoded(atom),
           b"dinf" => minf.dinf = EncodedAtom::Encoded(atom),
           b"stbl" => minf.stbl = EncodedAtom::Encoded(atom),
           _ => log!(warn@"#[minf] Unused atom {atom:#?}"),
@@ -43,9 +51,10 @@ impl AtomDecoder for MinfAtom {
 }
 
 #[derive(Debug)]
-pub enum MediaHeaderAtom {
-  Video(VmhdAtom),
-  Sound(SmhdAtom),
+pub enum MdiaAtomKind {
+  Vmhd(VmhdAtom),
+  Smhd(SmhdAtom),
+  Gmhd(GmhdAtom),
 }
 
 #[derive(Debug)]
@@ -98,6 +107,31 @@ impl AtomDecoder for SmhdAtom {
       flags,
       balance,
     })
+  }
+}
+
+#[derive(Debug, Default)]
+pub struct GmhdAtom {
+  pub gmin: EncodedAtom,
+  pub text: EncodedAtom,
+}
+
+impl AtomDecoder for GmhdAtom {
+  const NAME: [u8; 4] = *b"gmhd";
+  fn decode_unchecked<R: Read + Seek>(atom: Atom, reader: &mut R) -> AtomResult<Self> {
+    let mut gmhd = Self::default();
+    for atom in atom.atoms(reader) {
+      match atom {
+        Ok(atom) => match &*atom.name {
+          b"gmin" => gmhd.gmin = EncodedAtom::Encoded(atom),
+          b"text" => gmhd.text = EncodedAtom::Encoded(atom),
+          _ => log!(warn@"#[gmhd] Unused atom {atom:#?}"),
+        },
+        Err(e) => log!(err@"#[gmhd] {e}"),
+      }
+    }
+
+    Ok(gmhd)
   }
 }
 

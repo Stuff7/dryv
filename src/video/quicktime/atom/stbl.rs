@@ -83,13 +83,14 @@ impl AtomDecoder for StsdAtom {
 pub struct StsdItem {
   pub data_format: Str<4>,
   pub dref_index: u16,
-  pub extra_data: Vec<u8>,
+  pub extra_data: String,
 }
 
 impl StsdItem {
   pub fn new(data: &[u8], data_format: Str<4>) -> AtomResult<Self> {
+    // __reserved__ (6 bytes)
     let dref_index = u16::from_be_bytes((&data[6..8]).try_into()?);
-    let extra_data = (&data[8..]).into();
+    let extra_data = String::from_utf8_lossy(&data[8..]).to_string();
 
     Ok(Self {
       data_format,
@@ -246,19 +247,19 @@ impl AtomDecoder for StscAtom {
 pub struct StscItem {
   pub first_chunk: u32,
   pub samples_per_chunk: u32,
-  pub sample_description_id: u32,
+  // pub sample_description_id: u32, // TODO Handle isom ftyp
 }
 
 impl StscItem {
   pub fn from_bytes(data: &[u8]) -> AtomResult<Self> {
     let first_chunk = u32::from_be_bytes((&data[..4]).try_into()?);
     let samples_per_chunk = u32::from_be_bytes((&data[..4]).try_into()?);
-    let sample_description_id = u32::from_be_bytes((&data[4..8]).try_into()?);
+    // let sample_description_id = u32::from_be_bytes((&data[4..8]).try_into()?);
 
     Ok(Self {
       first_chunk,
       samples_per_chunk,
-      sample_description_id,
+      // sample_description_id,
     })
   }
 }

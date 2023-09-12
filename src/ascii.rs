@@ -98,6 +98,15 @@ impl<'a> LogDisplay for &'a str {}
 
 #[macro_export]
 macro_rules! log {
+  ( File@$($t: tt)* ) => {
+    {
+      let msg = format!($($t)*);
+      let msg = format!("{msg}\n");
+      <std::fs::File as std::io::Write>::write_all(
+        unsafe {&mut *$crate::LOG_FILE_PTR.load(std::sync::atomic::Ordering::SeqCst)}, msg.as_bytes(),
+      ).expect("Could not write log file");
+    }
+  };
   ( $($fn: ident).* @ $($t: tt)* ) => {
     {
       let msg = format!($($t)*).$($fn()).*;

@@ -39,7 +39,7 @@ pub enum AtomError {
   #[error(transparent)]
   Utf8Conversion(#[from] Utf8Error),
   #[error("Invalid {0:?} atom size {1}")]
-  Size(&'static str, u32),
+  Size(Str<4>, u32),
   #[error("Math Error\n{0}")]
   Math(#[from] MathError),
   #[error("Atom not found {:?}", Str(*(.0)))]
@@ -121,7 +121,7 @@ pub struct Atom {
 impl Atom {
   pub fn read_data<R: Read + Seek>(&mut self, reader: &mut R) -> AtomResult<Vec<u8>> {
     if self.size <= HEADER_SIZE {
-      return Err(AtomError::Size("TODO", self.size));
+      return Err(AtomError::Size(self.name, self.size));
     }
     let mut data = vec![0; (self.size - HEADER_SIZE) as usize];
     reader.seek(SeekFrom::Start((self.offset + HEADER_SIZE) as u64))?;
@@ -275,14 +275,14 @@ impl<T: AtomDecoder> EncodedAtom<T> {
 }
 
 pub trait AtomDecoder: std::marker::Sized {
-  const NAME: [u8; 4];
+  const NAME: [u8; 4] = [0; 4];
   fn decode_unchecked<R: Read + Seek>(atom: Atom, reader: &mut R) -> AtomResult<Self>;
   #[inline]
   fn decode<R: Read + Seek>(atom: Atom, reader: &mut R) -> AtomResult<Self> {
-    if *atom.name != Self::NAME {
-      Err(AtomError::AtomType(Str(Self::NAME), atom.name))
-    } else {
+    if *atom.name == Self::NAME {
       Self::decode_unchecked(atom, reader)
+    } else {
+      Err(AtomError::AtomType(Str(Self::NAME), atom.name))
     }
   }
 }
