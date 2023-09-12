@@ -7,9 +7,8 @@ pub struct MdatAtom {
   pub extended_size: i64,
 }
 
-impl AtomDecoder for MdatAtom {
-  const NAME: [u8; 4] = *b"mdat";
-  fn decode_unchecked<R: Read + Seek>(mut atom: Atom, reader: &mut R) -> AtomResult<Self> {
+impl MdatAtom {
+  pub fn new<R: Read + Seek>(mut atom: Atom, reader: &mut R) -> AtomResult<Self> {
     let extended_size = if atom.size == 1 {
       let mut buffer = [0; 8];
       reader.read_exact(&mut buffer)?;

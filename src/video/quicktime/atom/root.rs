@@ -21,9 +21,9 @@ impl RootAtom {
     while let Some(atom) = atoms.next() {
       match atom {
         Ok(atom) => match &*atom.name {
-          b"ftyp" => ftyp = Some(FtypAtom::decode_unchecked(atom, atoms.reader)?),
-          b"mdat" => mdat = Some(MdatAtom::decode_unchecked(atom, atoms.reader)?),
-          b"moov" => moov = Some(MoovAtom::decode_unchecked(atom, atoms.reader)?),
+          b"ftyp" => ftyp = Some(FtypAtom::new(atom, atoms.reader)?),
+          b"mdat" => mdat = Some(MdatAtom::new(atom, atoms.reader)?),
+          b"moov" => moov = Some(MoovAtom::new(atom, atoms.reader)?),
           _ => rest.push(atom),
         },
         Err(e) => log!(err@"#[root] {e}"),
@@ -47,9 +47,8 @@ pub struct FtypAtom {
   pub minor_version: u32,
 }
 
-impl AtomDecoder for FtypAtom {
-  const NAME: [u8; 4] = *b"ftyp";
-  fn decode_unchecked<R: Read + Seek>(mut atom: Atom, reader: &mut R) -> AtomResult<Self> {
+impl FtypAtom {
+  fn new<R: Read + Seek>(mut atom: Atom, reader: &mut R) -> AtomResult<Self> {
     let data = atom.read_data(reader)?;
 
     let major_brand = Str::try_from(&data[..4])?;

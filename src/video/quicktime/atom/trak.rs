@@ -2,7 +2,6 @@ use super::*;
 use crate::log;
 use crate::math::fixed_point_to_f32;
 use crate::{ascii::LogDisplay, math::Matrix3x3};
-use std::io::{Read, Seek};
 
 #[derive(Debug, Default)]
 pub struct TrakAtom {
@@ -23,13 +22,13 @@ pub struct TrakAtom {
 
 impl AtomDecoder for TrakAtom {
   const NAME: [u8; 4] = *b"trak";
-  fn decode_unchecked<R: Read + Seek>(atom: Atom, reader: &mut R) -> AtomResult<Self> {
+  fn decode_unchecked(atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
     let mut trak = Self {
       atom,
       ..Default::default()
     };
 
-    for atom in trak.atom.atoms(reader) {
+    for atom in trak.atom.atoms(decoder) {
       match atom {
         Ok(atom) => match &*atom.name {
           b"prfl" => trak.prfl = EncodedAtom::Encoded(atom),
@@ -73,8 +72,8 @@ pub struct TkhdAtom {
 
 impl AtomDecoder for TkhdAtom {
   const NAME: [u8; 4] = *b"tkhd";
-  fn decode_unchecked<R: Read + Seek>(mut atom: Atom, reader: &mut R) -> AtomResult<Self> {
-    let data = atom.read_data(reader)?;
+  fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
+    let data = atom.read_data(decoder)?;
 
     let (version, flags) = decode_version_flags(&data);
     let creation_time = u32::from_be_bytes((&data[4..8]).try_into()?);

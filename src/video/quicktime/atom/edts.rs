@@ -2,7 +2,6 @@ use super::*;
 use crate::ascii::LogDisplay;
 use crate::log;
 use crate::math::fixed_point_to_f32;
-use std::io::{Read, Seek};
 
 #[derive(Debug, Default)]
 pub struct EdtsAtom {
@@ -11,9 +10,9 @@ pub struct EdtsAtom {
 
 impl AtomDecoder for EdtsAtom {
   const NAME: [u8; 4] = *b"edts";
-  fn decode_unchecked<R: Read + Seek>(atom: Atom, reader: &mut R) -> AtomResult<Self> {
+  fn decode_unchecked(atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
     let mut edts = Self::default();
-    for atom in atom.atoms(reader) {
+    for atom in atom.atoms(decoder) {
       match atom {
         Ok(atom) => match &*atom.name {
           b"elst" => edts.elst = EncodedAtom::Encoded(atom),
@@ -37,8 +36,8 @@ pub struct ElstAtom {
 
 impl AtomDecoder for ElstAtom {
   const NAME: [u8; 4] = *b"elst";
-  fn decode_unchecked<R: Read + Seek>(mut atom: Atom, reader: &mut R) -> AtomResult<Self> {
-    let data = atom.read_data(reader)?;
+  fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
+    let data = atom.read_data(decoder)?;
 
     let (version, flags) = decode_version_flags(&data);
     let number_of_entries = u32::from_be_bytes((&data[4..8]).try_into()?);

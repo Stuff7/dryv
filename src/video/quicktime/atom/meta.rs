@@ -1,10 +1,10 @@
 use super::*;
 use crate::ascii::LogDisplay;
 use crate::log;
-use std::io::{Read, Seek};
 
 #[derive(Debug, Default)]
 pub struct MetaAtom {
+  pub handler_type: Str<4>,
   pub ilst: EncodedAtom<IlstAtom>,
   pub hdlr: EncodedAtom<MetaHdlrAtom>,
   pub keys: EncodedAtom<KeysAtom>,
@@ -12,10 +12,18 @@ pub struct MetaAtom {
 
 impl AtomDecoder for MetaAtom {
   const NAME: [u8; 4] = *b"meta";
-  fn decode_unchecked<R: Read + Seek>(atom: Atom, reader: &mut R) -> AtomResult<Self> {
-    // atom.offset += 4; // TODO Handle isom ftyp
-    let mut meta = Self::default();
-    for atom in atom.atoms(reader) {
+  fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
+    let mut data = [0; 4];
+    if decoder.brand.is_isom() {
+      decoder.read_exact(&mut data)?;
+      atom.offset += 4;
+    }
+
+    let mut meta = Self {
+      handler_type: Str(data),
+      ..Default::default()
+    };
+    for atom in atom.atoms(decoder) {
       match atom {
         Ok(atom) => match &*atom.name {
           b"ilst" => meta.ilst = EncodedAtom::Encoded(atom),
@@ -42,8 +50,8 @@ pub struct MetaHdlrAtom {
 
 impl AtomDecoder for MetaHdlrAtom {
   const NAME: [u8; 4] = *b"hdlr";
-  fn decode_unchecked<R: Read + Seek>(mut atom: Atom, reader: &mut R) -> AtomResult<Self> {
-    let data = atom.read_data(reader)?;
+  fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
+    let data = atom.read_data(decoder)?;
 
     let (version, flags) = decode_version_flags(&data);
     // __reserved__ (4 bytes)
@@ -73,13 +81,13 @@ pub struct KeysAtom {
 
 impl AtomDecoder for KeysAtom {
   const NAME: [u8; 4] = *b"keys";
-  fn decode_unchecked<R: Read + Seek>(mut atom: Atom, reader: &mut R) -> AtomResult<Self> {
-    let data = atom.read_data(reader)?;
+  fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
+    let data = atom.read_data(decoder)?;
 
     let (version, flags) = decode_version_flags(&data);
     let entry_count = u32::from_be_bytes((&data[4..8]).try_into()?);
     atom.offset += 8;
-    let mut atoms = atom.atoms(reader);
+    let mut atoms = atom.atoms(decoder);
     let mut key_values = Vec::new();
     while let Some(atom) = atoms.next() {
       match atom {
@@ -105,8 +113,8 @@ pub struct KeyValueAtom {
 }
 
 impl AtomDecoder for KeyValueAtom {
-  fn decode_unchecked<R: Read + Seek>(mut atom: Atom, reader: &mut R) -> AtomResult<Self> {
-    let data = atom.read_data(reader)?;
+  fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
+    let data = atom.read_data(decoder)?;
 
     Ok(Self {
       namespace: atom.name,
@@ -122,9 +130,9 @@ pub struct IlstAtom {
 
 impl AtomDecoder for IlstAtom {
   const NAME: [u8; 4] = *b"ilst";
-  fn decode_unchecked<R: Read + Seek>(atom: Atom, reader: &mut R) -> AtomResult<Self> {
+  fn decode_unchecked(atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
     let mut items = Vec::new();
-    let mut atoms = atom.atoms(reader);
+    let mut atoms = atom.atoms(decoder);
     while let Some(atom) = atoms.next() {
       match atom {
         Ok(atom) => items.push(IlstItem::new(atom, atoms.reader)?),
@@ -137,21 +145,23 @@ impl AtomDecoder for IlstAtom {
 
 #[derive(Debug, Default)]
 pub struct IlstItem {
+  pub atom: Atom,
   pub index: u32,
   pub data: Vec<DataAtom>,
 }
 
 impl IlstItem {
-  fn new<R: Read + Seek>(atom: Atom, reader: &mut R) -> AtomResult<Self> {
+  fn new(atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
     let mut data = Vec::new();
-    let mut atoms = atom.atoms(reader);
+    let mut atoms = atom.atoms(decoder);
     while let Some(atom) = atoms.next() {
       match atom {
-        Ok(atom) => data.push(DataAtom::decode(atom, &mut atoms.reader)?),
+        Ok(atom) => data.push(DataAtom::decode(atom, atoms.reader)?),
         Err(e) => log!(err@"#[data] {e}"),
       }
     }
     Ok(Self {
+      atom,
       index: u32::from_be_bytes(*atom.name),
       data,
     })
@@ -167,8 +177,8 @@ pub struct DataAtom {
 
 impl AtomDecoder for DataAtom {
   const NAME: [u8; 4] = *b"data";
-  fn decode_unchecked<R: Read + Seek>(mut atom: Atom, reader: &mut R) -> AtomResult<Self> {
-    let data = atom.read_data(reader)?;
+  fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
+    let data = atom.read_data(decoder)?;
     let type_indicator = (&data[..4]).try_into()?;
     let locale_indicator = (&data[4..8]).try_into()?;
     let value = String::from_utf8_lossy(&data[8..]).to_string();

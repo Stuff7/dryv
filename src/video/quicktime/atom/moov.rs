@@ -18,9 +18,8 @@ pub struct MoovAtom {
   pub meta: Option<EncodedAtom<MetaAtom>>,
 }
 
-impl AtomDecoder for MoovAtom {
-  const NAME: [u8; 4] = *b"moov";
-  fn decode_unchecked<R: Read + Seek>(atom: Atom, reader: &mut R) -> AtomResult<Self> {
+impl MoovAtom {
+  pub fn new<R: Read + Seek>(atom: Atom, reader: &mut R) -> AtomResult<Self> {
     let mut moov = Self {
       atom,
       ..Default::default()
@@ -64,8 +63,8 @@ pub struct MvhdAtom {
 
 impl AtomDecoder for MvhdAtom {
   const NAME: [u8; 4] = *b"mvhd";
-  fn decode_unchecked<R: Read + Seek>(mut atom: Atom, reader: &mut R) -> AtomResult<Self> {
-    let data = atom.read_data(reader)?;
+  fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
+    let data = atom.read_data(decoder)?;
 
     let (version, flags) = decode_version_flags(&data);
     let creation_time = u32::from_be_bytes((&data[4..8]).try_into()?);
@@ -96,7 +95,7 @@ impl AtomDecoder for MvhdAtom {
   }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct UdtaAtom {
   pub version: u8,
   pub flags: [u8; 3],
@@ -105,13 +104,16 @@ pub struct UdtaAtom {
 
 impl AtomDecoder for UdtaAtom {
   const NAME: [u8; 4] = *b"udta";
-  fn decode_unchecked<R: Read + Seek>(mut atom: Atom, reader: &mut R) -> AtomResult<Self> {
-    let data = atom.read_data(reader)?;
+  fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
+    if atom.size == 8 {
+      return Ok(Self::default());
+    }
+    let data = atom.read_data(decoder)?;
 
     let (version, flags) = decode_version_flags(&data);
     let mut metas = Vec::new();
 
-    for atom in atom.atoms(reader) {
+    for atom in atom.atoms(decoder) {
       match atom {
         Ok(atom) => match &*atom.name {
           b"meta" => metas.push(EncodedAtom::Encoded(atom)),

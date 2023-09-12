@@ -1,7 +1,6 @@
 use super::*;
 use crate::ascii::LogDisplay;
 use crate::log;
-use std::io::{Read, Seek};
 
 #[derive(Debug, Default)]
 pub struct MdiaAtom {
@@ -13,12 +12,12 @@ pub struct MdiaAtom {
 
 impl AtomDecoder for MdiaAtom {
   const NAME: [u8; 4] = *b"mdia";
-  fn decode_unchecked<R: Read + Seek>(atom: Atom, reader: &mut R) -> AtomResult<Self> {
+  fn decode_unchecked(atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
     let mut mdia = Self {
       atom,
       ..Default::default()
     };
-    for atom in mdia.atom.atoms(reader) {
+    for atom in mdia.atom.atoms(decoder) {
       match atom {
         Ok(atom) => match &*atom.name {
           b"mdhd" => mdia.mdhd = EncodedAtom::Encoded(atom),
@@ -49,8 +48,8 @@ pub struct MdhdAtom {
 
 impl AtomDecoder for MdhdAtom {
   const NAME: [u8; 4] = *b"mdhd";
-  fn decode_unchecked<R: Read + Seek>(mut atom: Atom, reader: &mut R) -> AtomResult<Self> {
-    let data = atom.read_data(reader)?;
+  fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
+    let data = atom.read_data(decoder)?;
 
     let (version, flags) = decode_version_flags(&data);
     let creation_time = u32::from_be_bytes((&data[4..8]).try_into()?);
@@ -89,8 +88,8 @@ pub struct HdlrAtom {
 
 impl AtomDecoder for HdlrAtom {
   const NAME: [u8; 4] = *b"hdlr";
-  fn decode_unchecked<R: Read + Seek>(mut atom: Atom, reader: &mut R) -> AtomResult<Self> {
-    let data = atom.read_data(reader)?;
+  fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
+    let data = atom.read_data(decoder)?;
 
     let (version, flags) = decode_version_flags(&data);
     let component_type = Str::try_from(&data[4..8])?;

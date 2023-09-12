@@ -27,6 +27,8 @@ use std::{
 };
 use thiserror::Error;
 
+use super::Decoder;
+
 const HEADER_SIZE: u32 = 8;
 
 #[derive(Debug, Error)]
@@ -138,7 +140,7 @@ pub struct UnknownAtom(Atom);
 
 impl AtomDecoder for UnknownAtom {
   const NAME: [u8; 4] = [0; 4];
-  fn decode_unchecked<R: Read + Seek>(atom: Atom, _: &mut R) -> AtomResult<Self> {
+  fn decode_unchecked(atom: Atom, _: &mut Decoder) -> AtomResult<Self> {
     Err(AtomError::UnknownAtom(atom))
   }
 }
@@ -152,11 +154,11 @@ pub enum EncodedAtom<T: AtomDecoder = UnknownAtom> {
 }
 
 impl<T: AtomDecoder> EncodedAtom<T> {
-  pub fn decode<R: Read + Seek>(&mut self, reader: &mut R) -> AtomResult<&mut T> {
+  pub fn decode(&mut self, decoder: &mut Decoder) -> AtomResult<&mut T> {
     match self {
       EncodedAtom::Decoded(decoded) => Ok(decoded),
       EncodedAtom::Encoded(atom) => {
-        let decoded = T::decode(*atom, reader)?;
+        let decoded = T::decode(*atom, decoder)?;
         *self = EncodedAtom::Decoded(decoded);
         if let EncodedAtom::Decoded(decoded) = self {
           Ok(decoded)
@@ -171,11 +173,11 @@ impl<T: AtomDecoder> EncodedAtom<T> {
 
 pub trait AtomDecoder: std::marker::Sized {
   const NAME: [u8; 4] = [0; 4];
-  fn decode_unchecked<R: Read + Seek>(atom: Atom, reader: &mut R) -> AtomResult<Self>;
+  fn decode_unchecked(atom: Atom, decoder: &mut Decoder) -> AtomResult<Self>;
   #[inline]
-  fn decode<R: Read + Seek>(atom: Atom, reader: &mut R) -> AtomResult<Self> {
+  fn decode(atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
     if *atom.name == Self::NAME {
-      Self::decode_unchecked(atom, reader)
+      Self::decode_unchecked(atom, decoder)
     } else {
       Err(AtomError::AtomType(Str(Self::NAME), atom.name))
     }
