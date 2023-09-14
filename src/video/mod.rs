@@ -1,13 +1,14 @@
+pub mod codec;
 pub mod quicktime;
 
 use self::quicktime::atom::AtomError;
 use crate::{
   ascii::{Color, RESET},
-  byte::Str,
   log,
   math::Matrix3x3,
   time::Duration,
 };
+use codec::VideoCodec;
 use quicktime::*;
 use std::{fmt, path::Path, str::FromStr};
 use thiserror::Error;
@@ -23,21 +24,6 @@ pub enum VideoError {
 }
 
 pub type VideoResult<T = ()> = Result<T, VideoError>;
-
-#[derive(Debug)]
-pub enum VideoCodec {
-  H264,
-  Unknown(Str<4>),
-}
-
-impl From<Str<4>> for VideoCodec {
-  fn from(value: Str<4>) -> Self {
-    match &*value {
-      b"avc1" => Self::H264,
-      _ => Self::Unknown(value),
-    }
-  }
-}
 
 #[derive(Debug)]
 pub struct Video {

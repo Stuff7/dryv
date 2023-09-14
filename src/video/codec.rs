@@ -1,0 +1,66 @@
+use crate::byte::Str;
+
+#[derive(Debug)]
+pub enum VideoCodec {
+  H264,
+  Unknown(Str<4>),
+  Cinepak,
+  Jpeg,
+  Graphics,
+  Animation,
+  Apple,
+  KodakPhotoCd,
+  PortableNetworkGraphics,
+  MotionJpegFormatA,
+  MotionJpegFormatB,
+  SorensonV1,
+  Sorenson3,
+  Mpeg4,
+  NtscDv25,
+  PalDv25,
+  CompuServeGraphicsInterchangeFormat,
+  H263,
+  TaggedImageFileFormat,
+  Rgb,
+  YCbCr4228Bit,
+  YCbCr4228BitAlt,
+  YCbCr4448Bit,
+  YCbCr4444Bit,
+  YCbCr10Bit,
+  YCbCr10Bit444,
+  YCbCr10Bit422,
+}
+
+impl From<Str<4>> for VideoCodec {
+  fn from(value: Str<4>) -> Self {
+    match &*value {
+      b"avc1" => Self::H264,
+      b"cvid" => Self::Cinepak,
+      b"jpeg" => Self::Jpeg,
+      b"smc " => Self::Graphics,
+      b"rle " => Self::Animation,
+      b"rpza" => Self::Apple,
+      b"kpcd" => Self::KodakPhotoCd,
+      b"png " => Self::PortableNetworkGraphics,
+      b"mjpa" => Self::MotionJpegFormatA,
+      b"mjpb" => Self::MotionJpegFormatB,
+      b"SVQ1" => Self::SorensonV1,
+      b"SVQ3" => Self::Sorenson3,
+      b"mp4v" => Self::Mpeg4,
+      b"dvc " => Self::NtscDv25,
+      b"dvcp" => Self::PalDv25,
+      b"gif " => Self::CompuServeGraphicsInterchangeFormat,
+      b"h263" => Self::H263,
+      b"tiff" => Self::TaggedImageFileFormat,
+      b"raw " => Self::Rgb,
+      b"2vuY" => Self::YCbCr4228Bit,
+      b"yuv2" => Self::YCbCr4228BitAlt,
+      b"v308" => Self::YCbCr4448Bit,
+      b"v408" => Self::YCbCr4444Bit,
+      b"v216" => Self::YCbCr10Bit,
+      b"v410" => Self::YCbCr10Bit444,
+      b"v210" => Self::YCbCr10Bit422,
+      _ => Self::Unknown(value),
+    }
+  }
+}
