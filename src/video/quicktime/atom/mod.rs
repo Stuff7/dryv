@@ -6,6 +6,7 @@ mod minf;
 mod moov;
 mod root;
 mod stbl;
+mod stsd;
 mod trak;
 
 pub use edts::*;
@@ -16,6 +17,7 @@ pub use minf::*;
 pub use moov::*;
 pub use root::*;
 pub use stbl::*;
+pub use stsd::*;
 pub use trak::*;
 
 use crate::{byte::Str, math::MathError};
