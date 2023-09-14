@@ -52,12 +52,12 @@ impl Video {
     decoder.decode_moov_meta(&mut root)?;
     for trak in &mut root.moov.trak {
       let trak = trak.decode(&mut decoder)?;
+      decoder.decode_stbl(trak)?;
       let mdia = trak.mdia.decode(&mut decoder)?;
       let hdlr = mdia.hdlr.decode(&mut decoder)?;
       log!(File@"{:-^100}", hdlr.component_subtype.as_string());
       let minf = mdia.minf.decode(&mut decoder)?;
       log!(File@"ROOT.TRAK.MDIA.MINF.DINF.DREF {:#?}", minf.dinf.decode(&mut decoder)?.dref.decode(&mut decoder));
-      decoder.decode_stbl(minf)?;
       log!(File@"ROOT.TRAK.MDIA.MINF.MHD {:#?}", minf.mhd);
 
       if *hdlr.component_subtype == *b"vide" {

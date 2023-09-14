@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use super::*;
 use crate::ascii::LogDisplay;
+use crate::byte::pascal_string;
 use crate::log;
 
 #[derive(Debug, Default)]
@@ -99,8 +100,7 @@ impl AtomDecoder for MetaHdlrAtom {
     // __reserved__ (4 bytes)
     let handler_type = Str::try_from(&data[8..12])?;
     // __reserved__ (12 bytes)
-    // __name_len__ (1 byte)
-    let name = String::from_utf8_lossy(&data[25..]).to_string();
+    let (name, _) = pascal_string(&data[24..]);
 
     Ok(Self {
       atom,

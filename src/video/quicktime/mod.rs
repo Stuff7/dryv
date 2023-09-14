@@ -124,10 +124,14 @@ impl Decoder {
       .unwrap_or_else(|| Ok(Vec::new()))
   }
 
-  pub fn decode_stbl<'a>(&mut self, minf: &'a mut MinfAtom) -> DecoderResult<&'a mut StblAtom> {
+  pub fn decode_stbl<'a>(&mut self, trak: &'a mut TrakAtom) -> DecoderResult<&'a mut StblAtom> {
+    let mdia = trak.mdia.decode(self)?;
+    let minf = mdia.minf.decode(self)?;
     let stbl = minf.stbl.decode(self)?;
     stbl.stsd.decode(self)?;
-    log!(File@"ROOT.TRAK.MDIA.MINF.STBL.STSD {:#?}", stbl.stsd);
+    for stsd in &mut stbl.stsd.decode(self)?.sample_description_table {
+      log!(File@"ROOT.TRAK.MDIA.MINF.STBL.STSD {:#?}", stsd);
+    }
     log!(File@"ROOT.TRAK.MDIA.MINF.STBL.STCO {} {:#?}",
       stbl.stco.number_of_entries,
       stbl.stco.chunk_offsets(self).take(50).collect::<Vec<_>>()
