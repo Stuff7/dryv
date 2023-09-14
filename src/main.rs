@@ -2,6 +2,7 @@ mod ascii;
 mod byte;
 mod cli;
 mod math;
+mod time;
 mod video;
 
 use crate::cli::CLIArgs;

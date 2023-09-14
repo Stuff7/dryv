@@ -2,9 +2,9 @@ use super::*;
 use crate::ascii::LogDisplay;
 use crate::log;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct MinfAtom {
-  pub kind: Option<MdiaAtomKind>,
+  pub mhd: MhdAtomKind,
   pub hdlr: EncodedAtom,
   pub dinf: EncodedAtom<DinfAtom>,
   pub stbl: EncodedAtom<StblAtom>,
@@ -13,44 +13,52 @@ pub struct MinfAtom {
 impl AtomDecoder for MinfAtom {
   const NAME: [u8; 4] = *b"minf";
   fn decode_unchecked(atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
-    let mut minf = Self::default();
+    let mut mhd = None;
+    let mut hdlr = EncodedAtom::None;
+    let mut dinf = EncodedAtom::None;
+    let mut stbl = EncodedAtom::None;
     let mut atoms = atom.atoms(decoder);
     while let Some(atom) = atoms.next() {
       match atom {
         Ok(atom) => match &*atom.name {
           b"vmhd" => {
-            minf.kind = Some(MdiaAtomKind::Vmhd(VmhdAtom::decode_unchecked(
+            mhd = Some(MhdAtomKind::Vmhd(VmhdAtom::decode_unchecked(
               atom,
               atoms.reader,
             )?))
           }
           b"smhd" => {
-            minf.kind = Some(MdiaAtomKind::Smhd(SmhdAtom::decode_unchecked(
+            mhd = Some(MhdAtomKind::Smhd(SmhdAtom::decode_unchecked(
               atom,
               atoms.reader,
             )?))
           }
           b"gmhd" => {
-            minf.kind = Some(MdiaAtomKind::Gmhd(GmhdAtom::decode_unchecked(
+            mhd = Some(MhdAtomKind::Gmhd(GmhdAtom::decode_unchecked(
               atom,
               atoms.reader,
             )?))
           }
-          b"hdlr" => minf.hdlr = EncodedAtom::Encoded(atom),
-          b"dinf" => minf.dinf = EncodedAtom::Encoded(atom),
-          b"stbl" => minf.stbl = EncodedAtom::Encoded(atom),
+          b"hdlr" => hdlr = EncodedAtom::Encoded(atom),
+          b"dinf" => dinf = EncodedAtom::Encoded(atom),
+          b"stbl" => stbl = EncodedAtom::Encoded(atom),
           _ => log!(warn@"#[minf] Unused atom {atom:#?}"),
         },
         Err(e) => log!(err@"#[minf] {e}"),
       }
     }
 
-    Ok(minf)
+    Ok(Self {
+      mhd: mhd.ok_or(AtomError::NoMinfHandler)?,
+      hdlr,
+      dinf,
+      stbl,
+    })
   }
 }
 
 #[derive(Debug)]
-pub enum MdiaAtomKind {
+pub enum MhdAtomKind {
   Vmhd(VmhdAtom),
   Smhd(SmhdAtom),
   Gmhd(GmhdAtom),
@@ -67,7 +75,7 @@ pub struct VmhdAtom {
 impl AtomDecoder for VmhdAtom {
   const NAME: [u8; 4] = *b"vmhd";
   fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
-    let data = atom.read_data(decoder)?;
+    let data: [u8; 12] = atom.read_data_exact(decoder)?;
 
     let (version, flags) = decode_version_flags(&data);
     let graphics_mode = u16::from_be_bytes((&data[4..6]).try_into()?);
@@ -96,7 +104,7 @@ pub struct SmhdAtom {
 impl AtomDecoder for SmhdAtom {
   const NAME: [u8; 4] = *b"smhd";
   fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
-    let data = atom.read_data(decoder)?;
+    let data: [u8; 6] = atom.read_data_exact(decoder)?;
 
     let (version, flags) = decode_version_flags(&data);
     let balance = u16::from_be_bytes((&data[4..6]).try_into()?);

@@ -41,3 +41,15 @@ impl<const N: usize> std::fmt::Debug for Str<N> {
     write!(f, "b{:?}", self.as_string())
   }
 }
+
+pub fn from_be_slice(bytes: &[u8], size: usize) -> u64 {
+  let mut result = 0;
+
+  #[allow(clippy::needless_range_loop)]
+  for i in 0..size {
+    let shift = (size - i - 1) * 8;
+    result |= u64::from(bytes[i]) << shift;
+  }
+
+  result
+}

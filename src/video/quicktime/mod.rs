@@ -7,6 +7,7 @@ use std::path::Path;
 use thiserror::Error;
 
 use crate::byte::Str;
+use crate::log;
 
 #[derive(Debug, Error)]
 pub enum DecoderError {
@@ -20,6 +21,7 @@ pub enum DecoderError {
 
 pub type DecoderResult<T = ()> = Result<T, DecoderError>;
 
+#[derive(Debug)]
 pub enum DecoderBrand {
   QuickTime,
   Isom,
@@ -43,6 +45,7 @@ impl TryFrom<Str<4>> for DecoderBrand {
   }
 }
 
+#[derive(Debug)]
 pub struct Decoder {
   pub file: File,
   pub size: u64,
@@ -61,7 +64,7 @@ impl Decoder {
   }
 
   pub fn decode_root(&mut self) -> DecoderResult<RootAtom> {
-    let root = RootAtom::new(&mut self.file, self.size as u32)?;
+    let root = RootAtom::new(&mut self.file, self.size)?;
     self.brand = DecoderBrand::try_from(root.ftyp.major_brand).or_else(|e| {
       root
         .ftyp
@@ -71,6 +74,91 @@ impl Decoder {
         .ok_or(e)
     })?;
     Ok(root)
+  }
+
+  pub fn decode_moov_meta<'a>(
+    &mut self,
+    root: &'a mut RootAtom,
+  ) -> DecoderResult<Option<&'a mut MetaAtom>> {
+    log!(File@"{:-^100}", "meta");
+    root
+      .moov
+      .meta
+      .as_mut()
+      .map(|meta| {
+        let meta = meta.decode(self)?;
+        log!(File@"MOOV.META TAGS {:#?}", meta.tags(self));
+        meta.ilst.decode(self)?;
+        meta.hdlr.decode(self)?;
+        meta.keys.decode(self)?;
+        log!(File@"MOOV.META {:#?}", meta);
+        Ok(meta)
+      })
+      .transpose()
+  }
+
+  pub fn decode_udta_meta<'a>(
+    &mut self,
+    root: &'a mut RootAtom,
+  ) -> DecoderResult<Vec<&'a mut MetaAtom>> {
+    log!(File@"{:-^100}", "meta");
+    let decoder = self;
+    root
+      .moov
+      .udta
+      .as_mut()
+      .map(|udta| {
+        let udta = udta.decode(decoder)?;
+        udta
+          .metas
+          .iter_mut()
+          .map(|meta| {
+            let meta = meta.decode(decoder)?;
+            meta.ilst.decode(decoder)?;
+            meta.hdlr.decode(decoder)?;
+            log!(File@"MOOV.UDTA.META TAGS {:#?}", meta.tags(decoder));
+            Ok(meta)
+          })
+          .collect::<DecoderResult<Vec<_>>>()
+      })
+      .unwrap_or_else(|| Ok(Vec::new()))
+  }
+
+  pub fn decode_stbl<'a>(&mut self, minf: &'a mut MinfAtom) -> DecoderResult<&'a mut StblAtom> {
+    let stbl = minf.stbl.decode(self)?;
+    stbl.stsd.decode(self)?;
+    log!(File@"ROOT.TRAK.MDIA.MINF.STBL.STSD {:#?}", stbl.stsd);
+    log!(File@"ROOT.TRAK.MDIA.MINF.STBL.STCO {} {:#?}",
+      stbl.stco.number_of_entries,
+      stbl.stco.chunk_offsets(self).take(50).collect::<Vec<_>>()
+    );
+    stbl.stts.decode(self)?;
+    if let Some(stss) = &mut stbl.stss {
+      let stss = stss.decode(self)?;
+      log!(File@"ROOT.TRAK.MDIA.MINF.STBL.STSS {} {:#?}",
+        stss.number_of_entries,
+        stss.sync_samples(self).take(50).collect::<Vec<_>>()
+      );
+    }
+    if let Some(ctts) = &mut stbl.ctts {
+      ctts.decode(self)?;
+    }
+    stbl.stsc.decode(self)?;
+    log!(File@"ROOT.TRAK.MDIA.MINF.STBL.STSC {:#?}", stbl.stsc.decode(self)?.number_of_entries);
+    {
+      let stsz = stbl.stsz.decode(self)?;
+      log!(File@"ROOT.TRAK.MDIA.MINF.STBL.STSZ {} {:#?}",
+        stsz.number_of_entries,
+        stsz.sample_sizes(self).take(50).collect::<Vec<_>>()
+      );
+    }
+    if let Some(sgpd) = &mut stbl.sgpd {
+      sgpd.decode(self)?;
+    }
+    if let Some(sbgp) = &mut stbl.sbgp {
+      sbgp.decode(self)?;
+    }
+    Ok(stbl)
   }
 }
 

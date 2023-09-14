@@ -73,7 +73,7 @@ pub struct TkhdAtom {
 impl AtomDecoder for TkhdAtom {
   const NAME: [u8; 4] = *b"tkhd";
   fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
-    let data = atom.read_data(decoder)?;
+    let data: [u8; 84] = atom.read_data_exact(decoder)?;
 
     let (version, flags) = decode_version_flags(&data);
     let creation_time = u32::from_be_bytes((&data[4..8]).try_into()?);

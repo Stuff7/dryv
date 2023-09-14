@@ -4,7 +4,7 @@ use std::io::{Read, Seek};
 #[derive(Debug, Default)]
 pub struct MdatAtom {
   pub atom: Atom,
-  pub extended_size: i64,
+  pub extended_size: u64,
 }
 
 impl MdatAtom {
@@ -13,10 +13,9 @@ impl MdatAtom {
       let mut buffer = [0; 8];
       reader.read_exact(&mut buffer)?;
       atom.offset += 8;
-      atom.size -= 8;
-      i64::from_be_bytes((&buffer[..8]).try_into()?)
+      u64::from_be_bytes((&buffer[..8]).try_into()?) - 8
     } else {
-      0
+      atom.size as u64
     };
 
     Ok(Self {

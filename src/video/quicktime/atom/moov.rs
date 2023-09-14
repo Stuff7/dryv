@@ -64,7 +64,7 @@ pub struct MvhdAtom {
 impl AtomDecoder for MvhdAtom {
   const NAME: [u8; 4] = *b"mvhd";
   fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
-    let data = atom.read_data(decoder)?;
+    let data: [u8; 100] = atom.read_data_exact(decoder)?;
 
     let (version, flags) = decode_version_flags(&data);
     let creation_time = u32::from_be_bytes((&data[4..8]).try_into()?);
@@ -105,7 +105,7 @@ pub struct UdtaAtom {
 impl AtomDecoder for UdtaAtom {
   const NAME: [u8; 4] = *b"udta";
   fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
-    if atom.size == 8 {
+    if atom.size == 0 {
       return Ok(Self::default());
     }
     let data = atom.read_data(decoder)?;

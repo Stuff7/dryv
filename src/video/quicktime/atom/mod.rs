@@ -29,7 +29,7 @@ use thiserror::Error;
 
 use super::Decoder;
 
-const HEADER_SIZE: u32 = 8;
+const HEADER_SIZE: u64 = 8;
 
 #[derive(Debug, Error)]
 pub enum AtomError {
@@ -41,8 +41,6 @@ pub enum AtomError {
   StringConversion(#[from] FromUtf8Error),
   #[error(transparent)]
   Utf8Conversion(#[from] Utf8Error),
-  #[error("Invalid {0:?} atom size {1}")]
-  Size(Str<4>, u32),
   #[error("Math Error\n{0}")]
   Math(#[from] MathError),
   #[error("Atom not found {:?}", Str(*(.0)))]
@@ -55,8 +53,12 @@ pub enum AtomError {
   MetaHandler(Str<4>),
   #[error("Meta value index {0} not found in keys {1:?}")]
   MetaKeyValue(usize, String),
+  #[error("Requested {1} bytes from {} with {} bytes of data", .0.name, .0.size)]
+  NotEnoughData(Atom, usize),
   #[error("Meta item has no data")]
   IlstData,
+  #[error("MinfAtom is missing media handler [vmhd | smhd | gmhd]")]
+  NoMinfHandler,
 }
 
 pub type AtomResult<T = ()> = Result<T, AtomError>;
@@ -82,34 +84,44 @@ pub fn unpack_language_code(bytes: &[u8]) -> AtomResult<[u8; 3]> {
 pub struct Atom {
   pub size: u32,
   pub name: Str<4>,
-  pub offset: u32,
+  pub offset: u64,
 }
 
 impl Atom {
   pub fn read_data<R: Read + Seek>(&mut self, reader: &mut R) -> AtomResult<Vec<u8>> {
-    if self.size <= HEADER_SIZE {
-      return Err(AtomError::Size(self.name, self.size));
+    let mut data = vec![0; self.size as usize];
+    reader.seek(SeekFrom::Start(self.offset))?;
+    reader.read_exact(&mut data)?;
+    Ok(data)
+  }
+
+  pub fn read_data_exact<R: Read + Seek, const S: usize>(
+    &mut self,
+    reader: &mut R,
+  ) -> AtomResult<[u8; S]> {
+    if S as u32 > self.size {
+      return Err(AtomError::NotEnoughData(*self, S));
     }
-    let mut data = vec![0; (self.size - HEADER_SIZE) as usize];
-    reader.seek(SeekFrom::Start((self.offset + HEADER_SIZE) as u64))?;
+    let mut data = [0; S];
+    reader.seek(SeekFrom::Start(self.offset))?;
     reader.read_exact(&mut data)?;
     Ok(data)
   }
 
   pub fn atoms<'a, R: Read + Seek>(&self, reader: &'a mut R) -> AtomIter<'a, R> {
-    AtomIter::new(reader, self.offset + HEADER_SIZE, self.offset + self.size)
+    AtomIter::new(reader, self.offset, self.offset + self.size as u64)
   }
 }
 
 pub struct AtomIter<'a, R: Read + Seek> {
   reader: &'a mut R,
   buffer: [u8; HEADER_SIZE as usize],
-  start: u32,
-  end: u32,
+  start: u64,
+  end: u64,
 }
 
 impl<'a, R: Read + Seek> AtomIter<'a, R> {
-  pub fn new(reader: &'a mut R, start: u32, end: u32) -> Self {
+  pub fn new(reader: &'a mut R, start: u64, end: u64) -> Self {
     Self {
       reader,
       buffer: [0; HEADER_SIZE as usize],
@@ -124,14 +136,18 @@ impl<'a, R: Read + Seek> Iterator for AtomIter<'a, R> {
 
   fn next(&mut self) -> Option<Self::Item> {
     (self.start + HEADER_SIZE < self.end).then(|| {
-      self.reader.seek(SeekFrom::Start(self.start as u64))?;
+      self.reader.seek(SeekFrom::Start(self.start))?;
       self.reader.read_exact(&mut self.buffer)?;
       decode_header(&self.buffer).and_then(|(atom_size, atom_type)| {
-        let offset = self.start;
-        self.start += atom_size;
+        let offset = self.start + HEADER_SIZE;
+        self.start += atom_size as u64;
         Str::<4>::try_from(atom_type)
           .map(|name| Atom {
-            size: atom_size,
+            size: if atom_size < HEADER_SIZE as u32 {
+              atom_size
+            } else {
+              atom_size - HEADER_SIZE as u32
+            },
             name,
             offset,
           })

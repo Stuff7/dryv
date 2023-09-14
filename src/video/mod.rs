@@ -3,8 +3,10 @@ pub mod quicktime;
 use self::quicktime::atom::AtomError;
 use crate::{
   ascii::{Color, RESET},
+  byte::Str,
   log,
   math::Matrix3x3,
+  time::Duration,
 };
 use quicktime::*;
 use std::{fmt, path::Path, str::FromStr};
@@ -16,96 +18,93 @@ pub enum VideoError {
   Decoding(#[from] DecoderError),
   #[error("Could not decode atom\n{0}")]
   AtomDecoding(#[from] AtomError),
+  #[error("Could not find video codec")]
+  VideoCodec,
 }
 
 pub type VideoResult<T = ()> = Result<T, VideoError>;
 
 #[derive(Debug)]
+pub enum VideoCodec {
+  H264,
+  Unknown(Str<4>),
+}
+
+impl From<Str<4>> for VideoCodec {
+  fn from(value: Str<4>) -> Self {
+    match &*value {
+      b"avc1" => Self::H264,
+      _ => Self::Unknown(value),
+    }
+  }
+}
+
+#[derive(Debug)]
 pub struct Video {
   pub timescale: u32,
-  pub duration_ms: f32,
+  pub duration: Duration,
   pub height: f32,
   pub width: f32,
   pub matrix: Matrix3x3,
+  pub video_codec: VideoCodec,
 }
 
 impl Video {
   pub fn open<P: AsRef<Path>>(path: P) -> VideoResult<Self> {
     let mut decoder = Decoder::open(path)?;
     let mut root = decoder.decode_root()?;
-    log!(File@"FTYP {:#?}", root.ftyp);
+    log!(File@"ROOT {:#?}", root);
 
-    let mut video = Self {
-      timescale: 0,
-      duration_ms: 0.,
-      height: 0.,
-      width: 0.,
-      matrix: Matrix3x3::identity(),
-    };
+    let mut timescale = 0;
+    let mut duration = None;
+    let mut height = 0.;
+    let mut width = 0.;
+    let mut matrix = None;
+    let mut video_codec = None;
 
-    log!(File@"{:-^100}", "meta");
-    if let Some(udta) = &mut root.moov.udta {
-      let udta = udta.decode(&mut decoder)?;
-      for meta in &mut udta.metas {
-        let meta = meta.decode(&mut decoder)?;
-        meta.ilst.decode(&mut decoder)?;
-        meta.hdlr.decode(&mut decoder)?;
-        log!(File@"MOOV.UDTA.META TAGS {:#?}", meta.tags(&mut decoder));
-      }
-      log!(File@"MOOV.UDTA {:#?}", udta);
-    }
-    if let Some(meta) = &mut root.moov.meta {
-      let meta = meta.decode(&mut decoder)?;
-      log!(File@"MOOV.META TAGS {:#?}", meta.tags(&mut decoder));
-      meta.ilst.decode(&mut decoder)?;
-      meta.hdlr.decode(&mut decoder)?;
-      meta.keys.decode(&mut decoder)?;
-      log!(File@"MOOV.META {:#?}", meta);
-    }
+    decoder.decode_udta_meta(&mut root)?;
+    decoder.decode_moov_meta(&mut root)?;
     for trak in &mut root.moov.trak {
       let trak = trak.decode(&mut decoder)?;
       let mdia = trak.mdia.decode(&mut decoder)?;
       let hdlr = mdia.hdlr.decode(&mut decoder)?;
-      if let Some(edts) = &mut trak.edts {
-        edts.decode(&mut decoder)?.elst.decode(&mut decoder)?;
-      }
+      log!(File@"{:-^100}", hdlr.component_subtype.as_string());
       let minf = mdia.minf.decode(&mut decoder)?;
-      minf.dinf.decode(&mut decoder)?.dref.decode(&mut decoder)?;
-
-      {
-        let stbl = minf.stbl.decode(&mut decoder)?;
-        stbl.stsd.decode(&mut decoder)?;
-        stbl.stts.decode(&mut decoder)?;
-        if let Some(stss) = &mut stbl.stss {
-          stss.decode(&mut decoder)?;
-        }
-        if let Some(ctts) = &mut stbl.ctts {
-          ctts.decode(&mut decoder)?;
-        }
-        stbl.stsc.decode(&mut decoder)?;
-        stbl.stsz.decode(&mut decoder)?;
-        stbl.stco.decode(&mut decoder)?;
-        if let Some(sgpd) = &mut stbl.sgpd {
-          sgpd.decode(&mut decoder)?;
-        }
-        if let Some(sbgp) = &mut stbl.sbgp {
-          sbgp.decode(&mut decoder)?;
-        }
-      }
+      log!(File@"ROOT.TRAK.MDIA.MINF.DINF.DREF {:#?}", minf.dinf.decode(&mut decoder)?.dref.decode(&mut decoder));
+      decoder.decode_stbl(minf)?;
+      log!(File@"ROOT.TRAK.MDIA.MINF.MHD {:#?}", minf.mhd);
 
       if *hdlr.component_subtype == *b"vide" {
         let tkhd = trak.tkhd.decode(&mut decoder)?;
         let mdhd = mdia.mdhd.decode(&mut decoder)?;
-        video.timescale = mdhd.timescale;
-        video.duration_ms = mdhd.duration as f32 / video.timescale as f32 * 1000.;
-        video.width = tkhd.width;
-        video.height = tkhd.height;
-        video.matrix = tkhd.matrix;
+
+        timescale = mdhd.timescale;
+        duration = Some(Duration::from_secs_f32(
+          mdhd.duration as f32 / timescale as f32,
+        ));
+        width = tkhd.width;
+        height = tkhd.height;
+        matrix = Some(tkhd.matrix);
+        video_codec = minf
+          .stbl
+          .decode(&mut decoder)?
+          .stsd
+          .decode(&mut decoder)?
+          .sample_description_table
+          .get(0)
+          .map(|sample| VideoCodec::from(sample.data_format));
       }
-      log!(File@"{:-^100}", hdlr.component_subtype.as_string());
+
       log!(File@"TRAK.MDIA.MDHD {:#?}", mdia.mdhd);
     }
-    Ok(video)
+    Ok(Self {
+      timescale,
+      duration: duration.unwrap_or_default(),
+      width,
+      height,
+      matrix: matrix.unwrap_or_default(),
+      video_codec: video_codec.ok_or(VideoError::VideoCodec)?,
+    })
   }
 }
 
@@ -114,17 +113,19 @@ impl fmt::Display for Video {
     write!(
       f,
       "{title}VIDEO INFO{RESET}\n\
+      - {title}Video Codec:{RESET} {:?}\n\
       - {title}Matrix:{RESET}\n{}\
       - {title}Rotation:{RESET} {}°\n\
       - {title}Width:{RESET} {}\n\
       - {title}Height:{RESET} {}\n\
-      - {title}Duration:{RESET} {}ms\n\
+      - {title}Duration:{RESET} {}\n\
       - {title}Timescale:{RESET} {:?}",
+      self.video_codec,
       self.matrix,
       self.matrix.rotation(),
       self.width,
       self.height,
-      self.duration_ms,
+      self.duration,
       self.timescale,
       title = "".rgb(75, 205, 94).bold(),
     )

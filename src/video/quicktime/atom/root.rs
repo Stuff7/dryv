@@ -11,7 +11,7 @@ pub struct RootAtom {
 }
 
 impl RootAtom {
-  pub fn new<R: Read + Seek>(reader: &mut R, size: u32) -> AtomResult<Self> {
+  pub fn new<R: Read + Seek>(reader: &mut R, size: u64) -> AtomResult<Self> {
     let mut ftyp = None;
     let mut mdat = None;
     let mut moov = None;
@@ -22,7 +22,15 @@ impl RootAtom {
       match atom {
         Ok(atom) => match &*atom.name {
           b"ftyp" => ftyp = Some(FtypAtom::new(atom, atoms.reader)?),
-          b"mdat" => mdat = Some(MdatAtom::new(atom, atoms.reader)?),
+          b"mdat" => {
+            mdat = {
+              let mdat = MdatAtom::new(atom, atoms.reader)?;
+              if mdat.extended_size > u32::MAX as u64 {
+                atoms.start += mdat.extended_size + 7;
+              }
+              Some(mdat)
+            }
+          }
           b"moov" => moov = Some(MoovAtom::new(atom, atoms.reader)?),
           _ => rest.push(atom),
         },

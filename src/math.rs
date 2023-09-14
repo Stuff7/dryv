@@ -19,6 +19,12 @@ pub struct Matrix3x3 {
   data: [f32; 9],
 }
 
+impl Default for Matrix3x3 {
+  fn default() -> Self {
+    Self::identity()
+  }
+}
+
 impl Matrix3x3 {
   pub fn identity() -> Self {
     Self {
