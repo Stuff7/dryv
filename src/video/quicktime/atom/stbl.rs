@@ -51,7 +51,17 @@ pub struct SttsAtom {
   pub version: u8,
   pub flags: [u8; 3],
   pub number_of_entries: u32,
-  pub time_to_sample_table: Vec<SttsItem>,
+}
+
+impl SttsAtom {
+  pub fn time_to_sample_table<'a>(&self, decoder: &'a mut Decoder) -> SampleTable<'a, SttsItem> {
+    SampleTable::new(
+      decoder,
+      self.atom.offset + 8,
+      self.atom.offset + self.atom.size as u64,
+      8,
+    )
+  }
 }
 
 impl AtomDecoder for SttsAtom {
@@ -62,17 +72,11 @@ impl AtomDecoder for SttsAtom {
     let (version, flags) = decode_version_flags(&data);
     let number_of_entries = u32::from_be_bytes((&data[4..8]).try_into()?);
 
-    let time_to_sample_table = data[8..]
-      .chunks(8)
-      .map(SttsItem::from_bytes)
-      .collect::<AtomResult<_>>()?;
-
     Ok(Self {
       atom,
       version,
       flags,
       number_of_entries,
-      time_to_sample_table,
     })
   }
 }
@@ -83,15 +87,20 @@ pub struct SttsItem {
   pub sample_duration: u32,
 }
 
-impl SttsItem {
-  pub fn from_bytes(data: &[u8]) -> AtomResult<Self> {
-    let sample_count = u32::from_be_bytes((&data[..4]).try_into()?);
-    let sample_duration = u32::from_be_bytes((&data[4..8]).try_into()?);
+impl TryFromSlice for SttsItem {
+  fn try_from_slice(slice: &[u8]) -> Self {
+    let sample_count =
+      u32::from_be_bytes((&slice[..4]).try_into().expect("Stts sample_count missing"));
+    let sample_duration = u32::from_be_bytes(
+      (&slice[4..8])
+        .try_into()
+        .expect("Stts sample_duration missing"),
+    );
 
-    Ok(Self {
+    Self {
       sample_count,
       sample_duration,
-    })
+    }
   }
 }
 

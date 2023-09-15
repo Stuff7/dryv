@@ -129,7 +129,13 @@ impl Decoder {
     log!(File@"ROOT.TRAK.MDIA.HDLR {:#?}", mdia.hdlr.decode(self)?);
     let minf = mdia.minf.decode(self)?;
     let stbl = minf.stbl.decode(self)?;
-    stbl.stts.decode(self)?;
+    {
+      let stts = stbl.stts.decode(self)?;
+      log!(File@"ROOT.TRAK.MDIA.MINF.STBL.STTS {} {:#?}",
+        stts.number_of_entries,
+        stts.time_to_sample_table(self).take(10).collect::<Vec<_>>()
+      );
+    }
     stbl.stsd.decode(self)?;
     for stsd in &mut stbl.stsd.decode(self)?.sample_description_table {
       log!(File@"ROOT.TRAK.MDIA.MINF.STBL.STSD {:#?}", stsd);
