@@ -1,4 +1,4 @@
-use std::{array::TryFromSliceError, ops::Deref};
+use std::{array::TryFromSliceError, ops::Deref, rc::Rc};
 
 #[derive(Clone, Copy)]
 pub struct Str<const N: usize>(pub [u8; N]);
@@ -10,8 +10,17 @@ impl<const N: usize> Default for Str<N> {
 }
 
 impl<const N: usize> Str<N> {
-  pub fn as_string(&self) -> String {
-    self.0.map(|c| c as char).iter().collect()
+  pub fn as_str(&self) -> Box<str> {
+    match std::str::from_utf8(&self.0) {
+      Ok(s) => s.into(),
+      Err(_) => self.0.map(|c| c as char).iter().collect::<String>().into(),
+    }
+  }
+}
+
+impl<const N: usize> From<Str<N>> for Rc<str> {
+  fn from(value: Str<N>) -> Self {
+    value.as_str().into()
   }
 }
 
@@ -32,40 +41,59 @@ impl<const N: usize> Deref for Str<N> {
 
 impl<const N: usize> std::fmt::Display for Str<N> {
   fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-    write!(f, "{}", self.as_string())
+    write!(f, "{}", self.as_str())
   }
 }
 
 impl<const N: usize> std::fmt::Debug for Str<N> {
   fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-    write!(f, "b{:?}", self.as_string())
+    write!(f, "b{:?}", self.as_str())
   }
 }
 
-pub fn pascal_string(slice: &[u8]) -> (String, usize) {
+pub fn pascal_string(slice: &[u8]) -> (Box<str>, usize) {
   if slice.is_empty() {
-    return (String::with_capacity(0), 0);
+    return ("".into(), 0);
   }
 
   let length = slice[0] as usize;
   if length + 1 > slice.len() {
-    return (String::with_capacity(0), 0);
+    return ("".into(), 0);
   }
 
   (
-    String::from_utf8_lossy(&slice[1..=length]).to_string(),
+    std::str::from_utf8(&slice[1..=length])
+      .unwrap_or_default()
+      .into(),
     length,
   )
 }
 
-pub fn from_be_slice(bytes: &[u8], size: usize) -> u64 {
-  let mut result = 0;
-
-  #[allow(clippy::needless_range_loop)]
-  for i in 0..size {
-    let shift = (size - i - 1) * 8;
-    result |= u64::from(bytes[i]) << shift;
+pub fn c_string(slice: &[u8]) -> Box<str> {
+  if slice.last().unwrap_or(&1) != &0 {
+    return "".into();
   }
 
-  result
+  std::str::from_utf8(&slice[..slice.len() - 1])
+    .unwrap_or_default()
+    .into()
+}
+
+pub trait TryFromSlice {
+  fn try_from_slice(slice: &[u8]) -> Self;
+}
+
+impl TryFromSlice for u64 {
+  fn try_from_slice(slice: &[u8]) -> Self {
+    let mut result = 0;
+    let size = slice.len();
+
+    #[allow(clippy::needless_range_loop)]
+    for i in 0..size {
+      let shift = (size - i - 1) * 8;
+      result |= u64::from(slice[i]) << shift;
+    }
+
+    result
+  }
 }

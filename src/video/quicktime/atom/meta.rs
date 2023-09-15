@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use super::*;
 use crate::ascii::LogDisplay;
@@ -43,7 +44,7 @@ impl AtomDecoder for MetaAtom {
 }
 
 impl MetaAtom {
-  pub fn tags(&mut self, decoder: &mut Decoder) -> AtomResult<HashMap<String, String>> {
+  pub fn tags(&mut self, decoder: &mut Decoder) -> AtomResult<HashMap<Rc<str>, Rc<str>>> {
     match &*self.hdlr.decode(decoder)?.handler_type {
       b"mdta" => {
         let Ok(keys) = self.keys.decode(decoder) else {
@@ -61,7 +62,7 @@ impl MetaAtom {
               .key_values
               .get(index)
               .ok_or_else(|| AtomError::MetaKeyValue(index, format!("{:?}", keys.key_values)))
-              .map(|key| (key.value.to_string(), item.data.value.to_string()))
+              .map(|key| (key.value.clone(), item.data.value.clone()))
           })
           .collect::<AtomResult<_>>()
       }
@@ -73,7 +74,7 @@ impl MetaAtom {
           values
             .items
             .iter()
-            .map(|item| (item.atom.name.as_string(), item.data.value.to_string()))
+            .map(|item| (item.atom.name.into(), item.data.value.clone()))
             .collect(),
         )
       }
@@ -88,7 +89,7 @@ pub struct MetaHdlrAtom {
   pub version: u8,
   pub flags: [u8; 3],
   pub handler_type: Str<4>,
-  pub name: String,
+  pub name: Box<str>,
 }
 
 impl AtomDecoder for MetaHdlrAtom {
@@ -148,10 +149,19 @@ impl AtomDecoder for KeysAtom {
   }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct KeyValueAtom {
   pub namespace: Str<4>,
-  pub value: String,
+  pub value: Rc<str>,
+}
+
+impl Default for KeyValueAtom {
+  fn default() -> Self {
+    Self {
+      namespace: Str::default(),
+      value: "".into(),
+    }
+  }
 }
 
 impl AtomDecoder for KeyValueAtom {
@@ -160,7 +170,7 @@ impl AtomDecoder for KeyValueAtom {
 
     Ok(Self {
       namespace: atom.name,
-      value: String::from_utf8_lossy(&data).to_string(),
+      value: std::str::from_utf8(&data).unwrap_or_default().into(),
     })
   }
 }
@@ -204,11 +214,21 @@ impl IlstItem {
   }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct DataAtom {
   pub type_indicator: [u8; 4],
   pub locale_indicator: [u8; 4],
-  pub value: String,
+  pub value: Rc<str>,
+}
+
+impl Default for DataAtom {
+  fn default() -> Self {
+    Self {
+      type_indicator: [0; 4],
+      locale_indicator: [0; 4],
+      value: "".into(),
+    }
+  }
 }
 
 impl AtomDecoder for DataAtom {
@@ -217,7 +237,7 @@ impl AtomDecoder for DataAtom {
     let data = atom.read_data(decoder)?;
     let type_indicator = (&data[..4]).try_into()?;
     let locale_indicator = (&data[4..8]).try_into()?;
-    let value = String::from_utf8_lossy(&data[8..]).to_string();
+    let value = std::str::from_utf8(&data[8..]).unwrap_or_default().into();
 
     Ok(Self {
       type_indicator,

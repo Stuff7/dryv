@@ -126,35 +126,41 @@ impl Decoder {
 
   pub fn decode_stbl<'a>(&mut self, trak: &'a mut TrakAtom) -> DecoderResult<&'a mut StblAtom> {
     let mdia = trak.mdia.decode(self)?;
+    log!(File@"ROOT.TRAK.MDIA.HDLR {:#?}", mdia.hdlr.decode(self)?);
     let minf = mdia.minf.decode(self)?;
     let stbl = minf.stbl.decode(self)?;
+    stbl.stts.decode(self)?;
     stbl.stsd.decode(self)?;
     for stsd in &mut stbl.stsd.decode(self)?.sample_description_table {
       log!(File@"ROOT.TRAK.MDIA.MINF.STBL.STSD {:#?}", stsd);
     }
     log!(File@"ROOT.TRAK.MDIA.MINF.STBL.STCO {} {:#?}",
       stbl.stco.number_of_entries,
-      stbl.stco.chunk_offsets(self).take(50).collect::<Vec<_>>()
+      stbl.stco.chunk_offset_table(self).take(10).collect::<Vec<_>>()
     );
-    stbl.stts.decode(self)?;
-    if let Some(stss) = &mut stbl.stss {
-      let stss = stss.decode(self)?;
-      log!(File@"ROOT.TRAK.MDIA.MINF.STBL.STSS {} {:#?}",
-        stss.number_of_entries,
-        stss.sync_samples(self).take(50).collect::<Vec<_>>()
-      );
-    }
-    if let Some(ctts) = &mut stbl.ctts {
-      ctts.decode(self)?;
-    }
-    stbl.stsc.decode(self)?;
-    log!(File@"ROOT.TRAK.MDIA.MINF.STBL.STSC {:#?}", stbl.stsc.decode(self)?.number_of_entries);
     {
       let stsz = stbl.stsz.decode(self)?;
       log!(File@"ROOT.TRAK.MDIA.MINF.STBL.STSZ {} {:#?}",
         stsz.number_of_entries,
-        stsz.sample_sizes(self).take(50).collect::<Vec<_>>()
+        stsz.sample_size_table(self).take(10).collect::<Vec<_>>()
       );
+    }
+    {
+      let stsc = stbl.stsc.decode(self)?;
+      log!(File@"ROOT.TRAK.MDIA.MINF.STBL.STSC {} {:#?}",
+        stsc.number_of_entries,
+        stsc.sample_to_chunk_table(self).take(10).collect::<Vec<_>>(),
+      );
+    }
+    if let Some(stss) = &mut stbl.stss {
+      let stss = stss.decode(self)?;
+      log!(File@"ROOT.TRAK.MDIA.MINF.STBL.STSS {} {:#?}",
+        stss.number_of_entries,
+        stss.sync_sample_table(self).take(10).collect::<Vec<_>>()
+      );
+    }
+    if let Some(ctts) = &mut stbl.ctts {
+      ctts.decode(self)?;
     }
     if let Some(sgpd) = &mut stbl.sgpd {
       sgpd.decode(self)?;

@@ -1,5 +1,6 @@
 use super::*;
 use crate::ascii::LogDisplay;
+use crate::byte::{c_string, pascal_string};
 use crate::log;
 
 #[derive(Debug, Default)]
@@ -83,7 +84,7 @@ pub struct HdlrAtom {
   pub component_manufacturer: Str<4>,
   pub component_flags: [u8; 4],
   pub component_flags_mask: [u8; 4],
-  pub component_name: String,
+  pub component_name: Box<str>,
 }
 
 impl AtomDecoder for HdlrAtom {
@@ -97,8 +98,10 @@ impl AtomDecoder for HdlrAtom {
     let component_manufacturer = Str::try_from(&data[12..16])?;
     let component_flags = (&data[16..20]).try_into()?;
     let component_flags_mask = (&data[20..24]).try_into()?;
-    // 24th byte is the size of the string
-    let component_name = String::from_utf8_lossy(&data[25..]).to_string();
+    let component_name = match &data[24..] {
+      slice if &*component_manufacturer == b"appl" => pascal_string(slice).0,
+      slice => c_string(slice),
+    };
 
     Ok(Self {
       atom,

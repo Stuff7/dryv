@@ -207,19 +207,19 @@ pub struct DrefItem {
   pub atom_type: Str<4>,
   pub version: u8,
   pub flags: [u8; 3],
-  pub data: String,
+  // pub data: String,
 }
 
 impl DrefItem {
   pub fn new(data: &[u8], atom_type: Str<4>) -> AtomResult<Self> {
     let (version, flags) = decode_version_flags(data);
-    let data = String::from_utf8_lossy(&data[4..]).to_string();
+    // let data = String::from_utf8_lossy(&data[4..]).to_string();
 
     Ok(Self {
       atom_type,
       version,
       flags,
-      data,
+      // data,
     })
   }
 }

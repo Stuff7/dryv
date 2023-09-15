@@ -92,7 +92,7 @@ pub struct StsdVide {
   pub vertical_resolution: f32,
   pub data_size: u32,
   pub frame_count: u16,
-  pub compressor_name: String,
+  pub compressor_name: Box<str>,
   pub depth: u16,
   pub color_table_id: u16,
 }

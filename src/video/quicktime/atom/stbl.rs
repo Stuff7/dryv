@@ -1,6 +1,8 @@
+use std::marker::PhantomData;
+
 use super::*;
 use crate::ascii::LogDisplay;
-use crate::byte::from_be_slice;
+use crate::byte::TryFromSlice;
 use crate::log;
 
 #[derive(Debug, Default)]
@@ -102,8 +104,8 @@ pub struct StssAtom {
 }
 
 impl StssAtom {
-  pub fn sync_samples<'a>(&self, decoder: &'a mut Decoder) -> SampleTableIter<'a> {
-    SampleTableIter::new(
+  pub fn sync_sample_table<'a>(&self, decoder: &'a mut Decoder) -> SampleTable<'a> {
+    SampleTable::new(
       decoder,
       self.atom.offset + 8,
       self.atom.offset + self.atom.size as u64,
@@ -160,28 +162,32 @@ pub struct StscAtom {
   pub version: u8,
   pub flags: [u8; 3],
   pub number_of_entries: u32,
-  pub sample_to_chunk_table: Vec<StscItem>,
+}
+
+impl StscAtom {
+  pub fn sample_to_chunk_table<'a>(&self, decoder: &'a mut Decoder) -> SampleTable<'a, StscItem> {
+    SampleTable::new(
+      decoder,
+      self.atom.offset + 8,
+      self.atom.offset + self.atom.size as u64,
+      12,
+    )
+  }
 }
 
 impl AtomDecoder for StscAtom {
   const NAME: [u8; 4] = *b"stsc";
   fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
-    let data = atom.read_data(decoder)?;
+    let data: [u8; 8] = atom.read_data_exact(decoder)?;
 
     let (version, flags) = decode_version_flags(&data);
     let number_of_entries = u32::from_be_bytes((&data[4..8]).try_into()?);
-
-    let sample_to_chunk_table = data[8..]
-      .chunks(12)
-      .map(StscItem::from_bytes)
-      .collect::<AtomResult<_>>()?;
 
     Ok(Self {
       atom,
       version,
       flags,
       number_of_entries,
-      sample_to_chunk_table,
     })
   }
 }
@@ -193,17 +199,26 @@ pub struct StscItem {
   pub sample_description_id: u32,
 }
 
-impl StscItem {
-  pub fn from_bytes(data: &[u8]) -> AtomResult<Self> {
-    let first_chunk = u32::from_be_bytes((&data[..4]).try_into()?);
-    let samples_per_chunk = u32::from_be_bytes((&data[4..8]).try_into()?);
-    let sample_description_id = u32::from_be_bytes((&data[8..12]).try_into()?);
+impl TryFromSlice for StscItem {
+  fn try_from_slice(slice: &[u8]) -> Self {
+    let first_chunk =
+      u32::from_be_bytes((&slice[..4]).try_into().expect("Stsc first_chunk missing"));
+    let samples_per_chunk = u32::from_be_bytes(
+      (&slice[4..8])
+        .try_into()
+        .expect("Stsc samples_per_chunk missing"),
+    );
+    let sample_description_id = u32::from_be_bytes(
+      (&slice[8..12])
+        .try_into()
+        .expect("Stsc sample_description_id missing"),
+    );
 
-    Ok(Self {
+    Self {
       first_chunk,
       samples_per_chunk,
       sample_description_id,
-    })
+    }
   }
 }
 
@@ -217,8 +232,8 @@ pub struct StszAtom {
 }
 
 impl StszAtom {
-  pub fn sample_sizes<'a>(&self, decoder: &'a mut Decoder) -> SampleTableIter<'a> {
-    SampleTableIter::new(
+  pub fn sample_size_table<'a>(&self, decoder: &'a mut Decoder) -> SampleTable<'a> {
+    SampleTable::new(
       decoder,
       self.atom.offset + 12,
       self.atom.offset + self.atom.size as u64,
@@ -247,9 +262,9 @@ impl AtomDecoder for StszAtom {
 }
 
 impl StcoAtom {
-  pub fn chunk_offsets<'a>(&self, decoder: &'a mut Decoder) -> SampleTableIter<'a> {
+  pub fn chunk_offset_table<'a>(&self, decoder: &'a mut Decoder) -> SampleTable<'a> {
     let atom = &self.atom;
-    SampleTableIter::new(
+    SampleTable::new(
       decoder,
       atom.offset + 8,
       atom.offset + atom.size as u64,
@@ -358,52 +373,51 @@ impl AtomDecoder for SbgpAtom {
 }
 
 #[derive(Debug)]
-pub struct SampleTableIter<'a> {
+pub struct SampleTable<'a, T: TryFromSlice = u64> {
   pub reader: &'a mut Decoder,
   pub buffer: Vec<u8>,
+  pub buffer_size: usize,
+  pub offset: usize,
   pub start: u64,
   pub end: u64,
   pub chunk_size: usize,
-  pub offset: usize,
-  pub byte_size: usize,
+  pub phantom: PhantomData<T>,
 }
 
-impl<'a> SampleTableIter<'a> {
-  const MAX_SIZE: usize = 8 * 1_000 * 1_000;
-  pub fn new(reader: &'a mut Decoder, start: u64, end: u64, size: usize) -> Self {
+impl<'a, T: TryFromSlice> SampleTable<'a, T> {
+  const MAX_SIZE: usize = 24 * 1_000;
+  pub fn new(reader: &'a mut Decoder, start: u64, end: u64, chunk_size: usize) -> Self {
     Self {
       reader,
       buffer: vec![0; std::cmp::min((end - start) as usize, Self::MAX_SIZE)],
+      buffer_size: 0,
+      offset: 0,
       start,
       end,
-      chunk_size: 0,
-      offset: 0,
-      byte_size: size,
+      chunk_size,
+      phantom: PhantomData,
     }
   }
 }
 
-impl<'a> Iterator for SampleTableIter<'a> {
-  type Item = u64;
+impl<'a, T: TryFromSlice> Iterator for SampleTable<'a, T> {
+  type Item = T;
   fn next(&mut self) -> Option<Self::Item> {
     (self.start < self.end)
-      .then(|| -> AtomResult<u64> {
-        if self.offset >= self.chunk_size {
-          self.chunk_size = std::cmp::min((self.end - self.start) as usize, Self::MAX_SIZE);
+      .then(|| -> AtomResult<T> {
+        if self.offset >= self.buffer_size {
+          self.buffer_size = std::cmp::min((self.end - self.start) as usize, Self::MAX_SIZE);
           self.reader.seek(SeekFrom::Start(self.start))?;
           self
             .reader
-            .read_exact(&mut self.buffer[..self.chunk_size])?;
+            .read_exact(&mut self.buffer[..self.buffer_size])?;
           self.offset = 0;
         }
 
-        self.start += self.byte_size as u64;
+        self.start += self.chunk_size as u64;
         let start = self.offset;
-        self.offset += self.byte_size;
-        Ok(from_be_slice(
-          &self.buffer[start..self.offset],
-          self.byte_size,
-        ))
+        self.offset += self.chunk_size;
+        Ok(T::try_from_slice(&self.buffer[start..self.offset]))
       })
       .and_then(|n| n.ok())
   }
