@@ -45,7 +45,7 @@ impl AtomDecoder for StsdAtom {
 pub struct StsdItem {
   pub data_format: Str<4>,
   pub dref_index: u16,
-  pub data: StsdKind,
+  pub data: StsdData,
 }
 
 impl StsdItem {
@@ -57,19 +57,19 @@ impl StsdItem {
     Ok(Self {
       data_format,
       dref_index,
-      data: StsdKind::new(data_format, &data[8..])?,
+      data: StsdData::new(data_format, &data[8..])?,
     })
   }
 }
 
 #[derive(Debug)]
-pub enum StsdKind {
+pub enum StsdData {
   Vide(StsdVide),
   Soun(StsdSoun),
   Unknown(Str<4>),
 }
 
-impl StsdKind {
+impl StsdData {
   fn new(hdlr: Str<4>, data: &[u8]) -> AtomResult<Self> {
     Ok(match &*hdlr {
       b"avc1" => Self::Vide(StsdVide::decode(data)?),
