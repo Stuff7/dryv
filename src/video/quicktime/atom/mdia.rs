@@ -99,7 +99,7 @@ impl AtomDecoder for HdlrAtom {
     let component_flags = (&data[16..20]).try_into()?;
     let component_flags_mask = (&data[20..24]).try_into()?;
     let component_name = match &data[24..] {
-      slice if &*component_manufacturer == b"appl" => pascal_string(slice).0,
+      slice if &*component_manufacturer == b"appl" => pascal_string(slice),
       slice => c_string(slice),
     };
 

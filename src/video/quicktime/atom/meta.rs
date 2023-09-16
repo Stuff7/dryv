@@ -101,7 +101,7 @@ impl AtomDecoder for MetaHdlrAtom {
     // __reserved__ (4 bytes)
     let handler_type = Str::try_from(&data[8..12])?;
     // __reserved__ (12 bytes)
-    let (name, _) = pascal_string(&data[24..]);
+    let name = pascal_string(&data[24..]);
 
     Ok(Self {
       atom,

@@ -51,22 +51,19 @@ impl<const N: usize> std::fmt::Debug for Str<N> {
   }
 }
 
-pub fn pascal_string(slice: &[u8]) -> (Box<str>, usize) {
+pub fn pascal_string(slice: &[u8]) -> Box<str> {
   if slice.is_empty() {
-    return ("".into(), 0);
+    return "".into();
   }
 
   let length = slice[0] as usize;
   if length + 1 > slice.len() {
-    return ("".into(), 0);
+    return "".into();
   }
 
-  (
-    std::str::from_utf8(&slice[1..=length])
-      .unwrap_or_default()
-      .into(),
-    length,
-  )
+  std::str::from_utf8(&slice[1..=length])
+    .unwrap_or_default()
+    .into()
 }
 
 pub fn c_string(slice: &[u8]) -> Box<str> {

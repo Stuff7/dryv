@@ -93,13 +93,12 @@ pub struct StsdVide {
   pub data_size: u32,
   pub frame_count: u16,
   pub compressor_name: Box<str>,
-  pub depth: u16,
-  pub color_table_id: u16,
+  pub depth: i16,
+  pub color_table_id: i16,
 }
 
 impl StsdVide {
   pub fn decode(data: &[u8]) -> AtomResult<Self> {
-    let (compressor_name, length) = pascal_string(&data[34..]);
     Ok(Self {
       revision_level: u16::from_be_bytes((&data[..2]).try_into()?),
       version: u16::from_be_bytes((&data[2..4]).try_into()?),
@@ -118,9 +117,9 @@ impl StsdVide {
       ),
       data_size: u32::from_be_bytes((&data[28..32]).try_into()?),
       frame_count: u16::from_be_bytes((&data[32..34]).try_into()?),
-      compressor_name,
-      depth: u16::from_be_bytes((&data[length..length + 2]).try_into()?),
-      color_table_id: u16::from_be_bytes((&data[length + 2..length + 4]).try_into()?),
+      compressor_name: pascal_string(&data[34..66]),
+      depth: i16::from_be_bytes((&data[66..68]).try_into()?),
+      color_table_id: i16::from_be_bytes((&data[68..70]).try_into()?),
     })
   }
 }
