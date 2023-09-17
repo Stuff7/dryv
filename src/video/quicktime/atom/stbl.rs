@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use super::*;
 use crate::ascii::LogDisplay;
-use crate::byte::TryFromSlice;
+use crate::byte::FromSlice;
 use crate::log;
 
 #[derive(Debug, Default)]
@@ -87,7 +87,7 @@ pub struct SttsItem {
   pub sample_duration: u32,
 }
 
-impl TryFromSlice for SttsItem {
+impl FromSlice for SttsItem {
   fn try_from_slice(slice: &[u8]) -> Self {
     let sample_count =
       u32::from_be_bytes((&slice[..4]).try_into().expect("Stts sample_count missing"));
@@ -208,7 +208,7 @@ pub struct StscItem {
   pub sample_description_id: u32,
 }
 
-impl TryFromSlice for StscItem {
+impl FromSlice for StscItem {
   fn try_from_slice(slice: &[u8]) -> Self {
     let first_chunk =
       u32::from_be_bytes((&slice[..4]).try_into().expect("Stsc first_chunk missing"));
@@ -382,7 +382,7 @@ impl AtomDecoder for SbgpAtom {
 }
 
 #[derive(Debug)]
-pub struct SampleTable<'a, T: TryFromSlice = u64> {
+pub struct SampleTable<'a, T: FromSlice = u64> {
   pub reader: &'a mut Decoder,
   pub buffer: Vec<u8>,
   pub buffer_size: usize,
@@ -393,7 +393,7 @@ pub struct SampleTable<'a, T: TryFromSlice = u64> {
   pub phantom: PhantomData<T>,
 }
 
-impl<'a, T: TryFromSlice> SampleTable<'a, T> {
+impl<'a, T: FromSlice> SampleTable<'a, T> {
   const MAX_SIZE: usize = 24 * 1_000;
   pub fn new(reader: &'a mut Decoder, start: u64, end: u64, chunk_size: usize) -> Self {
     Self {
@@ -409,7 +409,7 @@ impl<'a, T: TryFromSlice> SampleTable<'a, T> {
   }
 }
 
-impl<'a, T: TryFromSlice> Iterator for SampleTable<'a, T> {
+impl<'a, T: FromSlice> Iterator for SampleTable<'a, T> {
   type Item = T;
   fn next(&mut self) -> Option<Self::Item> {
     (self.start < self.end)
