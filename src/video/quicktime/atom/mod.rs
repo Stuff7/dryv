@@ -91,9 +91,16 @@ pub struct Atom {
 
 impl Atom {
   pub fn read_data<R: Read + Seek>(&mut self, reader: &mut R) -> AtomResult<Vec<u8>> {
-    let mut data = vec![0; self.size as usize];
     reader.seek(SeekFrom::Start(self.offset))?;
-    reader.read_exact(&mut data)?;
+    let data = if self.size == 0 {
+      let mut data = Vec::new();
+      reader.read_to_end(&mut data)?;
+      data
+    } else {
+      let mut data = vec![0; self.size as usize];
+      reader.read_exact(&mut data)?;
+      data
+    };
     Ok(data)
   }
 

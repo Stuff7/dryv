@@ -17,7 +17,7 @@ pub struct CLIArgs {
 
 impl CLIArgs {
   pub fn read() -> CLIResult<Self> {
-    let args: Vec<String> = env::args().collect();
+    let args: Box<[String]> = env::args().collect();
     Ok(Self {
       debug: Self::find_flag(&args, "-d"),
       film: Self::find_flag(&args, "-f"),

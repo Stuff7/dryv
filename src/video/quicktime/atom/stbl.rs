@@ -312,7 +312,7 @@ pub struct SgpdAtom {
   pub grouping_table: u32,
   pub default_length: u32,
   pub entry_count: u32,
-  pub payload_data: Vec<u16>,
+  pub payload_data: Box<[u16]>,
 }
 
 impl AtomDecoder for SgpdAtom {

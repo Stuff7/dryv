@@ -31,7 +31,7 @@ pub struct ElstAtom {
   pub version: u8,
   pub flags: [u8; 3],
   pub number_of_entries: u32,
-  pub edit_list_table: Vec<ElstItem>,
+  pub edit_list_table: Box<[ElstItem]>,
 }
 
 impl AtomDecoder for ElstAtom {

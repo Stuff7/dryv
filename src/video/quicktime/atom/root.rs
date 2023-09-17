@@ -50,7 +50,7 @@ impl RootAtom {
 #[derive(Debug, Default)]
 pub struct FtypAtom {
   pub atom: Atom,
-  pub compatible_brands: Vec<Str<4>>,
+  pub compatible_brands: Box<[Str<4>]>,
   pub major_brand: Str<4>,
   pub minor_version: u32,
 }
@@ -61,7 +61,7 @@ impl FtypAtom {
 
     let major_brand = Str::try_from(&data[..4])?;
     let minor_version = u32::from_be_bytes((&data[4..8]).try_into()?);
-    let compatible_brands: Vec<Str<4>> = data[8..]
+    let compatible_brands = data[8..]
       .chunks_exact(4)
       .map(Str::<4>::try_from)
       .collect::<Result<_, _>>()?;

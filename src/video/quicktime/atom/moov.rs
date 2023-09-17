@@ -99,29 +99,28 @@ impl AtomDecoder for MvhdAtom {
 pub struct UdtaAtom {
   pub version: u8,
   pub flags: [u8; 3],
-  pub metas: Vec<EncodedAtom<MetaAtom>>,
+  pub metas: Box<[EncodedAtom<MetaAtom>]>,
 }
 
 impl AtomDecoder for UdtaAtom {
   const NAME: [u8; 4] = *b"udta";
   fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
-    if atom.size == 0 {
-      return Ok(Self::default());
-    }
     let data = atom.read_data(decoder)?;
 
     let (version, flags) = decode_version_flags(&data);
-    let mut metas = Vec::new();
-
-    for atom in atom.atoms(decoder) {
-      match atom {
-        Ok(atom) => match &*atom.name {
-          b"meta" => metas.push(EncodedAtom::Encoded(atom)),
-          _ => log!(warn@"#[udta] Unused atom {atom:#?}"),
-        },
-        Err(e) => log!(err@"#[udta] {e}"),
-      }
-    }
+    let metas = atom
+      .atoms(decoder)
+      .filter_map(|atom| {
+        match atom {
+          Ok(atom) => match &*atom.name {
+            b"meta" => return Some(EncodedAtom::Encoded(atom)),
+            _ => log!(warn@"#[udta] Unused atom {atom:#?}"),
+          },
+          Err(e) => log!(err@"#[udta] {e}"),
+        }
+        None
+      })
+      .collect();
 
     Ok(Self {
       version,
