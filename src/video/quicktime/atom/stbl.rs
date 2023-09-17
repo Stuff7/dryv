@@ -88,7 +88,7 @@ pub struct SttsItem {
 }
 
 impl FromSlice for SttsItem {
-  fn try_from_slice(slice: &[u8]) -> Self {
+  fn from_slice(slice: &[u8]) -> Self {
     let sample_count =
       u32::from_be_bytes((&slice[..4]).try_into().expect("Stts sample_count missing"));
     let sample_duration = u32::from_be_bytes(
@@ -209,7 +209,7 @@ pub struct StscItem {
 }
 
 impl FromSlice for StscItem {
-  fn try_from_slice(slice: &[u8]) -> Self {
+  fn from_slice(slice: &[u8]) -> Self {
     let first_chunk =
       u32::from_be_bytes((&slice[..4]).try_into().expect("Stsc first_chunk missing"));
     let samples_per_chunk = u32::from_be_bytes(
@@ -426,7 +426,7 @@ impl<'a, T: FromSlice> Iterator for SampleTable<'a, T> {
         self.start += self.chunk_size as u64;
         let start = self.offset;
         self.offset += self.chunk_size;
-        Ok(T::try_from_slice(&self.buffer[start..self.offset]))
+        Ok(T::from_slice(&self.buffer[start..self.offset]))
       })
       .and_then(|n| n.ok())
   }

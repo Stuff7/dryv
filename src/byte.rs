@@ -77,11 +77,11 @@ pub fn c_string(slice: &[u8]) -> Box<str> {
 }
 
 pub trait FromSlice {
-  fn try_from_slice(slice: &[u8]) -> Self;
+  fn from_slice(slice: &[u8]) -> Self;
 }
 
 impl FromSlice for u64 {
-  fn try_from_slice(slice: &[u8]) -> Self {
+  fn from_slice(slice: &[u8]) -> Self {
     let mut result = 0;
     let size = slice.len();
 
