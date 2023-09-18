@@ -16,13 +16,13 @@ pub struct MetaAtom {
 
 impl MetaAtom {
   pub fn new(atom: Atom, data: AtomData) -> AtomResult<Self> {
-    let mut content = (None, None, None);
+    let (mut hdlr, mut keys, mut ilst) = (None, None, None);
     for atom in data.atoms() {
       match atom {
         Ok((atom, data)) => match &*atom.name {
-          b"hdlr" => content.0 = Some(MetaHdlrAtom::new(atom, AtomData::new(data, atom.offset))?),
-          b"keys" => content.1 = Some(KeysAtom::new(atom, AtomData::new(data, atom.offset))?),
-          b"ilst" => content.2 = Some(IlstAtom::new(AtomData::new(data, atom.offset))?),
+          b"hdlr" => hdlr = Some(MetaHdlrAtom::new(atom, AtomData::new(data, atom.offset))?),
+          b"keys" => keys = Some(KeysAtom::new(atom, AtomData::new(data, atom.offset))?),
+          b"ilst" => ilst = Some(IlstAtom::new(AtomData::new(data, atom.offset))?),
           _ => log!(warn@"#[meta] Unused atom {atom:#?}"),
         },
         Err(e) => log!(err@"#[meta] {e}"),
@@ -31,9 +31,9 @@ impl MetaAtom {
 
     Ok(Self {
       atom,
-      hdlr: content.0.ok_or(AtomError::NoMetaHandler)?,
-      keys: content.1,
-      ilst: content.2,
+      hdlr: hdlr.ok_or(AtomError::NoMetaHandler)?,
+      keys,
+      ilst,
     })
   }
 }
