@@ -39,7 +39,6 @@ impl Video {
   pub fn open<P: AsRef<Path>>(path: P) -> VideoResult<Self> {
     let mut decoder = Decoder::open(path)?;
     let mut root = decoder.decode_root()?;
-    log!(File@"ROOT {:#?}", root);
 
     let mut timescale = 0;
     let mut duration = None;
@@ -50,7 +49,8 @@ impl Video {
 
     decoder.decode_udta_meta(&mut root)?;
     decoder.decode_moov_meta(&mut root)?;
-    for trak in &mut root.moov.trak {
+    log!(File@"ROOT {:#?}", root);
+    for trak in &mut *root.moov.trak {
       let trak = trak.decode(&mut decoder)?;
       let mdia = trak.mdia.decode(&mut decoder)?;
       let hdlr = mdia.hdlr.decode(&mut decoder)?;
@@ -58,10 +58,15 @@ impl Video {
       let minf = mdia.minf.decode(&mut decoder)?;
       log!(File@"ROOT.TRAK.MDIA.MINF.DINF.DREF {:#?}", minf.dinf.decode(&mut decoder)?.dref.decode(&mut decoder));
       log!(File@"ROOT.TRAK.MDIA.MINF.MHD {:#?}", minf.mhd);
+      if let Some(edts) = &mut trak.edts {
+        let edts = edts.decode(&mut decoder)?;
+        log!(File@"ROOT.TRAK.EDTS.ELST {:#?}", edts.elst.decode(&mut decoder)?);
+      }
 
       if *hdlr.component_subtype == *b"vide" {
         let tkhd = trak.tkhd.decode(&mut decoder)?;
         let mdhd = mdia.mdhd.decode(&mut decoder)?;
+        log!(File@"ROOT.TRAK.MDIA.MDHD {:#?}", mdhd);
 
         timescale = mdhd.timescale;
         duration = Some(Duration::from_secs_f32(

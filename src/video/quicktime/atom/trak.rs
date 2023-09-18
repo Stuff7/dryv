@@ -1,6 +1,5 @@
 use super::*;
 use crate::log;
-use crate::math::fixed_point_to_f32;
 use crate::{ascii::LogDisplay, math::Matrix3x3};
 
 #[derive(Debug, Default)]
@@ -73,37 +72,21 @@ pub struct TkhdAtom {
 impl AtomDecoder for TkhdAtom {
   const NAME: [u8; 4] = *b"tkhd";
   fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
-    let data: [u8; 84] = atom.read_data_exact(decoder)?;
-
-    let (version, flags) = decode_version_flags(&data);
-    let creation_time = u32::from_be_bytes((&data[4..8]).try_into()?);
-    let modification_time = u32::from_be_bytes((&data[8..12]).try_into()?);
-    let track_id = u32::from_be_bytes((&data[12..16]).try_into()?);
-    // __reserved__ 32 bit     (4 bytes)
-    let duration = u32::from_be_bytes((&data[20..24]).try_into()?);
-    // __reserved__ 32 bit [2] (8 bytes)
-    let layer = u16::from_be_bytes((&data[32..34]).try_into()?);
-    let alternate_group = u16::from_be_bytes((&data[34..36]).try_into()?);
-    let volume = fixed_point_to_f32(i16::from_be_bytes((&data[36..38]).try_into()?) as f32, 8);
-    // __reserved__ 16 bit     (2 bytes)
-    let matrix = Matrix3x3::from_bytes(&data[40..])?;
-    let width = fixed_point_to_f32(i32::from_be_bytes((&data[76..80]).try_into()?) as f32, 16);
-    let height = fixed_point_to_f32(i32::from_be_bytes((&data[80..84]).try_into()?) as f32, 16);
-
+    let mut data = atom.read_data(decoder)?;
     Ok(Self {
       atom,
-      version,
-      flags,
-      creation_time,
-      modification_time,
-      track_id,
-      duration,
-      layer,
-      alternate_group,
-      volume,
-      matrix,
-      width,
-      height,
+      version: data.version(),
+      flags: data.flags(),
+      creation_time: data.next_into()?,
+      modification_time: data.next_into()?,
+      track_id: data.next_into()?,
+      duration: data.reserved(4).next_into()?,
+      layer: data.reserved(8).next_into()?,
+      alternate_group: data.next_into()?,
+      volume: data.fixed_point_8()?,
+      matrix: data.reserved(2).next_into()?,
+      width: data.fixed_point_16()?,
+      height: data.fixed_point_16()?,
     })
   }
 }

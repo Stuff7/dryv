@@ -7,6 +7,7 @@ use crate::log;
 
 #[derive(Debug, Default)]
 pub struct StblAtom {
+  pub atom: Atom,
   pub stsd: EncodedAtom<StsdAtom>,
   pub stts: EncodedAtom<SttsAtom>,
   pub stss: Option<EncodedAtom<StssAtom>>,
@@ -21,8 +22,11 @@ pub struct StblAtom {
 impl AtomDecoder for StblAtom {
   const NAME: [u8; 4] = *b"stbl";
   fn decode_unchecked(atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
-    let mut stbl = Self::default();
-    let mut atoms = atom.atoms(decoder);
+    let mut stbl = Self {
+      atom,
+      ..Default::default()
+    };
+    let mut atoms = stbl.atom.atoms(decoder);
     while let Some(atom) = atoms.next() {
       match atom {
         Ok(atom) => match &*atom.name {
@@ -67,16 +71,12 @@ impl SttsAtom {
 impl AtomDecoder for SttsAtom {
   const NAME: [u8; 4] = *b"stts";
   fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
-    let data = atom.read_data(decoder)?;
-
-    let (version, flags) = decode_version_flags(&data);
-    let number_of_entries = u32::from_be_bytes((&data[4..8]).try_into()?);
-
+    let mut data = atom.read_data_exact::<8, _>(decoder)?;
     Ok(Self {
       atom,
-      version,
-      flags,
-      number_of_entries,
+      version: data.version(),
+      flags: data.flags(),
+      number_of_entries: data.next_into()?,
     })
   }
 }
@@ -126,16 +126,12 @@ impl StssAtom {
 impl AtomDecoder for StssAtom {
   const NAME: [u8; 4] = *b"stss";
   fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
-    let data: [u8; 8] = atom.read_data_exact(decoder)?;
-
-    let (version, flags) = decode_version_flags(&data);
-    let number_of_entries = u32::from_be_bytes((&data[4..8]).try_into()?);
-
+    let mut data = atom.read_data_exact::<8, _>(decoder)?;
     Ok(Self {
       atom,
-      version,
-      flags,
-      number_of_entries,
+      version: data.version(),
+      flags: data.flags(),
+      number_of_entries: data.next_into()?,
     })
   }
 }
@@ -151,16 +147,12 @@ pub struct CttsAtom {
 impl AtomDecoder for CttsAtom {
   const NAME: [u8; 4] = *b"ctts";
   fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
-    let data: [u8; 8] = atom.read_data_exact(decoder)?;
-
-    let (version, flags) = decode_version_flags(&data);
-    let entry_count = u32::from_be_bytes((&data[4..8]).try_into()?);
-
+    let mut data = atom.read_data_exact::<8, _>(decoder)?;
     Ok(Self {
       atom,
-      version,
-      flags,
-      entry_count,
+      version: data.version(),
+      flags: data.flags(),
+      entry_count: data.next_into()?,
     })
   }
 }
@@ -187,16 +179,12 @@ impl StscAtom {
 impl AtomDecoder for StscAtom {
   const NAME: [u8; 4] = *b"stsc";
   fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
-    let data: [u8; 8] = atom.read_data_exact(decoder)?;
-
-    let (version, flags) = decode_version_flags(&data);
-    let number_of_entries = u32::from_be_bytes((&data[4..8]).try_into()?);
-
+    let mut data = atom.read_data_exact::<8, _>(decoder)?;
     Ok(Self {
       atom,
-      version,
-      flags,
-      number_of_entries,
+      version: data.version(),
+      flags: data.flags(),
+      number_of_entries: data.next_into()?,
     })
   }
 }
@@ -254,18 +242,13 @@ impl StszAtom {
 impl AtomDecoder for StszAtom {
   const NAME: [u8; 4] = *b"stsz";
   fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
-    let data: [u8; 12] = atom.read_data_exact(decoder)?;
-
-    let (version, flags) = decode_version_flags(&data);
-    let sample_size = u32::from_be_bytes((&data[4..8]).try_into()?);
-    let number_of_entries = u32::from_be_bytes((&data[8..12]).try_into()?);
-
+    let mut data = atom.read_data_exact::<12, _>(decoder)?;
     Ok(Self {
       atom,
-      version,
-      flags,
-      sample_size,
-      number_of_entries,
+      version: data.version(),
+      flags: data.flags(),
+      sample_size: data.next_into()?,
+      number_of_entries: data.next_into()?,
     })
   }
 }
@@ -292,14 +275,12 @@ pub struct StcoAtom {
 
 impl AtomDecoder for StcoAtom {
   fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
-    let data: [u8; 8] = atom.read_data_exact(decoder)?;
-    let (version, flags) = decode_version_flags(&data);
-
+    let mut data = atom.read_data_exact::<8, _>(decoder)?;
     Ok(Self {
       atom,
-      version,
-      flags,
-      number_of_entries: u32::from_be_bytes((&data[4..8]).try_into()?),
+      version: data.version(),
+      flags: data.flags(),
+      number_of_entries: data.next_into()?,
     })
   }
 }
@@ -318,30 +299,22 @@ pub struct SgpdAtom {
 impl AtomDecoder for SgpdAtom {
   const NAME: [u8; 4] = *b"sgpd";
   fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
-    let data = atom.read_data(decoder)?;
-
-    let (version, flags) = decode_version_flags(&data);
-    let grouping_table = u32::from_be_bytes((&data[4..8]).try_into()?);
-    let default_length = u32::from_be_bytes((&data[8..12]).try_into()?);
-    let entry_count = u32::from_be_bytes((&data[12..16]).try_into()?);
-
-    let payload_data = data[16..]
-      .chunks(2)
-      .map(|b| {
-        b.try_into()
-          .map(u16::from_be_bytes)
-          .map_err(AtomError::from)
-      })
-      .collect::<AtomResult<_>>()?;
-
+    let mut data = atom.read_data(decoder)?;
     Ok(Self {
       atom,
-      version,
-      flags,
-      grouping_table,
-      default_length,
-      entry_count,
-      payload_data,
+      version: data.version(),
+      flags: data.flags(),
+      grouping_table: data.next_into()?,
+      default_length: data.next_into()?,
+      entry_count: data.next_into()?,
+      payload_data: data
+        .chunks(2)
+        .map(|b| {
+          b.try_into()
+            .map(u16::from_be_bytes)
+            .map_err(AtomError::from)
+        })
+        .collect::<AtomResult<_>>()?,
     })
   }
 }
@@ -360,23 +333,15 @@ pub struct SbgpAtom {
 impl AtomDecoder for SbgpAtom {
   const NAME: [u8; 4] = *b"sbgp";
   fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
-    let data: [u8; 20] = atom.read_data_exact(decoder)?;
-
-    let (version, flags) = decode_version_flags(&data);
-    let grouping_type = Str::try_from(&data[4..8])?;
-    let entry_count = u32::from_be_bytes((&data[8..12]).try_into()?);
-    let sample_count = u32::from_be_bytes((&data[12..16]).try_into()?);
-
-    let group_description_index = u32::from_be_bytes((&data[16..20]).try_into()?);
-
+    let mut data = atom.read_data_exact::<20, _>(decoder)?;
     Ok(Self {
       atom,
-      version,
-      flags,
-      grouping_type,
-      entry_count,
-      sample_count,
-      group_description_index,
+      version: data.version(),
+      flags: data.flags(),
+      grouping_type: data.next_into()?,
+      entry_count: data.next_into()?,
+      sample_count: data.next_into()?,
+      group_description_index: data.next_into()?,
     })
   }
 }
@@ -394,7 +359,7 @@ pub struct SampleTable<'a, T: FromSlice = u64> {
 }
 
 impl<'a, T: FromSlice> SampleTable<'a, T> {
-  const MAX_SIZE: usize = 24 * 1_000;
+  const MAX_SIZE: usize = 24_000;
   pub fn new(reader: &'a mut Decoder, start: u64, end: u64, chunk_size: usize) -> Self {
     Self {
       reader,

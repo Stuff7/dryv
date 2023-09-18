@@ -1,48 +1,51 @@
 use super::*;
 use crate::log;
-use crate::math::fixed_point_to_f32;
 use crate::{ascii::LogDisplay, math::Matrix3x3};
-use std::io::{Read, Seek};
+use std::fs::File;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct MoovAtom {
   pub atom: Atom,
-  pub prfl: EncodedAtom,
   pub mvhd: EncodedAtom<MvhdAtom>,
-  pub clip: EncodedAtom,
-  pub trak: Vec<EncodedAtom<TrakAtom>>,
+  pub trak: Box<[EncodedAtom<TrakAtom>]>,
   pub udta: Option<EncodedAtom<UdtaAtom>>,
-  pub ctab: EncodedAtom,
-  pub cmov: EncodedAtom,
-  pub rmra: EncodedAtom,
-  pub meta: Option<EncodedAtom<MetaAtom>>,
+  pub meta: Option<MetaAtom>,
 }
 
 impl MoovAtom {
-  pub fn new<R: Read + Seek>(atom: Atom, reader: &mut R) -> AtomResult<Self> {
-    let mut moov = Self {
-      atom,
-      ..Default::default()
-    };
-    for atom in moov.atom.atoms(reader) {
-      match atom {
-        Ok(atom) => match &*atom.name {
-          b"prfl" => moov.prfl = EncodedAtom::Encoded(atom),
-          b"mvhd" => moov.mvhd = EncodedAtom::Encoded(atom),
-          b"clip" => moov.clip = EncodedAtom::Encoded(atom),
-          b"trak" => moov.trak.push(EncodedAtom::Encoded(atom)),
-          b"udta" => moov.udta = Some(EncodedAtom::Encoded(atom)),
-          b"ctab" => moov.ctab = EncodedAtom::Encoded(atom),
-          b"cmov" => moov.cmov = EncodedAtom::Encoded(atom),
-          b"rmra" => moov.rmra = EncodedAtom::Encoded(atom),
-          b"meta" => moov.meta = Some(EncodedAtom::Encoded(atom)),
-          _ => log!(warn@"#[moov] Unused atom {atom:#?}"),
-        },
-        Err(e) => log!(err@"#[moov] {e}"),
-      }
-    }
+  pub fn new(atom: Atom, reader: &mut File) -> AtomResult<Self> {
+    let (mut mvhd, mut udta, mut meta) = (EncodedAtom::Required, None, None);
+    let mut reader_clone = reader.try_clone()?;
+    let trak = atom
+      .atoms(&mut reader_clone)
+      .filter_map(|atom| {
+        match atom {
+          Ok(mut atom) => match &*atom.name {
+            b"mvhd" => mvhd = EncodedAtom::Encoded(atom),
+            b"trak" => return Some(EncodedAtom::<TrakAtom>::Encoded(atom)),
+            b"udta" => udta = Some(EncodedAtom::Encoded(atom)),
+            b"meta" => {
+              meta = Some(
+                atom
+                  .read_data(reader)
+                  .and_then(|data| MetaAtom::new(atom, data)),
+              )
+            }
+            _ => log!(warn@"#[moov] Unused atom {atom:#?}"),
+          },
+          Err(e) => log!(err@"#[moov] {e}"),
+        }
+        None
+      })
+      .collect();
 
-    Ok(moov)
+    Ok(Self {
+      atom,
+      mvhd,
+      trak,
+      udta,
+      meta: meta.transpose()?,
+    })
   }
 }
 
@@ -64,68 +67,52 @@ pub struct MvhdAtom {
 impl AtomDecoder for MvhdAtom {
   const NAME: [u8; 4] = *b"mvhd";
   fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
-    let data: [u8; 100] = atom.read_data_exact(decoder)?;
-
-    let (version, flags) = decode_version_flags(&data);
-    let creation_time = u32::from_be_bytes((&data[4..8]).try_into()?);
-    let modification_time = u32::from_be_bytes((&data[8..12]).try_into()?);
-    let timescale = u32::from_be_bytes((&data[12..16]).try_into()?);
-    let duration = u32::from_be_bytes((&data[16..20]).try_into()?);
-    let rate = fixed_point_to_f32(i32::from_be_bytes((&data[20..24]).try_into()?) as f32, 16);
-    let volume = fixed_point_to_f32(i16::from_be_bytes((&data[24..26]).try_into()?) as f32, 8);
-    // __reserved__    16 bit     (2 bytes)
-    // __reserved__    32 bit [2] (8 bytes)
-    let matrix = Matrix3x3::from_bytes(&data[36..])?;
-    // __pre_defined__ 32 bit [6] (24 bytes)
-    let next_track_id = u32::from_be_bytes((&data[96..100]).try_into()?);
-
+    let mut data = atom.read_data(decoder)?;
     Ok(Self {
       atom,
-      version,
-      flags,
-      creation_time,
-      modification_time,
-      timescale,
-      duration,
-      rate,
-      volume,
-      matrix,
-      next_track_id,
+      version: data.version(),
+      flags: data.flags(),
+      creation_time: data.next_into()?,
+      modification_time: data.next_into()?,
+      timescale: data.next_into()?,
+      duration: data.next_into()?,
+      rate: data.fixed_point_16()?,
+      volume: data.fixed_point_8()?,
+      matrix: data.reserved(2).reserved(8).next_into()?,
+      next_track_id: data.reserved(24).next_into()?,
     })
   }
 }
 
 #[derive(Debug, Default)]
 pub struct UdtaAtom {
-  pub version: u8,
-  pub flags: [u8; 3],
-  pub metas: Box<[EncodedAtom<MetaAtom>]>,
+  pub metas: Box<[MetaAtom]>,
 }
 
 impl AtomDecoder for UdtaAtom {
   const NAME: [u8; 4] = *b"udta";
   fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
     let data = atom.read_data(decoder)?;
-
-    let (version, flags) = decode_version_flags(&data);
-    let metas = atom
-      .atoms(decoder)
-      .filter_map(|atom| {
-        match atom {
-          Ok(atom) => match &*atom.name {
-            b"meta" => return Some(EncodedAtom::Encoded(atom)),
-            _ => log!(warn@"#[udta] Unused atom {atom:#?}"),
-          },
-          Err(e) => log!(err@"#[udta] {e}"),
-        }
-        None
-      })
-      .collect();
-
     Ok(Self {
-      version,
-      flags,
-      metas,
+      metas: data
+        .atoms()
+        .filter_map(|atom| {
+          match atom {
+            Ok((atom, data)) => match &*atom.name {
+              b"meta" => {
+                let mut data = AtomData::new(data, atom.offset);
+                if decoder.brand.is_isom() {
+                  data.reserved(4);
+                }
+                return Some(MetaAtom::new(atom, data));
+              }
+              _ => log!(warn@"#[udta] Unused atom {atom:#?}"),
+            },
+            Err(e) => log!(err@"#[udta] {e}"),
+          }
+          None
+        })
+        .collect::<AtomResult<_>>()?,
     })
   }
 }

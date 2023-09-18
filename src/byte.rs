@@ -31,6 +31,13 @@ impl<const N: usize> TryFrom<&[u8]> for Str<N> {
   }
 }
 
+impl<const N: usize> TryFromSlice for Str<N> {
+  const SIZE: usize = N;
+  fn try_from_slice(slice: &[u8]) -> Result<Self, TryFromSliceError> {
+    Ok(Self(slice.try_into()?))
+  }
+}
+
 impl<const N: usize> Deref for Str<N> {
   type Target = [u8; N];
 
@@ -92,5 +99,45 @@ impl FromSlice for u64 {
     }
 
     result
+  }
+}
+
+pub trait TryFromSlice: Sized {
+  const SIZE: usize;
+  fn try_from_slice(slice: &[u8]) -> Result<Self, TryFromSliceError>;
+}
+
+impl TryFromSlice for u32 {
+  const SIZE: usize = 4;
+  fn try_from_slice(slice: &[u8]) -> Result<Self, TryFromSliceError> {
+    Ok(u32::from_be_bytes(slice[..Self::SIZE].try_into()?))
+  }
+}
+
+impl TryFromSlice for i32 {
+  const SIZE: usize = 4;
+  fn try_from_slice(slice: &[u8]) -> Result<Self, TryFromSliceError> {
+    Ok(i32::from_be_bytes(slice[..Self::SIZE].try_into()?))
+  }
+}
+
+impl TryFromSlice for u16 {
+  const SIZE: usize = 2;
+  fn try_from_slice(slice: &[u8]) -> Result<Self, TryFromSliceError> {
+    Ok(u16::from_be_bytes(slice[..Self::SIZE].try_into()?))
+  }
+}
+
+impl TryFromSlice for i16 {
+  const SIZE: usize = 2;
+  fn try_from_slice(slice: &[u8]) -> Result<Self, TryFromSliceError> {
+    Ok(i16::from_be_bytes(slice[..Self::SIZE].try_into()?))
+  }
+}
+
+impl<const N: usize> TryFromSlice for [u8; N] {
+  const SIZE: usize = N;
+  fn try_from_slice(slice: &[u8]) -> Result<Self, TryFromSliceError> {
+    slice.try_into()
   }
 }

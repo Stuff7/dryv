@@ -50,26 +50,17 @@ pub struct MdhdAtom {
 impl AtomDecoder for MdhdAtom {
   const NAME: [u8; 4] = *b"mdhd";
   fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
-    let data: [u8; 24] = atom.read_data_exact(decoder)?;
-
-    let (version, flags) = decode_version_flags(&data);
-    let creation_time = u32::from_be_bytes((&data[4..8]).try_into()?);
-    let modification_time = u32::from_be_bytes((&data[8..12]).try_into()?);
-    let timescale = u32::from_be_bytes((&data[12..16]).try_into()?);
-    let duration = u32::from_be_bytes((&data[16..20]).try_into()?);
-    let language = Str(unpack_language_code(&data[20..22])?);
-    let quality = u16::from_be_bytes((&data[22..24]).try_into()?);
-
+    let mut data = atom.read_data(decoder)?;
     Ok(Self {
       atom,
-      version,
-      flags,
-      creation_time,
-      timescale,
-      modification_time,
-      duration,
-      language,
-      quality,
+      version: data.version(),
+      flags: data.flags(),
+      creation_time: data.next_into()?,
+      modification_time: data.next_into()?,
+      timescale: data.next_into()?,
+      duration: data.next_into()?,
+      language: Str(unpack_language_code(data.next(2))?),
+      quality: data.next_into()?,
     })
   }
 }
@@ -90,18 +81,13 @@ pub struct HdlrAtom {
 impl AtomDecoder for HdlrAtom {
   const NAME: [u8; 4] = *b"hdlr";
   fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
-    let data = atom.read_data(decoder)?;
+    let mut data = atom.read_data(decoder)?;
 
-    let (version, flags) = decode_version_flags(&data);
-    let component_type = Str::try_from(&data[4..8])?;
-    let component_subtype = Str::try_from(&data[8..12])?;
-    let component_manufacturer = Str::try_from(&data[12..16])?;
-    let component_flags = (&data[16..20]).try_into()?;
-    let component_flags_mask = (&data[20..24]).try_into()?;
-    let component_name = match &data[24..] {
-      slice if &*component_manufacturer == b"appl" => pascal_string(slice),
-      slice => c_string(slice),
-    };
+    let version = data.version();
+    let flags = data.flags();
+    let component_type = data.next_into()?;
+    let component_subtype = data.next_into()?;
+    let component_manufacturer = data.next_into()?;
 
     Ok(Self {
       atom,
@@ -110,9 +96,12 @@ impl AtomDecoder for HdlrAtom {
       component_type,
       component_subtype,
       component_manufacturer,
-      component_flags,
-      component_flags_mask,
-      component_name,
+      component_flags: data.next_into()?,
+      component_flags_mask: data.next_into()?,
+      component_name: match &data {
+        slice if &*component_manufacturer == b"appl" => pascal_string(slice),
+        slice => c_string(slice),
+      },
     })
   }
 }

@@ -1,17 +1,20 @@
 use super::*;
 use crate::{ascii::LogDisplay, log};
-use std::io::{Read, Seek};
+use std::{
+  fs::File,
+  io::{Read, Seek},
+};
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct RootAtom {
   pub ftyp: FtypAtom,
   pub mdat: MdatAtom,
   pub moov: MoovAtom,
-  pub rest: Vec<Atom>,
+  pub rest: Box<[Atom]>,
 }
 
 impl RootAtom {
-  pub fn new<R: Read + Seek>(reader: &mut R, size: u64) -> AtomResult<Self> {
+  pub fn new(reader: &mut File, size: u64) -> AtomResult<Self> {
     let mut ftyp = None;
     let mut mdat = None;
     let mut moov = None;
@@ -39,10 +42,10 @@ impl RootAtom {
     }
 
     Ok(Self {
-      ftyp: ftyp.ok_or(AtomError::AtomNotFound(*b"ftyp"))?,
-      mdat: mdat.ok_or(AtomError::AtomNotFound(*b"mdat"))?,
-      moov: moov.ok_or(AtomError::AtomNotFound(*b"moov"))?,
-      rest,
+      ftyp: ftyp.ok_or(AtomError::Required(*b"ftyp"))?,
+      mdat: mdat.ok_or(AtomError::Required(*b"mdat"))?,
+      moov: moov.ok_or(AtomError::Required(*b"moov"))?,
+      rest: rest.into_boxed_slice(),
     })
   }
 }
@@ -50,27 +53,22 @@ impl RootAtom {
 #[derive(Debug, Default)]
 pub struct FtypAtom {
   pub atom: Atom,
-  pub compatible_brands: Box<[Str<4>]>,
   pub major_brand: Str<4>,
   pub minor_version: u32,
+  pub compatible_brands: Box<[Str<4>]>,
 }
 
 impl FtypAtom {
   fn new<R: Read + Seek>(mut atom: Atom, reader: &mut R) -> AtomResult<Self> {
-    let data = atom.read_data(reader)?;
-
-    let major_brand = Str::try_from(&data[..4])?;
-    let minor_version = u32::from_be_bytes((&data[4..8]).try_into()?);
-    let compatible_brands = data[8..]
-      .chunks_exact(4)
-      .map(Str::<4>::try_from)
-      .collect::<Result<_, _>>()?;
-
+    let mut data = atom.read_data(reader)?;
     Ok(Self {
       atom,
-      compatible_brands,
-      major_brand,
-      minor_version,
+      major_brand: data.next_into()?,
+      minor_version: data.next_into()?,
+      compatible_brands: data
+        .chunks_exact(4)
+        .map(Str::<4>::try_from)
+        .collect::<Result<_, _>>()?,
     })
   }
 }

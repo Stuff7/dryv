@@ -1,7 +1,6 @@
 use super::*;
 use crate::ascii::LogDisplay;
 use crate::log;
-use crate::math::fixed_point_to_f32;
 
 #[derive(Debug, Default)]
 pub struct EdtsAtom {
@@ -37,21 +36,15 @@ pub struct ElstAtom {
 impl AtomDecoder for ElstAtom {
   const NAME: [u8; 4] = *b"elst";
   fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
-    let data = atom.read_data(decoder)?;
-
-    let (version, flags) = decode_version_flags(&data);
-    let number_of_entries = u32::from_be_bytes((&data[4..8]).try_into()?);
-
-    let edit_list_table = data[8..]
-      .chunks(12)
-      .map(ElstItem::from_bytes)
-      .collect::<AtomResult<_>>()?;
-
+    let mut data = atom.read_data(decoder)?;
     Ok(Self {
-      version,
-      flags,
-      number_of_entries,
-      edit_list_table,
+      version: data.version(),
+      flags: data.flags(),
+      number_of_entries: data.next_into()?,
+      edit_list_table: data
+        .chunks(12)
+        .map(|data| ElstItem::from_bytes(AtomData::new(data, atom.offset)))
+        .collect::<AtomResult<_>>()?,
     })
   }
 }
@@ -64,11 +57,11 @@ pub struct ElstItem {
 }
 
 impl ElstItem {
-  pub fn from_bytes(bytes: &[u8]) -> AtomResult<Self> {
+  pub fn from_bytes(mut data: AtomData) -> AtomResult<Self> {
     Ok(Self {
-      track_duration: u32::from_be_bytes((&bytes[..4]).try_into()?),
-      media_time: i32::from_be_bytes((&bytes[4..8]).try_into()?),
-      media_rate: fixed_point_to_f32(i32::from_be_bytes((&bytes[8..12]).try_into()?) as f32, 16),
+      track_duration: data.next_into()?,
+      media_time: data.next_into()?,
+      media_rate: data.fixed_point_16()?,
     })
   }
 }

@@ -8,49 +8,44 @@ use crate::log;
 
 #[derive(Debug, Default)]
 pub struct MetaAtom {
-  pub handler_type: Str<4>,
-  pub ilst: EncodedAtom<IlstAtom>,
-  pub hdlr: EncodedAtom<MetaHdlrAtom>,
-  pub keys: EncodedAtom<KeysAtom>,
+  pub atom: Atom,
+  pub hdlr: MetaHdlrAtom,
+  pub keys: Option<KeysAtom>,
+  pub ilst: Option<IlstAtom>,
 }
 
-impl AtomDecoder for MetaAtom {
-  const NAME: [u8; 4] = *b"meta";
-  fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
-    let mut data = [0; 4];
-    if decoder.brand.is_isom() {
-      decoder.read_exact(&mut data)?;
-      atom.offset += 4;
-    }
-
-    let mut meta = Self {
-      handler_type: Str(data),
-      ..Default::default()
-    };
-    for atom in atom.atoms(decoder) {
+impl MetaAtom {
+  pub fn new(atom: Atom, data: AtomData) -> AtomResult<Self> {
+    let mut content = (None, None, None);
+    for atom in data.atoms() {
       match atom {
-        Ok(atom) => match &*atom.name {
-          b"ilst" => meta.ilst = EncodedAtom::Encoded(atom),
-          b"hdlr" => meta.hdlr = EncodedAtom::Encoded(atom),
-          b"keys" => meta.keys = EncodedAtom::Encoded(atom),
+        Ok((atom, data)) => match &*atom.name {
+          b"hdlr" => content.0 = Some(MetaHdlrAtom::new(atom, AtomData::new(data, atom.offset))?),
+          b"keys" => content.1 = Some(KeysAtom::new(atom, AtomData::new(data, atom.offset))?),
+          b"ilst" => content.2 = Some(IlstAtom::new(AtomData::new(data, atom.offset))?),
           _ => log!(warn@"#[meta] Unused atom {atom:#?}"),
         },
         Err(e) => log!(err@"#[meta] {e}"),
       }
     }
 
-    Ok(meta)
+    Ok(Self {
+      atom,
+      hdlr: content.0.ok_or(AtomError::NoMetaHandler)?,
+      keys: content.1,
+      ilst: content.2,
+    })
   }
 }
 
 impl MetaAtom {
-  pub fn tags(&mut self, decoder: &mut Decoder) -> AtomResult<HashMap<Rc<str>, Rc<str>>> {
-    match &*self.hdlr.decode(decoder)?.handler_type {
+  pub fn tags(&mut self) -> AtomResult<HashMap<Rc<str>, Rc<str>>> {
+    match &*self.hdlr.handler_type {
       b"mdta" => {
-        let Ok(keys) = self.keys.decode(decoder) else {
+        let Some(keys) = &mut self.keys else {
           return Ok(HashMap::new())
         };
-        let Ok(values) = self.ilst.decode(decoder) else {
+        let Some(values) = &mut self.ilst else {
           return Ok(HashMap::new())
         };
         values
@@ -67,7 +62,7 @@ impl MetaAtom {
           .collect::<AtomResult<_>>()
       }
       b"mdir" => {
-        let Ok(values) = self.ilst.decode(decoder) else {
+        let Some(values) = &mut self.ilst else {
           return Ok(HashMap::new())
         };
         Ok(
@@ -92,23 +87,14 @@ pub struct MetaHdlrAtom {
   pub name: Box<str>,
 }
 
-impl AtomDecoder for MetaHdlrAtom {
-  const NAME: [u8; 4] = *b"hdlr";
-  fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
-    let data = atom.read_data(decoder)?;
-
-    let (version, flags) = decode_version_flags(&data);
-    // __reserved__ (4 bytes)
-    let handler_type = Str::try_from(&data[8..12])?;
-    // __reserved__ (12 bytes)
-    let name = pascal_string(&data[24..]);
-
+impl MetaHdlrAtom {
+  fn new(atom: Atom, mut data: AtomData) -> AtomResult<Self> {
     Ok(Self {
       atom,
-      version,
-      flags,
-      handler_type,
-      name,
+      version: data.version(),
+      flags: data.flags(),
+      handler_type: data.reserved(4).next_into()?,
+      name: pascal_string(data.reserved(12)),
     })
   }
 }
@@ -119,32 +105,26 @@ pub struct KeysAtom {
   pub version: u8,
   pub flags: [u8; 3],
   pub entry_count: u32,
-  pub key_values: Vec<KeyValueAtom>,
+  pub key_values: Box<[KeyValueAtom]>,
 }
 
-impl AtomDecoder for KeysAtom {
-  const NAME: [u8; 4] = *b"keys";
-  fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
-    let data = atom.read_data(decoder)?;
-
-    let (version, flags) = decode_version_flags(&data);
-    let entry_count = u32::from_be_bytes((&data[4..8]).try_into()?);
-    atom.offset += 8;
-    let mut atoms = atom.atoms(decoder);
-    let mut key_values = Vec::new();
-    while let Some(atom) = atoms.next() {
-      match atom {
-        Ok(atom) => key_values.push(KeyValueAtom::decode_unchecked(atom, atoms.reader)?),
-        Err(e) => log!(err@"#[keys] {e}"),
-      }
-    }
-
+impl KeysAtom {
+  fn new(atom: Atom, mut data: AtomData) -> AtomResult<Self> {
     Ok(Self {
       atom,
-      version,
-      flags,
-      entry_count,
-      key_values,
+      version: data.version(),
+      flags: data.flags(),
+      entry_count: data.next_into()?,
+      key_values: data
+        .atoms()
+        .filter_map(|atom| match atom {
+          Ok((atom, data)) => Some(KeyValueAtom::new(atom, data)),
+          Err(e) => {
+            log!(err@"#[keys] {e}");
+            None
+          }
+        })
+        .collect(),
     })
   }
 }
@@ -164,34 +144,34 @@ impl Default for KeyValueAtom {
   }
 }
 
-impl AtomDecoder for KeyValueAtom {
-  fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
-    let data = atom.read_data(decoder)?;
-
-    Ok(Self {
+impl KeyValueAtom {
+  fn new(atom: Atom, data: &[u8]) -> Self {
+    Self {
       namespace: atom.name,
-      value: std::str::from_utf8(&data).unwrap_or_default().into(),
-    })
+      value: std::str::from_utf8(data).unwrap_or_default().into(),
+    }
   }
 }
 
 #[derive(Debug, Default)]
 pub struct IlstAtom {
-  pub items: Vec<IlstItem>,
+  pub items: Box<[IlstItem]>,
 }
 
-impl AtomDecoder for IlstAtom {
-  const NAME: [u8; 4] = *b"ilst";
-  fn decode_unchecked(atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
-    let mut items = Vec::new();
-    let mut atoms = atom.atoms(decoder);
-    while let Some(atom) = atoms.next() {
-      match atom {
-        Ok(atom) => items.push(IlstItem::new(atom, atoms.reader)?),
-        Err(e) => log!(err@"#[ilst] {e}"),
-      }
-    }
-    Ok(Self { items })
+impl IlstAtom {
+  fn new(data: AtomData) -> AtomResult<Self> {
+    Ok(Self {
+      items: data
+        .atoms()
+        .filter_map(|atom| match atom {
+          Ok((atom, data)) => Some(IlstItem::new(atom, AtomData::new(data, atom.offset))),
+          Err(e) => {
+            log!(err@"#[ilst] {e}");
+            None
+          }
+        })
+        .collect::<AtomResult<_>>()?,
+    })
   }
 }
 
@@ -203,13 +183,14 @@ pub struct IlstItem {
 }
 
 impl IlstItem {
-  fn new(atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
-    let mut atoms = atom.atoms(decoder);
-    let data = DataAtom::decode(atoms.next().ok_or(AtomError::IlstData)??, decoder)?;
+  fn new(atom: Atom, data: AtomData) -> AtomResult<Self> {
     Ok(Self {
       atom,
       index: u32::from_be_bytes(*atom.name),
-      data,
+      data: DataAtom::new(AtomData::new(
+        data.atoms().next().ok_or(AtomError::IlstData)??.1,
+        atom.offset,
+      ))?,
     })
   }
 }
@@ -231,18 +212,12 @@ impl Default for DataAtom {
   }
 }
 
-impl AtomDecoder for DataAtom {
-  const NAME: [u8; 4] = *b"data";
-  fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
-    let data = atom.read_data(decoder)?;
-    let type_indicator = (&data[..4]).try_into()?;
-    let locale_indicator = (&data[4..8]).try_into()?;
-    let value = std::str::from_utf8(&data[8..]).unwrap_or_default().into();
-
+impl DataAtom {
+  fn new(mut data: AtomData) -> AtomResult<Self> {
     Ok(Self {
-      type_indicator,
-      locale_indicator,
-      value,
+      type_indicator: data.next_into()?,
+      locale_indicator: data.next_into()?,
+      value: std::str::from_utf8(&data).unwrap_or_default().into(),
     })
   }
 }

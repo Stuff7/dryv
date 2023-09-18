@@ -1,4 +1,5 @@
 pub mod atom;
+pub mod decoder;
 
 use atom::*;
 use std::fs::File;
@@ -86,11 +87,7 @@ impl Decoder {
       .meta
       .as_mut()
       .map(|meta| {
-        let meta = meta.decode(self)?;
-        log!(File@"MOOV.META TAGS {:#?}", meta.tags(self));
-        meta.ilst.decode(self)?;
-        meta.hdlr.decode(self)?;
-        meta.keys.decode(self)?;
+        log!(File@"MOOV.META TAGS {:#?}", meta.tags());
         log!(File@"MOOV.META {:#?}", meta);
         Ok(meta)
       })
@@ -113,10 +110,7 @@ impl Decoder {
           .metas
           .iter_mut()
           .map(|meta| {
-            let meta = meta.decode(decoder)?;
-            meta.ilst.decode(decoder)?;
-            meta.hdlr.decode(decoder)?;
-            log!(File@"MOOV.UDTA.META TAGS {:#?}", meta.tags(decoder));
+            log!(File@"MOOV.UDTA.META TAGS {:#?}", meta.tags());
             Ok(meta)
           })
           .collect::<DecoderResult<Vec<_>>>()
@@ -129,6 +123,7 @@ impl Decoder {
     log!(File@"ROOT.TRAK.MDIA.HDLR {:#?}", mdia.hdlr.decode(self)?);
     let minf = mdia.minf.decode(self)?;
     let stbl = minf.stbl.decode(self)?;
+    log!(File@"STBL Size: {}", stbl.atom.size);
     {
       let stts = stbl.stts.decode(self)?;
       log!(File@"ROOT.TRAK.MDIA.MINF.STBL.STTS {} {:#?}",
@@ -137,7 +132,7 @@ impl Decoder {
       );
     }
     stbl.stsd.decode(self)?;
-    for stsd in &mut stbl.stsd.decode(self)?.sample_description_table {
+    for stsd in &mut *stbl.stsd.decode(self)?.sample_description_table {
       log!(File@"ROOT.TRAK.MDIA.MINF.STBL.STSD {:#?}", stsd);
     }
     log!(File@"ROOT.TRAK.MDIA.MINF.STBL.STCO {} {:#?}",
@@ -146,7 +141,8 @@ impl Decoder {
     );
     {
       let stsz = stbl.stsz.decode(self)?;
-      log!(File@"ROOT.TRAK.MDIA.MINF.STBL.STSZ {} {:#?}",
+      log!(File@"ROOT.TRAK.MDIA.MINF.STBL.STSZ {} {} {:#?}",
+        stsz.atom.size,
         stsz.number_of_entries,
         stsz.sample_size_table(self).take(10).collect::<Vec<_>>()
       );

@@ -2,85 +2,75 @@ use super::*;
 use crate::ascii::LogDisplay;
 use crate::byte::pascal_string;
 use crate::log;
-use crate::math::fixed_point_to_f32;
 
 #[derive(Debug)]
 pub struct StsdAtom {
   pub version: u8,
   pub flags: [u8; 3],
   pub number_of_entries: u32,
-  pub sample_description_table: Vec<StsdItem>,
+  pub sample_description_table: Box<[StsdCodec]>,
 }
 
 impl AtomDecoder for StsdAtom {
   const NAME: [u8; 4] = *b"stsd";
   fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
-    let data = atom.read_data(decoder)?;
-
-    let (version, flags) = decode_version_flags(&data);
-    let number_of_entries = u32::from_be_bytes((&data[4..8]).try_into()?);
-
-    atom.offset += 8;
-    let mut sample_description_table = Vec::new();
-    let mut atoms = atom.atoms(decoder);
-    while let Some(atom) = atoms.next() {
-      match atom {
-        Ok(mut atom) => {
-          sample_description_table.push(StsdItem::new(&atom.read_data(atoms.reader)?, atom.name)?)
-        }
-        Err(e) => log!(err@"#[stsd] {e}"),
-      }
-    }
+    let mut data = atom.read_data(decoder)?;
 
     Ok(Self {
-      version,
-      flags,
-      number_of_entries,
-      sample_description_table,
+      version: data.version(),
+      flags: data.flags(),
+      number_of_entries: data.next_into()?,
+      sample_description_table: data
+        .atoms()
+        .filter_map(|atom| match atom {
+          Ok((atom, data)) => Some(StsdCodec::new(atom.name, AtomData::new(data, atom.offset))),
+          Err(e) => {
+            log!(err@"#[stsd] {e}");
+            None
+          }
+        })
+        .collect::<AtomResult<_>>()?,
     })
   }
 }
 
 #[derive(Debug)]
-pub struct StsdItem {
+pub struct StsdCodec {
   pub data_format: Str<4>,
   pub dref_index: u16,
-  pub data: StsdData,
+  pub data: CodecData,
 }
 
-impl StsdItem {
-  pub fn new(data: &[u8], data_format: Str<4>) -> AtomResult<Self> {
-    // __reserved__ (6 bytes)
-    let dref_index = u16::from_be_bytes((&data[6..8]).try_into()?);
-    println!("{data_format} {}", data[8..].len());
-
+impl StsdCodec {
+  pub fn new(data_format: Str<4>, mut data: AtomData) -> AtomResult<Self> {
+    data.reserved(6);
     Ok(Self {
       data_format,
-      dref_index,
-      data: StsdData::new(data_format, &data[8..])?,
+      dref_index: data.next_into()?,
+      data: CodecData::new(data_format, data)?,
     })
   }
 }
 
 #[derive(Debug)]
-pub enum StsdData {
-  Vide(StsdVide),
-  Soun(StsdSoun),
+pub enum CodecData {
+  Avc1(Avc1Atom),
+  Mp4a(Mp4aAtom),
   Unknown(Str<4>),
 }
 
-impl StsdData {
-  fn new(hdlr: Str<4>, data: &[u8]) -> AtomResult<Self> {
+impl CodecData {
+  fn new(hdlr: Str<4>, data: AtomData) -> AtomResult<Self> {
     Ok(match &*hdlr {
-      b"avc1" => Self::Vide(StsdVide::decode(data)?),
-      b"mp4a" => Self::Soun(StsdSoun::decode(data)?),
+      b"avc1" => Self::Avc1(Avc1Atom::decode(data)?),
+      b"mp4a" => Self::Mp4a(Mp4aAtom::decode(data)?),
       _ => Self::Unknown(hdlr),
     })
   }
 }
 
 #[derive(Debug)]
-pub struct StsdVide {
+pub struct Avc1Atom {
   pub revision_level: u16,
   pub version: u16,
   pub vendor: u32,
@@ -97,35 +87,29 @@ pub struct StsdVide {
   pub color_table_id: i16,
 }
 
-impl StsdVide {
-  pub fn decode(data: &[u8]) -> AtomResult<Self> {
+impl Avc1Atom {
+  pub fn decode(mut data: AtomData) -> AtomResult<Self> {
     Ok(Self {
-      revision_level: u16::from_be_bytes((&data[..2]).try_into()?),
-      version: u16::from_be_bytes((&data[2..4]).try_into()?),
-      vendor: u32::from_be_bytes((&data[4..8]).try_into()?),
-      temporal_quality: u32::from_be_bytes((&data[8..12]).try_into()?),
-      spatial_quality: u32::from_be_bytes((&data[12..16]).try_into()?),
-      width: u16::from_be_bytes((&data[16..18]).try_into()?),
-      height: u16::from_be_bytes((&data[18..20]).try_into()?),
-      horizontal_resolution: fixed_point_to_f32(
-        i32::from_be_bytes((&data[20..24]).try_into()?) as f32,
-        16,
-      ),
-      vertical_resolution: fixed_point_to_f32(
-        i32::from_be_bytes((&data[24..28]).try_into()?) as f32,
-        16,
-      ),
-      data_size: u32::from_be_bytes((&data[28..32]).try_into()?),
-      frame_count: u16::from_be_bytes((&data[32..34]).try_into()?),
-      compressor_name: pascal_string(&data[34..66]),
-      depth: i16::from_be_bytes((&data[66..68]).try_into()?),
-      color_table_id: i16::from_be_bytes((&data[68..70]).try_into()?),
+      revision_level: data.next_into()?,
+      version: data.next_into()?,
+      vendor: data.next_into()?,
+      temporal_quality: data.next_into()?,
+      spatial_quality: data.next_into()?,
+      width: data.next_into()?,
+      height: data.next_into()?,
+      horizontal_resolution: data.fixed_point_16()?,
+      vertical_resolution: data.fixed_point_16()?,
+      data_size: data.next_into()?,
+      frame_count: data.next_into()?,
+      compressor_name: pascal_string(data.next(32)),
+      depth: data.next_into()?,
+      color_table_id: data.next_into()?,
     })
   }
 }
 
 #[derive(Debug)]
-pub struct StsdSoun {
+pub struct Mp4aAtom {
   pub version: u16,
   pub revision_level: u16,
   pub vendor: u32,
@@ -136,17 +120,17 @@ pub struct StsdSoun {
   pub sample_rate: f32,
 }
 
-impl StsdSoun {
-  pub fn decode(data: &[u8]) -> AtomResult<Self> {
+impl Mp4aAtom {
+  pub fn decode(mut data: AtomData) -> AtomResult<Self> {
     Ok(Self {
-      version: u16::from_be_bytes((&data[..2]).try_into()?),
-      revision_level: u16::from_be_bytes((&data[2..4]).try_into()?),
-      vendor: u32::from_be_bytes((&data[4..8]).try_into()?),
-      number_of_channels: u16::from_be_bytes((&data[8..10]).try_into()?),
-      sample_size: u16::from_be_bytes((&data[10..12]).try_into()?),
-      compression_id: u16::from_be_bytes((&data[12..14]).try_into()?),
-      packet_size: u16::from_be_bytes((&data[14..16]).try_into()?),
-      sample_rate: fixed_point_to_f32(i32::from_be_bytes((&data[16..20]).try_into()?) as f32, 16),
+      version: data.next_into()?,
+      revision_level: data.next_into()?,
+      vendor: data.next_into()?,
+      number_of_channels: data.next_into()?,
+      sample_size: data.next_into()?,
+      compression_id: data.next_into()?,
+      packet_size: data.next_into()?,
+      sample_rate: data.fixed_point_16()?,
     })
   }
 }

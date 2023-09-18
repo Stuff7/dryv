@@ -1,18 +1,9 @@
+use crate::byte::TryFromSlice;
 use std::{
   array::TryFromSliceError,
   fmt,
   ops::{Deref, Index, IndexMut},
 };
-
-use thiserror::Error;
-
-#[derive(Error, Debug)]
-pub enum MathError {
-  #[error(transparent)]
-  InvalidBytes(#[from] TryFromSliceError),
-}
-
-type MathResult<T = ()> = Result<T, MathError>;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Matrix3x3 {
@@ -30,21 +21,6 @@ impl Matrix3x3 {
     Self {
       data: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
     }
-  }
-
-  pub fn from_bytes(bytes: &[u8]) -> MathResult<Self> {
-    let mut matrix = [0_f32; 9];
-    for (i, matrix_value) in matrix.iter_mut().enumerate() {
-      let bytes_i = i * 4;
-      let value = i32::from_be_bytes((&bytes[bytes_i..bytes_i + 4]).try_into()?) as f32;
-      // | 0 1 2 |
-      // | 3 4 5 |
-      // | 6 7 8 |
-      // All numbers are stored in native endianness, as 16.16 fixed-point values,
-      // except for 2, 5 and 8, which are stored as 2.30 fixed-point values.
-      *matrix_value = fixed_point_to_f32(value, if i == 2 || i == 5 || i == 8 { 30 } else { 16 });
-    }
-    Ok(Self { data: matrix })
   }
 
   /// Extract the rotation component of the transformation matrix and
@@ -105,6 +81,24 @@ impl Deref for Matrix3x3 {
 
   fn deref(&self) -> &Self::Target {
     &self.data
+  }
+}
+
+impl TryFromSlice for Matrix3x3 {
+  const SIZE: usize = 36;
+  fn try_from_slice(slice: &[u8]) -> Result<Self, TryFromSliceError> {
+    let mut matrix = [0_f32; 9];
+    for (i, matrix_value) in matrix.iter_mut().enumerate() {
+      let bytes_i = i * 4;
+      let value = i32::from_be_bytes((&slice[bytes_i..bytes_i + 4]).try_into()?) as f32;
+      // | 0 1 2 |
+      // | 3 4 5 |
+      // | 6 7 8 |
+      // All numbers are stored in native endianness, as 16.16 fixed-point values,
+      // except for 2, 5 and 8, which are stored as 2.30 fixed-point values.
+      *matrix_value = fixed_point_to_f32(value, if i == 2 || i == 5 || i == 8 { 30 } else { 16 });
+    }
+    Ok(Self { data: matrix })
   }
 }
 

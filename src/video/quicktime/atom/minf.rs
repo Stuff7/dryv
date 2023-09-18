@@ -14,9 +14,9 @@ impl AtomDecoder for MinfAtom {
   const NAME: [u8; 4] = *b"minf";
   fn decode_unchecked(atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
     let mut mhd = None;
-    let mut hdlr = EncodedAtom::None;
-    let mut dinf = EncodedAtom::None;
-    let mut stbl = EncodedAtom::None;
+    let mut hdlr = EncodedAtom::Required;
+    let mut dinf = EncodedAtom::Required;
+    let mut stbl = EncodedAtom::Required;
     let mut atoms = atom.atoms(decoder);
     while let Some(atom) = atoms.next() {
       match atom {
@@ -75,21 +75,12 @@ pub struct VmhdAtom {
 impl AtomDecoder for VmhdAtom {
   const NAME: [u8; 4] = *b"vmhd";
   fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
-    let data: [u8; 12] = atom.read_data_exact(decoder)?;
-
-    let (version, flags) = decode_version_flags(&data);
-    let graphics_mode = u16::from_be_bytes((&data[4..6]).try_into()?);
-    let opcolor = [
-      u16::from_be_bytes((&data[6..8]).try_into()?),
-      u16::from_be_bytes((&data[8..10]).try_into()?),
-      u16::from_be_bytes((&data[10..12]).try_into()?),
-    ];
-
+    let mut data = atom.read_data(decoder)?;
     Ok(Self {
-      version,
-      flags,
-      graphics_mode,
-      opcolor,
+      version: data.version(),
+      flags: data.flags(),
+      graphics_mode: data.next_into()?,
+      opcolor: [data.next_into()?, data.next_into()?, data.next_into()?],
     })
   }
 }
@@ -104,15 +95,11 @@ pub struct SmhdAtom {
 impl AtomDecoder for SmhdAtom {
   const NAME: [u8; 4] = *b"smhd";
   fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
-    let data: [u8; 6] = atom.read_data_exact(decoder)?;
-
-    let (version, flags) = decode_version_flags(&data);
-    let balance = u16::from_be_bytes((&data[4..6]).try_into()?);
-
+    let mut data = atom.read_data(decoder)?;
     Ok(Self {
-      version,
-      flags,
-      balance,
+      version: data.version(),
+      flags: data.flags(),
+      balance: data.next_into()?,
     })
   }
 }
@@ -170,35 +157,27 @@ pub struct DrefAtom {
   pub version: u8,
   pub flags: [u8; 3],
   pub number_of_entries: u32,
-  pub data_references: Vec<DrefItem>,
+  pub data_references: Box<[DrefItem]>,
 }
 
 impl AtomDecoder for DrefAtom {
   const NAME: [u8; 4] = *b"dref";
   fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
-    let data = atom.read_data(decoder)?;
-
-    let (version, flags) = decode_version_flags(&data);
-    let number_of_entries = u32::from_be_bytes((&data[4..8]).try_into()?);
-
-    atom.offset += 8;
-    let mut data_references = Vec::new();
-    let mut atoms = atom.atoms(decoder);
-    while let Some(atom) = atoms.next() {
-      match atom {
-        Ok(mut atom) => {
-          println!("DATA {} {}", atom.name, atom.size);
-          data_references.push(DrefItem::new(&atom.read_data(atoms.reader)?, atom.name)?)
-        }
-        Err(e) => log!(err@"#[dref] {e}"),
-      }
-    }
-
+    let mut data = atom.read_data(decoder)?;
     Ok(Self {
-      version,
-      flags,
-      number_of_entries,
-      data_references,
+      version: data.version(),
+      flags: data.flags(),
+      number_of_entries: data.next_into()?,
+      data_references: data
+        .atoms()
+        .filter_map(|atom| match atom {
+          Ok((atom, data)) => Some(DrefItem::new(atom.name, AtomData::new(data, atom.offset))),
+          Err(e) => {
+            log!(err@"#[dref] {e}");
+            None
+          }
+        })
+        .collect::<AtomResult<_>>()?,
     })
   }
 }
@@ -212,15 +191,12 @@ pub struct DrefItem {
 }
 
 impl DrefItem {
-  pub fn new(data: &[u8], atom_type: Str<4>) -> AtomResult<Self> {
-    let (version, flags) = decode_version_flags(data);
-    let data = String::from_utf8_lossy(&data[4..]).to_string();
-
+  pub fn new(atom_type: Str<4>, mut data: AtomData) -> AtomResult<Self> {
     Ok(Self {
       atom_type,
-      version,
-      flags,
-      data,
+      version: data.version(),
+      flags: data.flags(),
+      data: String::from_utf8_lossy(&data).to_string(),
     })
   }
 }
