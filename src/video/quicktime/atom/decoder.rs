@@ -103,20 +103,9 @@ impl AtomData {
   }
 
   pub fn exponential_golomb(&mut self) -> u64 {
-    let mut bits = BitIter::new(self.deref(), 0).enumerate();
-    let mut k = 0;
-    bits.any(|(pos, bit)| {
-      let is_one = bit == 1;
-      if is_one {
-        k = pos;
-      }
-      is_one
-    });
-    let mut x: u64 = 1;
-    for (_, bit) in bits.take(k) {
-      x <<= 1;
-      x |= bit as u64;
-    }
+    let mut bits = BitIter::new(self.deref(), 0);
+    let k = bits.position(|bit| bit == 1).unwrap_or_default();
+    let x = bits.take(k).fold(1, |x, bit| x << 1 | bit as u64);
     self.offset += (k + k + 8) >> 3;
     x - 1
   }
