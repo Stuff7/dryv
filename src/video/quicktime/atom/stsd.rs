@@ -158,11 +158,25 @@ pub struct SequenceParameterSet {
   pub constraint_set5_flag: bool,
   pub reserved_zero_2bits: bool,
   pub level_idc: u8,
-  pub id: u64,
+  pub id: u32,
+  pub log2_max_frame_num_minus4: u32,
+  pub pic_order_cnt_type: u32,
+  pub log2_max_pic_order_cnt_lsb_minus4: Option<u32>,
+  pub max_num_ref_frames: u32,
+  pub gaps_in_frame_num_value_allowed_flag: bool,
+  pub pic_width_in_mbs_minus1: u32,
+  pub pic_height_in_map_units_minus1: u32,
+  pub frame_mbs_only_flag: bool,
+  pub mb_adaptive_frame_field_flag: Option<bool>,
+  pub direct_8x8_inference_flag: bool,
+  pub frame_cropping_flag: bool,
+  pub vui_parameters_present_flag: bool,
 }
 
 impl SequenceParameterSet {
   pub fn decode(mut data: AtomData) -> AtomResult<Self> {
+    let pic_order_cnt_type;
+    let frame_mbs_only_flag;
     Ok(Self {
       length: data.next_into()?,
       profile_idc: data.byte(),
@@ -175,6 +189,25 @@ impl SequenceParameterSet {
       reserved_zero_2bits: (data.byte() & 0b0000_0011) != 0,
       level_idc: data.byte(),
       id: data.exponential_golomb(),
+      log2_max_frame_num_minus4: data.exponential_golomb(),
+      pic_order_cnt_type: {
+        pic_order_cnt_type = data.exponential_golomb();
+        pic_order_cnt_type
+      },
+      log2_max_pic_order_cnt_lsb_minus4: (pic_order_cnt_type == 0)
+        .then(|| data.exponential_golomb()),
+      max_num_ref_frames: data.exponential_golomb(),
+      gaps_in_frame_num_value_allowed_flag: data.bit() != 0,
+      pic_width_in_mbs_minus1: data.exponential_golomb(),
+      pic_height_in_map_units_minus1: data.exponential_golomb(),
+      frame_mbs_only_flag: {
+        frame_mbs_only_flag = data.bit() != 0;
+        frame_mbs_only_flag
+      },
+      mb_adaptive_frame_field_flag: (!frame_mbs_only_flag).then(|| data.bit() != 0),
+      direct_8x8_inference_flag: data.bit() != 0,
+      frame_cropping_flag: data.bit() != 0,
+      vui_parameters_present_flag: data.bit() != 0,
     })
   }
 }

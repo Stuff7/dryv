@@ -61,6 +61,7 @@ pub struct AtomData {
   data: Box<[u8]>,
   offset: usize,
   reader_offset: u64,
+  bit_offset: usize,
 }
 
 impl AtomData {
@@ -69,6 +70,7 @@ impl AtomData {
       data: data.into(),
       offset: 0,
       reader_offset,
+      bit_offset: 0,
     }
   }
 }
@@ -102,11 +104,23 @@ impl AtomData {
     self.data[index]
   }
 
-  pub fn exponential_golomb(&mut self) -> u64 {
-    let mut bits = BitIter::new(self.deref(), 0);
+  pub fn bit(&mut self) -> u8 {
+    let byte = self.data[self.offset];
+    let bit = (byte >> (7 - self.bit_offset)) & 1;
+    let read_bits = self.bit_offset + 1;
+    self.bit_offset = read_bits % 8;
+    self.offset += read_bits >> 3;
+    bit
+  }
+
+  pub fn exponential_golomb(&mut self) -> u32 {
+    let mut bits = BitIter::new(self.deref(), self.bit_offset);
     let k = bits.position(|bit| bit == 1).unwrap_or_default();
-    let x = bits.take(k).fold(1, |x, bit| x << 1 | bit as u64);
-    self.offset += (k + k + 8) >> 3;
+    let x = bits.take(k).fold(1, |x, bit| x << 1 | bit as u32);
+    let read_bits = k + k + 1;
+    let bit_offset = self.bit_offset + read_bits;
+    self.bit_offset = bit_offset % 8;
+    self.offset += bit_offset >> 3;
     x - 1
   }
 
