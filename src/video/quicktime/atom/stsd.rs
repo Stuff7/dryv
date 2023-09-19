@@ -85,6 +85,7 @@ pub struct Avc1Atom {
   pub compressor_name: Box<str>,
   pub depth: i16,
   pub color_table_id: i16,
+  pub avcc: AvcCAtom,
 }
 
 impl Avc1Atom {
@@ -104,6 +105,76 @@ impl Avc1Atom {
       compressor_name: pascal_string(data.next(32)),
       depth: data.next_into()?,
       color_table_id: data.next_into()?,
+      avcc: {
+        let (atom, data) = data
+          .atoms()
+          .find_map(|res| {
+            res
+              .map(|(atom, data)| (*atom.name == AvcCAtom::TYPE).then_some((atom, data)))
+              .transpose()
+          })
+          .ok_or(AtomError::Required(AvcCAtom::TYPE))??;
+        AvcCAtom::decode(AtomData::new(data, atom.offset))?
+      },
+    })
+  }
+}
+
+#[derive(Debug)]
+pub struct AvcCAtom {
+  pub configuration_version: u8,
+  pub profile_indication: u8,
+  pub profile_compatibility: u8,
+  pub level_indication: u8,
+  pub nal_length_size_minus_one: u8,
+  pub num_sps: u8,
+  pub sps: SequenceParameterSet,
+}
+
+impl AvcCAtom {
+  const TYPE: [u8; 4] = *b"avcC";
+  pub fn decode(mut data: AtomData) -> AtomResult<Self> {
+    Ok(Self {
+      configuration_version: data.byte(),
+      profile_indication: data.byte(),
+      profile_compatibility: data.byte(),
+      level_indication: data.byte(),
+      nal_length_size_minus_one: data.byte() & 0b0000_0011,
+      num_sps: data.byte() & 0b0001_1111,
+      sps: SequenceParameterSet::decode(data)?,
+    })
+  }
+}
+
+#[derive(Debug)]
+pub struct SequenceParameterSet {
+  pub length: u16,
+  pub profile_idc: u8,
+  pub constraint_set0_flag: bool,
+  pub constraint_set1_flag: bool,
+  pub constraint_set2_flag: bool,
+  pub constraint_set3_flag: bool,
+  pub constraint_set4_flag: bool,
+  pub constraint_set5_flag: bool,
+  pub reserved_zero_2bits: bool,
+  pub level_idc: u8,
+  pub id: u64,
+}
+
+impl SequenceParameterSet {
+  pub fn decode(mut data: AtomData) -> AtomResult<Self> {
+    Ok(Self {
+      length: data.next_into()?,
+      profile_idc: data.byte(),
+      constraint_set0_flag: (data[0] & 0b1000_0000) != 0,
+      constraint_set1_flag: (data[0] & 0b0100_0000) != 0,
+      constraint_set2_flag: (data[0] & 0b0010_0000) != 0,
+      constraint_set3_flag: (data[0] & 0b0001_0000) != 0,
+      constraint_set4_flag: (data[0] & 0b0000_1000) != 0,
+      constraint_set5_flag: (data[0] & 0b0000_0100) != 0,
+      reserved_zero_2bits: (data.byte() & 0b0000_0011) != 0,
+      level_idc: data.byte(),
+      id: data.exponential_golomb(),
     })
   }
 }

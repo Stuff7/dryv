@@ -71,3 +71,43 @@ impl<'a, R: Read + Seek> Iterator for AtomIter<'a, R> {
     })
   }
 }
+
+pub struct BitIter<'a> {
+  bytes: &'a [u8],
+  current_byte_index: usize,
+  current_bit_index: u8,
+}
+
+impl<'a> BitIter<'a> {
+  pub fn new(bytes: &'a [u8], bit_offset: usize) -> Self {
+    let current_byte_index = bit_offset / 8;
+    let current_bit_index = (bit_offset % 8) as u8;
+
+    Self {
+      bytes,
+      current_byte_index,
+      current_bit_index,
+    }
+  }
+}
+
+impl<'a> Iterator for BitIter<'a> {
+  type Item = u8;
+
+  fn next(&mut self) -> Option<Self::Item> {
+    if self.current_byte_index >= self.bytes.len() {
+      return None;
+    }
+
+    let current_byte = self.bytes[self.current_byte_index];
+    let bit_value = (current_byte >> (7 - self.current_bit_index)) & 1;
+
+    self.current_bit_index += 1;
+    if self.current_bit_index >= 8 {
+      self.current_byte_index += 1;
+      self.current_bit_index = 0;
+    }
+
+    Some(bit_value)
+  }
+}

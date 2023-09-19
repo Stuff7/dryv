@@ -96,6 +96,31 @@ impl AtomData {
     [self.data[1], self.data[2], self.data[3]]
   }
 
+  pub fn byte(&mut self) -> u8 {
+    let index = self.offset;
+    self.offset += 1;
+    self.data[index]
+  }
+
+  pub fn exponential_golomb(&mut self) -> u64 {
+    let mut bits = BitIter::new(self.deref(), 0).enumerate();
+    let mut k = 0;
+    bits.any(|(pos, bit)| {
+      let is_one = bit == 1;
+      if is_one {
+        k = pos;
+      }
+      is_one
+    });
+    let mut x: u64 = 1;
+    for (_, bit) in bits.take(k) {
+      x <<= 1;
+      x |= bit as u64;
+    }
+    self.offset += (k + k + 8) >> 3;
+    x - 1
+  }
+
   pub fn fixed_point_16(&mut self) -> AtomResult<f32> {
     let s = self.offset;
     self.offset += 4;
