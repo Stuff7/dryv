@@ -167,7 +167,7 @@ pub struct SequenceParameterSet {
   pub pic_width_in_mbs_minus1: u32,
   pub pic_height_in_map_units_minus1: u32,
   pub frame_mbs_only_flag: bool,
-  pub mb_adaptive_frame_field_flag: Option<bool>,
+  pub mb_adaptive_frame_field_flag: bool,
   pub direct_8x8_inference_flag: bool,
   pub frame_cropping_flag: bool,
   pub vui_parameters_present_flag: bool,
@@ -204,7 +204,7 @@ impl SequenceParameterSet {
         frame_mbs_only_flag = data.bit() != 0;
         frame_mbs_only_flag
       },
-      mb_adaptive_frame_field_flag: (!frame_mbs_only_flag).then(|| data.bit() != 0),
+      mb_adaptive_frame_field_flag: !frame_mbs_only_flag && data.bit() != 0,
       direct_8x8_inference_flag: data.bit() != 0,
       frame_cropping_flag: data.bit() != 0,
       vui_parameters_present_flag: data.bit() != 0,
