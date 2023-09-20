@@ -82,20 +82,18 @@ impl AtomDecoder for HdlrAtom {
   const NAME: [u8; 4] = *b"hdlr";
   fn decode_unchecked(mut atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
     let mut data = atom.read_data(decoder)?;
-
-    let version = data.version();
-    let flags = data.flags();
-    let component_type = data.next_into()?;
-    let component_subtype = data.next_into()?;
-    let component_manufacturer = data.next_into()?;
+    let component_manufacturer;
 
     Ok(Self {
       atom,
-      version,
-      flags,
-      component_type,
-      component_subtype,
-      component_manufacturer,
+      version: data.version(),
+      flags: data.flags(),
+      component_type: data.next_into()?,
+      component_subtype: data.next_into()?,
+      component_manufacturer: {
+        component_manufacturer = data.next_into()?;
+        component_manufacturer
+      },
       component_flags: data.next_into()?,
       component_flags_mask: data.next_into()?,
       component_name: match &data {
