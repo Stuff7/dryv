@@ -149,6 +149,9 @@ impl AvcCAtom {
 #[derive(Debug)]
 pub struct SequenceParameterSet {
   pub length: u16,
+  pub forbidden_zero_bit: u8,
+  pub nal_ref_idc: u8,
+  pub nal_unit_type: u8,
   pub profile_idc: u8,
   pub constraint_set0_flag: bool,
   pub constraint_set1_flag: bool,
@@ -159,6 +162,12 @@ pub struct SequenceParameterSet {
   pub reserved_zero_2bits: bool,
   pub level_idc: u8,
   pub id: u32,
+  pub chroma_format_idc: u32,
+  pub separate_colour_plane_flag: u8,
+  pub bit_depth_luma_minus8: u32,
+  pub bit_depth_chroma_minus8: u32,
+  pub qpprime_y_zero_transform_bypass_flag: u8,
+  pub seq_scaling_matrix_present_flag: u8,
   pub log2_max_frame_num_minus4: u32,
   pub pic_order_cnt_type: u32,
   pub log2_max_pic_order_cnt_lsb_minus4: Option<u32>,
@@ -177,18 +186,53 @@ impl SequenceParameterSet {
   pub fn decode(mut data: AtomData) -> AtomResult<Self> {
     let pic_order_cnt_type;
     let frame_mbs_only_flag;
+    let profile_idc;
+
+    let mut chroma_format_idc = 1;
+    let mut separate_colour_plane_flag = 0;
+    let mut bit_depth_luma_minus8 = 0;
+    let mut bit_depth_chroma_minus8 = 0;
+    let mut qpprime_y_zero_transform_bypass_flag = 0;
+    let mut seq_scaling_matrix_present_flag = 0;
     Ok(Self {
       length: data.next_into()?,
-      profile_idc: data.byte(),
-      constraint_set0_flag: (data[0] & 0b1000_0000) != 0,
-      constraint_set1_flag: (data[0] & 0b0100_0000) != 0,
-      constraint_set2_flag: (data[0] & 0b0010_0000) != 0,
-      constraint_set3_flag: (data[0] & 0b0001_0000) != 0,
-      constraint_set4_flag: (data[0] & 0b0000_1000) != 0,
-      constraint_set5_flag: (data[0] & 0b0000_0100) != 0,
-      reserved_zero_2bits: (data.byte() & 0b0000_0011) != 0,
+      forbidden_zero_bit: data.bit(),
+      nal_ref_idc: data.bits(2),
+      nal_unit_type: data.bits(5),
+      profile_idc: {
+        profile_idc = data.byte();
+        profile_idc
+      },
+      constraint_set0_flag: data.bit() != 0,
+      constraint_set1_flag: data.bit() != 0,
+      constraint_set2_flag: data.bit() != 0,
+      constraint_set3_flag: data.bit() != 0,
+      constraint_set4_flag: data.bit() != 0,
+      constraint_set5_flag: data.bit() != 0,
+      reserved_zero_2bits: data.bits(2) != 0,
       level_idc: data.byte(),
       id: data.exponential_golomb(),
+      chroma_format_idc: {
+        match profile_idc {
+          100 | 110 | 122 | 244 | 44 | 83 | 86 | 118 | 128 | 138 | 139 | 134 | 135 => {
+            chroma_format_idc = data.exponential_golomb();
+            if chroma_format_idc == 3 {
+              separate_colour_plane_flag = data.bit();
+            }
+            bit_depth_luma_minus8 = data.exponential_golomb();
+            bit_depth_chroma_minus8 = data.exponential_golomb();
+            qpprime_y_zero_transform_bypass_flag = data.bit();
+            seq_scaling_matrix_present_flag = data.bit();
+          }
+          _ => (),
+        }
+        chroma_format_idc
+      },
+      separate_colour_plane_flag,
+      bit_depth_luma_minus8,
+      bit_depth_chroma_minus8,
+      qpprime_y_zero_transform_bypass_flag,
+      seq_scaling_matrix_present_flag,
       log2_max_frame_num_minus4: data.exponential_golomb(),
       pic_order_cnt_type: {
         pic_order_cnt_type = data.exponential_golomb();

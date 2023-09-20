@@ -113,6 +113,15 @@ impl AtomData {
     bit
   }
 
+  pub fn bits(&mut self, n: u8) -> u8 {
+    let byte = self.data[self.offset];
+    let bit = byte << self.bit_offset >> (8 - n);
+    let read_bits = self.bit_offset + n as usize;
+    self.bit_offset = read_bits % 8;
+    self.offset += read_bits >> 3;
+    bit
+  }
+
   pub fn exponential_golomb(&mut self) -> u32 {
     let mut bits = BitIter::new(self.deref(), self.bit_offset);
     let k = bits.position(|bit| bit == 1).unwrap_or_default();
