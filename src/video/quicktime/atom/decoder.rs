@@ -1,9 +1,9 @@
 use super::*;
 use crate::{
-  byte::{Str, TryFromSlice},
+  byte::{pack_bits, Str, TryFromSlice},
   math::fixed_point_to_f32,
 };
-use std::ops::Deref;
+use std::{num::TryFromIntError, ops::Deref};
 
 pub const HEADER_SIZE: u64 = 8;
 
@@ -61,7 +61,6 @@ pub struct AtomData {
   data: Box<[u8]>,
   offset: usize,
   reader_offset: u64,
-  bit_offset: usize,
 }
 
 impl AtomData {
@@ -70,7 +69,6 @@ impl AtomData {
       data: data.into(),
       offset: 0,
       reader_offset,
-      bit_offset: 0,
     }
   }
 }
@@ -102,35 +100,6 @@ impl AtomData {
     let index = self.offset;
     self.offset += 1;
     self.data[index]
-  }
-
-  pub fn bit(&mut self) -> u8 {
-    let byte = self.data[self.offset];
-    let bit = (byte >> (7 - self.bit_offset)) & 1;
-    let read_bits = self.bit_offset + 1;
-    self.bit_offset = read_bits % 8;
-    self.offset += read_bits >> 3;
-    bit
-  }
-
-  pub fn bits(&mut self, n: u8) -> u8 {
-    let byte = self.data[self.offset];
-    let bit = byte << self.bit_offset >> (8 - n);
-    let read_bits = self.bit_offset + n as usize;
-    self.bit_offset = read_bits % 8;
-    self.offset += read_bits >> 3;
-    bit
-  }
-
-  pub fn exponential_golomb(&mut self) -> u32 {
-    let mut bits = BitIter::new(self.deref(), self.bit_offset);
-    let k = bits.position(|bit| bit == 1).unwrap_or_default();
-    let x = bits.take(k).fold(1, |x, bit| x << 1 | bit as u32);
-    let read_bits = k + k + 1;
-    let bit_offset = self.bit_offset + read_bits;
-    self.bit_offset = bit_offset % 8;
-    self.offset += bit_offset >> 3;
-    x - 1
   }
 
   pub fn fixed_point_16(&mut self) -> AtomResult<f32> {
@@ -168,6 +137,77 @@ impl AtomData {
       &self.data[self.offset..],
       self.reader_offset + self.offset as u64,
     )
+  }
+}
+
+#[derive(Debug)]
+pub struct AtomBitData {
+  data: Box<[u8]>,
+  offset: usize,
+  bit_offset: usize,
+}
+
+impl From<AtomData> for AtomBitData {
+  fn from(data: AtomData) -> Self {
+    Self {
+      data: data.deref().into(),
+      offset: 0,
+      bit_offset: 0,
+    }
+  }
+}
+
+impl Deref for AtomBitData {
+  type Target = [u8];
+  fn deref(&self) -> &Self::Target {
+    &self.data[self.offset..]
+  }
+}
+
+impl AtomBitData {
+  pub fn byte(&mut self) -> AtomResult<u8> {
+    self.bits_into(8)
+  }
+
+  pub fn bit(&mut self) -> u8 {
+    let byte = self.data[self.offset];
+    let bit = (byte >> (7 - self.bit_offset)) & 1;
+    self.consume_bits(1);
+    bit
+  }
+
+  pub fn bits(&mut self, n: u8) -> u8 {
+    let byte = self.data[self.offset];
+    let bit = byte << self.bit_offset >> (8 - n);
+    self.consume_bits(n as usize);
+    bit
+  }
+
+  pub fn bits_into<T: TryFrom<u128, Error = TryFromIntError>>(
+    &mut self,
+    bits: usize,
+  ) -> AtomResult<T> {
+    let number = pack_bits(&self.data[self.offset..], self.bit_offset, bits);
+    self.consume_bits(bits);
+    Ok(number.try_into()?)
+  }
+
+  pub fn exponential_golomb(&mut self) -> u32 {
+    let mut bits = BitIter::new(self.deref(), self.bit_offset);
+    let k = bits.position(|bit| bit == 1).unwrap_or_default();
+    let x = bits.take(k).fold(1, |x, bit| x << 1 | bit as u32);
+    self.consume_bits(k + k + 1);
+    x - 1
+  }
+
+  pub fn next_into<T: TryFrom<u128, Error = TryFromIntError> + Sized>(&mut self) -> AtomResult<T> {
+    self.bits_into(std::mem::size_of::<T>() * 8)
+  }
+
+  fn consume_bits(&mut self, bits: usize) {
+    let read_bits = self.bit_offset + bits;
+    self.bit_offset = read_bits % 8;
+    self.offset += read_bits >> 3;
   }
 }
 

@@ -141,7 +141,7 @@ impl AvcCAtom {
       level_indication: data.byte(),
       nal_length_size_minus_one: data.byte() & 0b0000_0011,
       num_sps: data.byte() & 0b0001_1111,
-      sps: SequenceParameterSet::decode(data)?,
+      sps: SequenceParameterSet::decode(data.into())?,
     })
   }
 }
@@ -184,7 +184,7 @@ pub struct SequenceParameterSet {
 }
 
 impl SequenceParameterSet {
-  pub fn decode(mut data: AtomData) -> AtomResult<Self> {
+  pub fn decode(mut data: AtomBitData) -> AtomResult<Self> {
     // use std::io::Write;
     // let mut img = std::fs::File::create("temp/img.264").expect("IMG CREATION");
     // let mut d = vec![0, 0, 1];
@@ -207,7 +207,7 @@ impl SequenceParameterSet {
       nal_ref_idc: data.bits(2),
       nal_unit_type: data.bits(5),
       profile_idc: {
-        profile_idc = data.byte();
+        profile_idc = data.byte()?;
         profile_idc
       },
       constraint_set0_flag: data.bit() != 0,
@@ -217,7 +217,7 @@ impl SequenceParameterSet {
       constraint_set4_flag: data.bit() != 0,
       constraint_set5_flag: data.bit() != 0,
       reserved_zero_2bits: data.bits(2) != 0,
-      level_idc: data.byte(),
+      level_idc: data.byte()?,
       id: data.exponential_golomb(),
       chroma_format_idc: {
         match profile_idc {
@@ -291,7 +291,7 @@ pub struct FrameCropping {
 }
 
 impl FrameCropping {
-  pub fn decode(data: &mut AtomData) -> Self {
+  pub fn decode(data: &mut AtomBitData) -> Self {
     Self {
       left: data.exponential_golomb(),
       right: data.exponential_golomb(),
@@ -321,7 +321,7 @@ pub struct VuiParameters {
 impl VuiParameters {
   pub fn decode(
     vui_parameters_present_flag: bool,
-    data: &mut AtomData,
+    data: &mut AtomBitData,
   ) -> AtomResult<Option<Self>> {
     vui_parameters_present_flag
       .then(|| -> AtomResult<Self> {
@@ -338,6 +338,7 @@ impl VuiParameters {
           aspect_ratio_idc: {
             aspect_ratio_idc = aspect_ratio_info_present_flag
               .then(|| data.byte())
+              .transpose()?
               .unwrap_or_default();
             aspect_ratio_idc
           },
@@ -347,7 +348,7 @@ impl VuiParameters {
             overscan_info_present_flag
           },
           overscan_appropriate_flag: overscan_info_present_flag && data.bit() != 0,
-          video_signal_type: VideoSignalType::decode(data.bit() != 0, data),
+          video_signal_type: VideoSignalType::decode(data.bit() != 0, data)?,
           chroma_loc_info: ChromaLocInfo::decode(data.bit() != 0, data),
           timing_info: TimingInfo::decode(data.bit() != 0, data)?,
           nal_hrd_parameters: {
@@ -358,8 +359,7 @@ impl VuiParameters {
             vcl_hrd_parameters_present_flag = data.bit() != 0;
             HrdParameters::decode(vcl_hrd_parameters_present_flag, data)
           },
-          low_delay_hrd_flag: nal_hrd_parameters_present_flag
-            && vcl_hrd_parameters_present_flag
+          low_delay_hrd_flag: (nal_hrd_parameters_present_flag || vcl_hrd_parameters_present_flag)
             && data.bit() != 0,
           pic_struct_present_flag: data.bit() != 0,
           bitstream_restriction: BitstreamRestriction::decode(data.bit() != 0, data),
@@ -377,7 +377,7 @@ pub struct SampleAspectRatio {
 
 impl SampleAspectRatio {
   const EXTENDED_SAR: u8 = 255;
-  pub fn decode(aspect_ratio_idc: u8, data: &mut AtomData) -> AtomResult<Option<Self>> {
+  pub fn decode(aspect_ratio_idc: u8, data: &mut AtomBitData) -> AtomResult<Option<Self>> {
     (aspect_ratio_idc == Self::EXTENDED_SAR)
       .then(|| -> AtomResult<Self> {
         Ok(Self {
@@ -397,12 +397,19 @@ pub struct VideoSignalType {
 }
 
 impl VideoSignalType {
-  pub fn decode(video_signal_type_present_flag: bool, data: &mut AtomData) -> Option<Self> {
-    video_signal_type_present_flag.then(|| Self {
-      video_format: data.bits(3),
-      video_full_range_flag: data.bit(),
-      color_description: ColorDescription::decode(data.bit() != 0, data),
-    })
+  pub fn decode(
+    video_signal_type_present_flag: bool,
+    data: &mut AtomBitData,
+  ) -> AtomResult<Option<Self>> {
+    video_signal_type_present_flag
+      .then(|| -> AtomResult<Self> {
+        Ok(Self {
+          video_format: data.bits(3),
+          video_full_range_flag: data.bit(),
+          color_description: ColorDescription::decode(data.bit() != 0, data)?,
+        })
+      })
+      .transpose()
   }
 }
 
@@ -414,12 +421,19 @@ pub struct ColorDescription {
 }
 
 impl ColorDescription {
-  pub fn decode(color_description_present_flag: bool, data: &mut AtomData) -> Option<Self> {
-    color_description_present_flag.then(|| Self {
-      primaries: data.byte(),
-      transfer_characteristics: data.byte(),
-      matrix_coefficients: data.byte(),
-    })
+  pub fn decode(
+    color_description_present_flag: bool,
+    data: &mut AtomBitData,
+  ) -> AtomResult<Option<Self>> {
+    color_description_present_flag
+      .then(|| -> AtomResult<Self> {
+        Ok(Self {
+          primaries: data.byte()?,
+          transfer_characteristics: data.byte()?,
+          matrix_coefficients: data.byte()?,
+        })
+      })
+      .transpose()
   }
 }
 
@@ -430,7 +444,7 @@ pub struct ChromaLocInfo {
 }
 
 impl ChromaLocInfo {
-  pub fn decode(chroma_loc_info_present_flag: bool, data: &mut AtomData) -> Option<Self> {
+  pub fn decode(chroma_loc_info_present_flag: bool, data: &mut AtomBitData) -> Option<Self> {
     chroma_loc_info_present_flag.then(|| Self {
       top_field: data.exponential_golomb(),
       bottom_field: data.exponential_golomb(),
@@ -446,7 +460,10 @@ pub struct TimingInfo {
 }
 
 impl TimingInfo {
-  pub fn decode(timing_info_present_flag: bool, data: &mut AtomData) -> AtomResult<Option<Self>> {
+  pub fn decode(
+    timing_info_present_flag: bool,
+    data: &mut AtomBitData,
+  ) -> AtomResult<Option<Self>> {
     timing_info_present_flag
       .then(|| -> AtomResult<Self> {
         Ok(Self {
@@ -474,7 +491,7 @@ pub struct HrdParameters {
 }
 
 impl HrdParameters {
-  pub fn decode(nal_hrd_parameters_present_flag: bool, data: &mut AtomData) -> Option<Self> {
+  pub fn decode(nal_hrd_parameters_present_flag: bool, data: &mut AtomBitData) -> Option<Self> {
     nal_hrd_parameters_present_flag.then(|| {
       let cpb_cnt_minus1;
       let mut bit_rate_value_minus1 = Vec::new();
@@ -519,7 +536,7 @@ pub struct BitstreamRestriction {
 }
 
 impl BitstreamRestriction {
-  pub fn decode(bitstream_restriction_flag: bool, data: &mut AtomData) -> Option<Self> {
+  pub fn decode(bitstream_restriction_flag: bool, data: &mut AtomBitData) -> Option<Self> {
     bitstream_restriction_flag.then(|| Self {
       motion_vectors_over_pic_boundaries_flag: data.bit() != 0,
       max_bytes_per_pic_denom: data.exponential_golomb(),

@@ -58,6 +58,21 @@ impl<const N: usize> std::fmt::Debug for Str<N> {
   }
 }
 
+pub fn padded_array_from_slice<const N: usize>(slice: &[u8]) -> [u8; N] {
+  let mut array = [0u8; N];
+  let len = std::cmp::min(slice.len(), N);
+  array[..len].copy_from_slice(&slice[..len]);
+  array
+}
+
+pub fn pack_bits(data: &[u8], bit_offset: usize, bit_size: usize) -> u128 {
+  let mut value = u128::from_be_bytes(padded_array_from_slice(data));
+  value <<= bit_offset;
+  value >>= 128 - bit_size;
+
+  value
+}
+
 pub fn pascal_string(slice: &[u8]) -> Box<str> {
   if slice.is_empty() {
     return "".into();

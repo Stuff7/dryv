@@ -29,6 +29,7 @@ use crate::byte::Str;
 use std::{
   array::TryFromSliceError,
   io::{Read, Seek, SeekFrom},
+  num::TryFromIntError,
   str::Utf8Error,
   string::FromUtf8Error,
 };
@@ -44,6 +45,8 @@ pub enum AtomError {
   StringConversion(#[from] FromUtf8Error),
   #[error(transparent)]
   Utf8Conversion(#[from] Utf8Error),
+  #[error(transparent)]
+  IntConversion(#[from] TryFromIntError),
   #[error("Required atom {:?} was not found", Str(*(.0)))]
   Required([u8; 4]),
   #[error("Unknown atom {0:?}")]
