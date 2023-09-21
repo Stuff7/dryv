@@ -73,6 +73,21 @@ pub fn pack_bits(data: &[u8], bit_offset: usize, bit_size: usize) -> u128 {
   value
 }
 
+pub fn remove_emulation_prevention_bytes(input: &[u8]) -> Box<[u8]> {
+  input
+    .iter()
+    .copied()
+    .enumerate()
+    .filter_map(|(i, byte)| {
+      if i > 1 && byte == 0x03 && input[i - 1] == 0x00 && input[i - 2] == 0x00 {
+        None
+      } else {
+        Some(byte)
+      }
+    })
+    .collect()
+}
+
 pub fn pascal_string(slice: &[u8]) -> Box<str> {
   if slice.is_empty() {
     return "".into();

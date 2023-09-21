@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-  byte::{pack_bits, Str, TryFromSlice},
+  byte::{pack_bits, remove_emulation_prevention_bytes, Str, TryFromSlice},
   math::fixed_point_to_f32,
 };
 use std::{num::TryFromIntError, ops::Deref};
@@ -150,7 +150,7 @@ pub struct AtomBitData {
 impl From<AtomData> for AtomBitData {
   fn from(data: AtomData) -> Self {
     Self {
-      data: data.deref().into(),
+      data: remove_emulation_prevention_bytes(data.deref()),
       offset: 0,
       bit_offset: 0,
     }
