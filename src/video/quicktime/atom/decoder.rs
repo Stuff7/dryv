@@ -168,8 +168,10 @@ impl Deref for AtomBitData {
 }
 
 impl AtomBitData {
-  pub fn is_bit_byte_aligned(&mut self) -> bool {
-    self.bit_offset == 0
+  pub fn skip_trailing_bits(&mut self) -> &mut Self {
+    self.bit_offset = 0;
+    self.offset += 1;
+    self
   }
 
   pub fn byte(&mut self) -> AtomResult<u8> {
