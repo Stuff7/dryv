@@ -79,11 +79,7 @@ pub fn remove_emulation_prevention_bytes(input: &[u8]) -> Box<[u8]> {
     .copied()
     .enumerate()
     .filter_map(|(i, byte)| {
-      if i > 1 && byte == 0x03 && input[i - 1] == 0x00 && input[i - 2] == 0x00 {
-        None
-      } else {
-        Some(byte)
-      }
+      (!(i > 1 && byte == 0x03 && input[i - 1] == 0x00 && input[i - 2] == 0x00)).then_some(byte)
     })
     .collect()
 }

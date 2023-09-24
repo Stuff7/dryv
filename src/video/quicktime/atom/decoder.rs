@@ -3,7 +3,10 @@ use crate::{
   byte::{pack_bits, remove_emulation_prevention_bytes, Str, TryFromSlice},
   math::fixed_point_to_f32,
 };
-use std::{num::TryFromIntError, ops::Deref};
+use std::{
+  num::TryFromIntError,
+  ops::{BitOr, Deref, Shl, Sub},
+};
 
 pub const HEADER_SIZE: u64 = 8;
 
@@ -147,8 +150,8 @@ pub struct AtomBitData {
   bit_offset: usize,
 }
 
-impl From<AtomData> for AtomBitData {
-  fn from(data: AtomData) -> Self {
+impl From<&AtomData> for AtomBitData {
+  fn from(data: &AtomData) -> Self {
     Self {
       data: remove_emulation_prevention_bytes(data.deref()),
       offset: 0,
@@ -165,6 +168,10 @@ impl Deref for AtomBitData {
 }
 
 impl AtomBitData {
+  pub fn is_bit_byte_aligned(&mut self) -> bool {
+    self.bit_offset == 0
+  }
+
   pub fn byte(&mut self) -> AtomResult<u8> {
     self.bits_into(8)
   }
@@ -192,12 +199,18 @@ impl AtomBitData {
     Ok(number.try_into()?)
   }
 
-  pub fn exponential_golomb(&mut self) -> u32 {
+  pub fn exponential_golomb<
+    T: Shl<u8, Output = T> + BitOr<T, Output = T> + Sub<T, Output = T> + From<u8>,
+  >(
+    &mut self,
+  ) -> T {
     let mut bits = BitIter::new(self.deref(), self.bit_offset);
     let k = bits.position(|bit| bit == 1).unwrap_or_default();
-    let x = bits.take(k).fold(1, |x, bit| x << 1 | bit as u32);
+    let x = bits
+      .take(k)
+      .fold(T::from(1), |x, bit| x << 1 | T::from(bit));
     self.consume_bits(k + k + 1);
-    x - 1
+    x - T::from(1)
   }
 
   pub fn next_into<T: TryFrom<u128, Error = TryFromIntError> + Sized>(&mut self) -> AtomResult<T> {

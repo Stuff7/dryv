@@ -129,11 +129,13 @@ pub struct AvcCAtom {
   pub nal_length_size_minus_one: u8,
   pub num_sps: u8,
   pub sps: SequenceParameterSet,
+  pub num_pps: u8,
 }
 
 impl AvcCAtom {
   const TYPE: [u8; 4] = *b"avcC";
   pub fn decode(mut data: AtomData) -> AtomResult<Self> {
+    let mut bit_data;
     Ok(Self {
       configuration_version: data.byte(),
       profile_indication: data.byte(),
@@ -141,7 +143,11 @@ impl AvcCAtom {
       level_indication: data.byte(),
       nal_length_size_minus_one: data.byte() & 0b0000_0011,
       num_sps: data.byte() & 0b0001_1111,
-      sps: SequenceParameterSet::decode(data.into())?,
+      sps: {
+        bit_data = (&data).into();
+        SequenceParameterSet::decode(&mut bit_data)?
+      },
+      num_pps: bit_data.byte()?,
     })
   }
 }
@@ -161,20 +167,22 @@ pub struct SequenceParameterSet {
   pub constraint_set5_flag: bool,
   pub reserved_zero_2bits: bool,
   pub level_idc: u8,
-  pub id: u32,
-  pub chroma_format_idc: u32,
+  pub id: u16,
+  pub chroma_format_idc: u16,
   pub separate_color_plane_flag: u8,
-  pub bit_depth_luma_minus8: u32,
-  pub bit_depth_chroma_minus8: u32,
+  pub bit_depth_luma_minus8: u16,
+  pub bit_depth_chroma_minus8: u16,
   pub qpprime_y_zero_transform_bypass_flag: u8,
   pub seq_scaling_matrix_present_flag: u8,
-  pub log2_max_frame_num_minus4: u32,
-  pub pic_order_cnt_type: u32,
-  pub log2_max_pic_order_cnt_lsb_minus4: Option<u32>,
-  pub max_num_ref_frames: u32,
+  pub scaling_list_4x4: Option<Box<[ScalingList<16>]>>,
+  pub scaling_list_16x16: Option<Box<[ScalingList<64>]>>,
+  pub log2_max_frame_num_minus4: u16,
+  pub pic_order_cnt_type: u16,
+  pub log2_max_pic_order_cnt_lsb_minus4: Option<u16>,
+  pub max_num_ref_frames: u16,
   pub gaps_in_frame_num_value_allowed_flag: bool,
-  pub pic_width_in_mbs_minus1: u32,
-  pub pic_height_in_map_units_minus1: u32,
+  pub pic_width_in_mbs_minus1: u16,
+  pub pic_height_in_map_units_minus1: u16,
   pub frame_mbs_only_flag: bool,
   pub mb_adaptive_frame_field_flag: bool,
   pub direct_8x8_inference_flag: bool,
@@ -184,12 +192,12 @@ pub struct SequenceParameterSet {
 }
 
 impl SequenceParameterSet {
-  pub fn decode(mut data: AtomBitData) -> AtomResult<Self> {
-    // use std::io::Write;
-    // let mut img = std::fs::File::create("temp/img.264").expect("IMG CREATION");
-    // let mut d = vec![0, 0, 1];
-    // d.extend_from_slice(&data[2..]);
-    // img.write_all(&d).expect("SAVING");
+  pub fn decode(data: &mut AtomBitData) -> AtomResult<Self> {
+    use std::io::Write;
+    let mut img = std::fs::File::create("temp/img.264").expect("IMG CREATION");
+    let mut d = vec![0, 0, 1];
+    d.extend_from_slice(&data[2..]);
+    img.write_all(&d).expect("SAVING");
     let pic_order_cnt_type;
     let frame_mbs_only_flag;
     let profile_idc;
@@ -201,6 +209,8 @@ impl SequenceParameterSet {
     let mut bit_depth_chroma_minus8 = 0;
     let mut qpprime_y_zero_transform_bypass_flag = 0;
     let mut seq_scaling_matrix_present_flag = 0;
+    let mut scaling_list_4x4 = None;
+    let mut scaling_list_16x16 = None;
     Ok(Self {
       length: data.next_into()?,
       forbidden_zero_bit: data.bit(),
@@ -230,21 +240,19 @@ impl SequenceParameterSet {
             bit_depth_chroma_minus8 = data.exponential_golomb();
             qpprime_y_zero_transform_bypass_flag = data.bit();
             seq_scaling_matrix_present_flag = data.bit();
-            // if seq_scaling_matrix_present_flag == 1 {
-            //   let end = if chroma_format_idc != 3 {8} else {12};
-            //   for i in 0..end {
-            //     seq_scaling_list_present_flag[ i ] 0 u(1)
-            //     if( seq_scaling_list_present_flag[ i ] )
-            //     if( i < 6 )
-            //     scaling_list( ScalingList4x4[ i ], 16,
-            //     UseDefaultScalingMatrix4x4Flag[ i ] )
-            //     0
-            //     else
-            //     scaling_list( ScalingList8x8[ i − 6 ], 64,
-            //     UseDefaultScalingMatrix8x8Flag[ i − 6 ] )
-            //     0
-            //   }
-            // }
+            if seq_scaling_matrix_present_flag == 1 {
+              let size = if chroma_format_idc != 3 { 8 } else { 12 };
+              scaling_list_4x4 = Some(
+                (0..6)
+                  .filter_map(|_| (data.bit() == 1).then(|| ScalingList::new(data)))
+                  .collect(),
+              );
+              scaling_list_16x16 = Some(
+                (6..size)
+                  .filter_map(|_| (data.bit() == 1).then(|| ScalingList::new(data)))
+                  .collect(),
+              );
+            }
           }
           _ => (),
         }
@@ -255,6 +263,8 @@ impl SequenceParameterSet {
       bit_depth_chroma_minus8,
       qpprime_y_zero_transform_bypass_flag,
       seq_scaling_matrix_present_flag,
+      scaling_list_4x4,
+      scaling_list_16x16,
       log2_max_frame_num_minus4: data.exponential_golomb(),
       pic_order_cnt_type: {
         pic_order_cnt_type = data.exponential_golomb();
@@ -276,18 +286,61 @@ impl SequenceParameterSet {
         frame_cropping_flag = data.bit() != 0;
         frame_cropping_flag
       },
-      frame_cropping: frame_cropping_flag.then(|| FrameCropping::decode(&mut data)),
-      vui_parameters: VuiParameters::decode(data.bit() != 0, &mut data)?,
+      frame_cropping: frame_cropping_flag.then(|| FrameCropping::decode(data)),
+      vui_parameters: {
+        let vui = VuiParameters::decode(data.bit() != 0, data)?;
+        if data.bit() == 1 {
+          loop {
+            if data.is_bit_byte_aligned() {
+              break;
+            }
+            data.bit();
+          }
+        }
+        vui
+      },
     })
   }
 }
 
 #[derive(Debug)]
+pub struct ScalingList<const S: usize> {
+  pub data: [i16; S],
+  pub use_default_scaling_matrix_flag: bool,
+}
+
+impl<const S: usize> ScalingList<S> {
+  pub fn new(bits: &mut AtomBitData) -> Self {
+    let mut data = [0; S];
+    let mut use_default_scaling_matrix_flag = false;
+    let mut last_scale = 8;
+    let mut next_scale = 8;
+    for (i, scale) in data.iter_mut().enumerate() {
+      if next_scale != 0 {
+        let delta_scale: i16 = bits.exponential_golomb();
+        next_scale = (last_scale + delta_scale + 256) % 256;
+        use_default_scaling_matrix_flag = i == 0 && next_scale == 0;
+      }
+      *scale = if next_scale == 0 {
+        last_scale
+      } else {
+        next_scale
+      };
+      last_scale = *scale;
+    }
+    Self {
+      data,
+      use_default_scaling_matrix_flag,
+    }
+  }
+}
+
+#[derive(Debug)]
 pub struct FrameCropping {
-  pub left: u32,
-  pub right: u32,
-  pub top: u32,
-  pub bottom: u32,
+  pub left: u16,
+  pub right: u16,
+  pub top: u16,
+  pub bottom: u16,
 }
 
 impl FrameCropping {
@@ -439,8 +492,8 @@ impl ColorDescription {
 
 #[derive(Debug)]
 pub struct ChromaLocInfo {
-  pub top_field: u32,
-  pub bottom_field: u32,
+  pub top_field: u16,
+  pub bottom_field: u16,
 }
 
 impl ChromaLocInfo {
@@ -478,11 +531,11 @@ impl TimingInfo {
 
 #[derive(Debug)]
 pub struct HrdParameters {
-  pub cpb_cnt_minus1: u32,
+  pub cpb_cnt_minus1: u16,
   pub bit_rate_scale: u8,
   pub cpb_size_scale: u8,
-  pub bit_rate_value_minus1: Box<[u32]>,
-  pub cpb_size_value_minus1: Box<[u32]>,
+  pub bit_rate_value_minus1: Box<[u16]>,
+  pub cpb_size_value_minus1: Box<[u16]>,
   pub cbr_flag: Box<[u8]>,
   pub initial_cpb_removal_delay_length_minus1: u8,
   pub cpb_removal_delay_length_minus1: u8,
@@ -527,12 +580,12 @@ impl HrdParameters {
 #[derive(Debug)]
 pub struct BitstreamRestriction {
   pub motion_vectors_over_pic_boundaries_flag: bool,
-  pub max_bytes_per_pic_denom: u32,
-  pub max_bits_per_mb_denom: u32,
-  pub log2_max_mv_length_horizontal: u32,
-  pub log2_max_mv_length_vertical: u32,
-  pub max_num_reorder_frames: u32,
-  pub max_dec_frame_buffering: u32,
+  pub max_bytes_per_pic_denom: u16,
+  pub max_bits_per_mb_denom: u16,
+  pub log2_max_mv_length_horizontal: u16,
+  pub log2_max_mv_length_vertical: u16,
+  pub max_num_reorder_frames: u16,
+  pub max_dec_frame_buffering: u16,
 }
 
 impl BitstreamRestriction {
