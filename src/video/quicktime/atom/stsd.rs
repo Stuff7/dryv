@@ -147,7 +147,7 @@ impl AvcCAtom {
         bit_data = (&data).into();
         SequenceParameterSet::decode(&mut bit_data)?
       },
-      num_pps: { bit_data.byte()? },
+      num_pps: bit_data.byte()?,
     })
   }
 }

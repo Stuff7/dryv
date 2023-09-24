@@ -169,8 +169,10 @@ impl Deref for AtomBitData {
 
 impl AtomBitData {
   pub fn skip_trailing_bits(&mut self) -> &mut Self {
-    self.bit_offset = 0;
-    self.offset += 1;
+    if self.bit_offset != 0 {
+      self.bit_offset = 0;
+      self.offset += 1;
+    }
     self
   }
 
