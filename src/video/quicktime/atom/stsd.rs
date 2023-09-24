@@ -340,18 +340,20 @@ impl PictureParameterSet {
 #[derive(Debug)]
 pub enum SliceGroup {
   Unknown(u16),
-  Zero {
+  Interleaved {
     run_length_minus1: Box<[u16]>,
   },
-  Two {
+  Dispersed,
+  ForegroundWithLeftOver {
     top_left: Box<[u16]>,
     bottom_right: Box<[u16]>,
   },
-  ThreeFourFive {
+  Change {
+    map_type: u16,
     change_direction_flag: bool,
     change_rate_minus1: u16,
   },
-  Six {
+  Explicit {
     pic_size_in_map_units_minus1: u16,
     id: Box<[u8]>,
   },
@@ -360,11 +362,12 @@ pub enum SliceGroup {
 impl SliceGroup {
   pub fn new(num_slice_groups_minus1: u16, data: &mut AtomBitData) -> Option<Self> {
     (num_slice_groups_minus1 > 0).then(|| match data.exponential_golomb() {
-      0 => Self::Zero {
+      0 => Self::Interleaved {
         run_length_minus1: (0..num_slice_groups_minus1)
           .map(|_| data.exponential_golomb())
           .collect(),
       },
+      1 => Self::Dispersed,
       2 => {
         let mut top_left = Vec::with_capacity(num_slice_groups_minus1 as usize);
         let mut bottom_right = Vec::with_capacity(num_slice_groups_minus1 as usize);
@@ -372,16 +375,17 @@ impl SliceGroup {
           top_left.push(data.exponential_golomb());
           bottom_right.push(data.exponential_golomb());
         }
-        Self::Two {
+        Self::ForegroundWithLeftOver {
           top_left: top_left.into_boxed_slice(),
           bottom_right: bottom_right.into_boxed_slice(),
         }
       }
-      3 | 4 | 5 => Self::ThreeFourFive {
+      n if n == 3 || n == 4 || n == 5 => Self::Change {
+        map_type: n,
         change_direction_flag: data.bit_flag(),
         change_rate_minus1: data.exponential_golomb(),
       },
-      6 => Self::Six {
+      6 => Self::Explicit {
         pic_size_in_map_units_minus1: data.exponential_golomb(),
         id: (0..num_slice_groups_minus1).map(|_| data.bit()).collect(),
       },
