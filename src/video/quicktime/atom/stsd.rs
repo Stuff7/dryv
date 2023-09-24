@@ -186,7 +186,6 @@ pub struct SequenceParameterSet {
   pub frame_mbs_only_flag: bool,
   pub mb_adaptive_frame_field_flag: bool,
   pub direct_8x8_inference_flag: bool,
-  pub frame_cropping_flag: bool,
   pub frame_cropping: Option<FrameCropping>,
   pub vui_parameters: Option<VuiParameters>,
 }
@@ -201,7 +200,6 @@ impl SequenceParameterSet {
     let pic_order_cnt_type;
     let frame_mbs_only_flag;
     let profile_idc;
-    let frame_cropping_flag;
 
     let mut chroma_format_idc = 1;
     let mut separate_color_plane_flag = 0;
@@ -282,11 +280,7 @@ impl SequenceParameterSet {
       },
       mb_adaptive_frame_field_flag: !frame_mbs_only_flag && data.bit() != 0,
       direct_8x8_inference_flag: data.bit() != 0,
-      frame_cropping_flag: {
-        frame_cropping_flag = data.bit() != 0;
-        frame_cropping_flag
-      },
-      frame_cropping: frame_cropping_flag.then(|| FrameCropping::decode(data)),
+      frame_cropping: FrameCropping::decode(data.bit() != 0, data),
       vui_parameters: {
         let vui = VuiParameters::decode(data.bit() != 0, data)?;
         if data.bit() == 1 {
@@ -339,13 +333,13 @@ pub struct FrameCropping {
 }
 
 impl FrameCropping {
-  pub fn decode(data: &mut AtomBitData) -> Self {
-    Self {
+  pub fn decode(frame_cropping_flag: bool, data: &mut AtomBitData) -> Option<Self> {
+    frame_cropping_flag.then(|| Self {
       left: data.exponential_golomb(),
       right: data.exponential_golomb(),
       top: data.exponential_golomb(),
       bottom: data.exponential_golomb(),
-    }
+    })
   }
 }
 
