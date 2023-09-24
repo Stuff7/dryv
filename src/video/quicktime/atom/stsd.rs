@@ -130,6 +130,7 @@ pub struct AvcCAtom {
   pub num_sps: u8,
   pub sps: SequenceParameterSet,
   pub num_pps: u8,
+  pub pps: PictureParameterSet,
 }
 
 impl AvcCAtom {
@@ -148,6 +149,7 @@ impl AvcCAtom {
         SequenceParameterSet::decode(&mut bit_data)?
       },
       num_pps: bit_data.byte()?,
+      pps: PictureParameterSet::decode(&mut bit_data)?,
     })
   }
 }
@@ -218,12 +220,12 @@ impl SequenceParameterSet {
         profile_idc = data.byte()?;
         profile_idc
       },
-      constraint_set0_flag: data.bit() != 0,
-      constraint_set1_flag: data.bit() != 0,
-      constraint_set2_flag: data.bit() != 0,
-      constraint_set3_flag: data.bit() != 0,
-      constraint_set4_flag: data.bit() != 0,
-      constraint_set5_flag: data.bit() != 0,
+      constraint_set0_flag: data.bit_flag(),
+      constraint_set1_flag: data.bit_flag(),
+      constraint_set2_flag: data.bit_flag(),
+      constraint_set3_flag: data.bit_flag(),
+      constraint_set4_flag: data.bit_flag(),
+      constraint_set5_flag: data.bit_flag(),
       reserved_zero_2bits: data.bits(2) != 0,
       level_idc: data.byte()?,
       id: data.exponential_golomb(),
@@ -271,23 +273,119 @@ impl SequenceParameterSet {
       log2_max_pic_order_cnt_lsb_minus4: (pic_order_cnt_type == 0)
         .then(|| data.exponential_golomb()),
       max_num_ref_frames: data.exponential_golomb(),
-      gaps_in_frame_num_value_allowed_flag: data.bit() != 0,
+      gaps_in_frame_num_value_allowed_flag: data.bit_flag(),
       pic_width_in_mbs_minus1: data.exponential_golomb(),
       pic_height_in_map_units_minus1: data.exponential_golomb(),
       frame_mbs_only_flag: {
-        frame_mbs_only_flag = data.bit() != 0;
+        frame_mbs_only_flag = data.bit_flag();
         frame_mbs_only_flag
       },
-      mb_adaptive_frame_field_flag: !frame_mbs_only_flag && data.bit() != 0,
-      direct_8x8_inference_flag: data.bit() != 0,
-      frame_cropping: FrameCropping::decode(data.bit() != 0, data),
+      mb_adaptive_frame_field_flag: !frame_mbs_only_flag && data.bit_flag(),
+      direct_8x8_inference_flag: data.bit_flag(),
+      frame_cropping: FrameCropping::decode(data.bit_flag(), data),
       vui_parameters: {
-        let vui = VuiParameters::decode(data.bit() != 0, data)?;
+        let vui = VuiParameters::decode(data.bit_flag(), data)?;
         if data.bit() == 1 {
           data.skip_trailing_bits();
         }
         vui
       },
+    })
+  }
+}
+
+#[derive(Debug)]
+pub struct PictureParameterSet {
+  pub length: u16,
+  pub id: u16,
+  pub seq_parameter_set_id: u16,
+  pub entropy_coding_mode_flag: bool,
+  pub bottom_field_pic_order_in_frame_present_flag: bool,
+  pub slice_group: Option<SliceGroup>,
+  pub num_ref_idx_10_default_active_minus1: u16,
+  pub num_ref_idx_11_default_active_minus1: u16,
+  pub weighted_pred_flag: bool,
+  pub weighted_bipred_idc: u8,
+  pub pic_init_qp_minus26: i16,
+  pub pic_init_qs_minus26: i16,
+  pub chroma_qp_index_offset: i16,
+  pub deblocking_filter_control_present_flag: bool,
+  pub constrained_intra_pred_flag: bool,
+  pub redundant_pic_cnt_present_flag: bool,
+}
+
+impl PictureParameterSet {
+  pub fn decode(data: &mut AtomBitData) -> AtomResult<Self> {
+    Ok(Self {
+      length: data.next_into()?,
+      id: data.exponential_golomb(),
+      seq_parameter_set_id: data.exponential_golomb(),
+      entropy_coding_mode_flag: data.bit_flag(),
+      bottom_field_pic_order_in_frame_present_flag: data.bit_flag(),
+      slice_group: SliceGroup::new(data.exponential_golomb(), data),
+      num_ref_idx_10_default_active_minus1: data.exponential_golomb(),
+      num_ref_idx_11_default_active_minus1: data.exponential_golomb(),
+      weighted_pred_flag: data.bit_flag(),
+      weighted_bipred_idc: data.bits_into(2)?,
+      pic_init_qp_minus26: data.exponential_golomb(),
+      pic_init_qs_minus26: data.exponential_golomb(),
+      chroma_qp_index_offset: data.exponential_golomb(),
+      deblocking_filter_control_present_flag: data.bit_flag(),
+      constrained_intra_pred_flag: data.bit_flag(),
+      redundant_pic_cnt_present_flag: data.bit_flag(),
+    })
+  }
+}
+
+#[derive(Debug)]
+pub enum SliceGroup {
+  Unknown(u16),
+  Zero {
+    run_length_minus1: Box<[u16]>,
+  },
+  Two {
+    top_left: Box<[u16]>,
+    bottom_right: Box<[u16]>,
+  },
+  ThreeFourFive {
+    change_direction_flag: bool,
+    change_rate_minus1: u16,
+  },
+  Six {
+    pic_size_in_map_units_minus1: u16,
+    id: Box<[u8]>,
+  },
+}
+
+impl SliceGroup {
+  pub fn new(num_slice_groups_minus1: u16, data: &mut AtomBitData) -> Option<Self> {
+    (num_slice_groups_minus1 > 0).then(|| match data.exponential_golomb() {
+      0 => Self::Zero {
+        run_length_minus1: (0..num_slice_groups_minus1)
+          .map(|_| data.exponential_golomb())
+          .collect(),
+      },
+      2 => {
+        let mut top_left = Vec::with_capacity(num_slice_groups_minus1 as usize);
+        let mut bottom_right = Vec::with_capacity(num_slice_groups_minus1 as usize);
+        for _ in 0..num_slice_groups_minus1 {
+          top_left.push(data.exponential_golomb());
+          bottom_right.push(data.exponential_golomb());
+        }
+        Self::Two {
+          top_left: top_left.into_boxed_slice(),
+          bottom_right: bottom_right.into_boxed_slice(),
+        }
+      }
+      3 | 4 | 5 => Self::ThreeFourFive {
+        change_direction_flag: data.bit_flag(),
+        change_rate_minus1: data.exponential_golomb(),
+      },
+      6 => Self::Six {
+        pic_size_in_map_units_minus1: data.exponential_golomb(),
+        id: (0..num_slice_groups_minus1).map(|_| data.bit()).collect(),
+      },
+      n => Self::Unknown(n),
     })
   }
 }
@@ -374,7 +472,7 @@ impl VuiParameters {
         let vcl_hrd_parameters_present_flag;
         Ok(Self {
           aspect_ratio_info_present_flag: {
-            aspect_ratio_info_present_flag = data.bit() != 0;
+            aspect_ratio_info_present_flag = data.bit_flag();
             aspect_ratio_info_present_flag
           },
           aspect_ratio_idc: {
@@ -386,25 +484,25 @@ impl VuiParameters {
           },
           sample_aspect_ratio: SampleAspectRatio::decode(aspect_ratio_idc, data)?,
           overscan_info_present_flag: {
-            overscan_info_present_flag = data.bit() != 0;
+            overscan_info_present_flag = data.bit_flag();
             overscan_info_present_flag
           },
-          overscan_appropriate_flag: overscan_info_present_flag && data.bit() != 0,
-          video_signal_type: VideoSignalType::decode(data.bit() != 0, data)?,
-          chroma_loc_info: ChromaLocInfo::decode(data.bit() != 0, data),
-          timing_info: TimingInfo::decode(data.bit() != 0, data)?,
+          overscan_appropriate_flag: overscan_info_present_flag && data.bit_flag(),
+          video_signal_type: VideoSignalType::decode(data.bit_flag(), data)?,
+          chroma_loc_info: ChromaLocInfo::decode(data.bit_flag(), data),
+          timing_info: TimingInfo::decode(data.bit_flag(), data)?,
           nal_hrd_parameters: {
-            nal_hrd_parameters_present_flag = data.bit() != 0;
+            nal_hrd_parameters_present_flag = data.bit_flag();
             HrdParameters::decode(nal_hrd_parameters_present_flag, data)
           },
           vcl_hrd_parameters: {
-            vcl_hrd_parameters_present_flag = data.bit() != 0;
+            vcl_hrd_parameters_present_flag = data.bit_flag();
             HrdParameters::decode(vcl_hrd_parameters_present_flag, data)
           },
           low_delay_hrd_flag: (nal_hrd_parameters_present_flag || vcl_hrd_parameters_present_flag)
-            && data.bit() != 0,
-          pic_struct_present_flag: data.bit() != 0,
-          bitstream_restriction: BitstreamRestriction::decode(data.bit() != 0, data),
+            && data.bit_flag(),
+          pic_struct_present_flag: data.bit_flag(),
+          bitstream_restriction: BitstreamRestriction::decode(data.bit_flag(), data),
         })
       })
       .transpose()
@@ -448,7 +546,7 @@ impl VideoSignalType {
         Ok(Self {
           video_format: data.bits(3),
           video_full_range_flag: data.bit(),
-          color_description: ColorDescription::decode(data.bit() != 0, data)?,
+          color_description: ColorDescription::decode(data.bit_flag(), data)?,
         })
       })
       .transpose()
@@ -580,7 +678,7 @@ pub struct BitstreamRestriction {
 impl BitstreamRestriction {
   pub fn decode(bitstream_restriction_flag: bool, data: &mut AtomBitData) -> Option<Self> {
     bitstream_restriction_flag.then(|| Self {
-      motion_vectors_over_pic_boundaries_flag: data.bit() != 0,
+      motion_vectors_over_pic_boundaries_flag: data.bit_flag(),
       max_bytes_per_pic_denom: data.exponential_golomb(),
       max_bits_per_mb_denom: data.exponential_golomb(),
       log2_max_mv_length_horizontal: data.exponential_golomb(),

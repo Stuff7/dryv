@@ -180,6 +180,10 @@ impl AtomBitData {
     self.bits_into(8)
   }
 
+  pub fn bit_flag(&mut self) -> bool {
+    self.bit() != 0
+  }
+
   pub fn bit(&mut self) -> u8 {
     let byte = self.data[self.offset];
     let bit = (byte >> (7 - self.bit_offset)) & 1;
