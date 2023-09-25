@@ -83,6 +83,9 @@ impl Video {
           .sample_description_table
           .get(0)
           .map(|sample| VideoCodec::from(sample.data_format));
+
+        let stbl = mdia.minf.decode(&mut decoder)?.stbl.decode(&mut decoder)?;
+        decoder.decode_sample(stbl)?;
       }
 
       log!(File@"TRAK.MDIA.MDHD {:#?}", mdia.mdhd);

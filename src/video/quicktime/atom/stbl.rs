@@ -1,3 +1,4 @@
+use std::fs::File;
 use std::marker::PhantomData;
 
 use super::*;
@@ -5,47 +6,63 @@ use crate::ascii::LogDisplay;
 use crate::byte::FromSlice;
 use crate::log;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct StblAtom {
   pub atom: Atom,
   pub stsd: EncodedAtom<StsdAtom>,
   pub stts: EncodedAtom<SttsAtom>,
-  pub stss: Option<EncodedAtom<StssAtom>>,
-  pub ctts: Option<EncodedAtom<CttsAtom>>,
+  pub ctts: Option<CttsAtom>,
   pub stsc: EncodedAtom<StscAtom>,
-  pub stsz: EncodedAtom<StszAtom>,
+  pub stss: Option<StssAtom>,
+  pub stsz: StszAtom,
   pub stco: StcoAtom,
-  pub sgpd: Option<EncodedAtom<SgpdAtom>>,
-  pub sbgp: Option<EncodedAtom<SbgpAtom>>,
+  pub sgpd: Option<SgpdAtom>,
+  pub sbgp: Option<SbgpAtom>,
 }
 
 impl AtomDecoder for StblAtom {
   const NAME: [u8; 4] = *b"stbl";
   fn decode_unchecked(atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
-    let mut stbl = Self {
-      atom,
-      ..Default::default()
-    };
-    let mut atoms = stbl.atom.atoms(decoder);
+    let mut stsd = EncodedAtom::Required;
+    let mut stts = EncodedAtom::Required;
+    let mut ctts = None;
+    let mut stsc = EncodedAtom::Required;
+    let mut stss = None;
+    let mut stsz = None;
+    let mut stco = None;
+    let mut sgpd = None;
+    let mut sbgp = None;
+    let mut atoms = atom.atoms(decoder);
     while let Some(atom) = atoms.next() {
       match atom {
         Ok(atom) => match &*atom.name {
-          b"stsd" => stbl.stsd = EncodedAtom::Encoded(atom),
-          b"stts" => stbl.stts = EncodedAtom::Encoded(atom),
-          b"stss" => stbl.stss = Some(EncodedAtom::Encoded(atom)),
-          b"ctts" => stbl.ctts = Some(EncodedAtom::Encoded(atom)),
-          b"stsc" => stbl.stsc = EncodedAtom::Encoded(atom),
-          b"stsz" => stbl.stsz = EncodedAtom::Encoded(atom),
-          b"stco" | b"co64" => stbl.stco = StcoAtom::decode_unchecked(atom, atoms.reader)?,
-          b"sgpd" => stbl.sgpd = Some(EncodedAtom::Encoded(atom)),
-          b"sbgp" => stbl.sbgp = Some(EncodedAtom::Encoded(atom)),
+          b"stsd" => stsd = EncodedAtom::Encoded(atom),
+          b"stts" => stts = EncodedAtom::Encoded(atom),
+          b"ctts" => ctts = Some(CttsAtom::decode_unchecked(atom, atoms.reader)?),
+          b"stsc" => stsc = EncodedAtom::Encoded(atom),
+          b"stss" => stss = Some(StssAtom::decode_unchecked(atom, atoms.reader)?),
+          b"stsz" => stsz = Some(StszAtom::decode_unchecked(atom, atoms.reader)?),
+          b"stco" | b"co64" => stco = Some(StcoAtom::decode_unchecked(atom, atoms.reader)?),
+          b"sgpd" => sgpd = Some(SgpdAtom::decode_unchecked(atom, atoms.reader)?),
+          b"sbgp" => sbgp = Some(SbgpAtom::decode_unchecked(atom, atoms.reader)?),
           _ => log!(warn@"#[stbl] Unused atom {atom:#?}"),
         },
         Err(e) => log!(err@"#[stbl] {e}"),
       }
     }
 
-    Ok(stbl)
+    Ok(Self {
+      atom,
+      stsd,
+      stts,
+      ctts,
+      stsc,
+      stss,
+      stsz: stsz.ok_or(AtomError::Required(StszAtom::NAME))?,
+      stco: stco.ok_or(AtomError::Required(StszAtom::NAME))?,
+      sgpd,
+      sbgp,
+    })
   }
 }
 
@@ -58,13 +75,13 @@ pub struct SttsAtom {
 }
 
 impl SttsAtom {
-  pub fn time_to_sample_table<'a>(&self, decoder: &'a mut Decoder) -> SampleTable<'a, SttsItem> {
-    SampleTable::new(
-      decoder,
+  pub fn time_to_sample_table(&self, decoder: &mut Decoder) -> AtomResult<SampleTable<SttsItem>> {
+    Ok(SampleTable::new(
+      decoder.file.try_clone()?,
       self.atom.offset + 8,
       self.atom.offset + self.atom.size as u64,
       8,
-    )
+    ))
   }
 }
 
@@ -113,13 +130,13 @@ pub struct StssAtom {
 }
 
 impl StssAtom {
-  pub fn sync_sample_table<'a>(&self, decoder: &'a mut Decoder) -> SampleTable<'a> {
-    SampleTable::new(
-      decoder,
+  pub fn sync_sample_table(&self, decoder: &mut Decoder) -> AtomResult<SampleTable> {
+    Ok(SampleTable::new(
+      decoder.file.try_clone()?,
       self.atom.offset + 8,
       self.atom.offset + self.atom.size as u64,
       4,
-    )
+    ))
   }
 }
 
@@ -166,13 +183,13 @@ pub struct StscAtom {
 }
 
 impl StscAtom {
-  pub fn sample_to_chunk_table<'a>(&self, decoder: &'a mut Decoder) -> SampleTable<'a, StscItem> {
-    SampleTable::new(
-      decoder,
+  pub fn sample_to_chunk_table(&self, decoder: &mut Decoder) -> AtomResult<SampleTable<StscItem>> {
+    Ok(SampleTable::new(
+      decoder.file.try_clone()?,
       self.atom.offset + 8,
       self.atom.offset + self.atom.size as u64,
       12,
-    )
+    ))
   }
 }
 
@@ -229,13 +246,13 @@ pub struct StszAtom {
 }
 
 impl StszAtom {
-  pub fn sample_size_table<'a>(&self, decoder: &'a mut Decoder) -> SampleTable<'a> {
-    SampleTable::new(
-      decoder,
+  pub fn sample_size_table(&self, decoder: &mut Decoder) -> AtomResult<SampleTable> {
+    Ok(SampleTable::new(
+      decoder.file.try_clone()?,
       self.atom.offset + 12,
       self.atom.offset + self.atom.size as u64,
       4,
-    )
+    ))
   }
 }
 
@@ -254,14 +271,14 @@ impl AtomDecoder for StszAtom {
 }
 
 impl StcoAtom {
-  pub fn chunk_offset_table<'a>(&self, decoder: &'a mut Decoder) -> SampleTable<'a> {
+  pub fn chunk_offset_table(&self, decoder: &mut Decoder) -> AtomResult<SampleTable> {
     let atom = &self.atom;
-    SampleTable::new(
-      decoder,
+    Ok(SampleTable::new(
+      decoder.file.try_clone()?,
       atom.offset + 8,
       atom.offset + atom.size as u64,
       if *atom.name == *b"stco" { 4 } else { 8 },
-    )
+    ))
   }
 }
 
@@ -347,8 +364,8 @@ impl AtomDecoder for SbgpAtom {
 }
 
 #[derive(Debug)]
-pub struct SampleTable<'a, T: FromSlice = u64> {
-  pub reader: &'a mut Decoder,
+pub struct SampleTable<T: FromSlice = u64> {
+  pub reader: File,
   pub buffer: Vec<u8>,
   pub buffer_size: usize,
   pub offset: usize,
@@ -358,9 +375,9 @@ pub struct SampleTable<'a, T: FromSlice = u64> {
   pub phantom: PhantomData<T>,
 }
 
-impl<'a, T: FromSlice> SampleTable<'a, T> {
+impl<T: FromSlice> SampleTable<T> {
   const MAX_SIZE: usize = 24_000;
-  pub fn new(reader: &'a mut Decoder, start: u64, end: u64, chunk_size: usize) -> Self {
+  pub fn new(reader: File, start: u64, end: u64, chunk_size: usize) -> Self {
     Self {
       reader,
       buffer: vec![0; std::cmp::min((end - start) as usize, Self::MAX_SIZE)],
@@ -374,7 +391,7 @@ impl<'a, T: FromSlice> SampleTable<'a, T> {
   }
 }
 
-impl<'a, T: FromSlice> Iterator for SampleTable<'a, T> {
+impl<T: FromSlice> Iterator for SampleTable<T> {
   type Item = T;
   fn next(&mut self) -> Option<Self::Item> {
     (self.start < self.end)
