@@ -1,4 +1,5 @@
 use super::*;
+use crate::byte::BitData;
 
 #[derive(Debug)]
 pub struct SequenceParameterSet {
@@ -39,7 +40,12 @@ pub struct SequenceParameterSet {
 }
 
 impl SequenceParameterSet {
-  pub fn decode(data: &mut AtomBitData) -> AtomResult<Self> {
+  pub fn decode(data: &mut BitData) -> AtomResult<Self> {
+    // use std::io::Write;
+    // let mut img = std::fs::File::create("temp/img.264").expect("IMG CREATION");
+    // let mut d = vec![0, 0, 1];
+    // d.extend_from_slice(&data[2..]);
+    // img.write_all(&d).expect("SAVING");
     let pic_order_cnt_type;
     let frame_mbs_only_flag;
     let profile_idc;
@@ -142,7 +148,7 @@ pub struct ScalingList<const S: usize> {
 }
 
 impl<const S: usize> ScalingList<S> {
-  pub fn new(bits: &mut AtomBitData) -> Self {
+  pub fn new(bits: &mut BitData) -> Self {
     let mut data = [0; S];
     let mut use_default_scaling_matrix_flag = false;
     let mut last_scale = 8;
@@ -176,7 +182,7 @@ pub struct FrameCropping {
 }
 
 impl FrameCropping {
-  pub fn decode(frame_cropping_flag: bool, data: &mut AtomBitData) -> Option<Self> {
+  pub fn decode(frame_cropping_flag: bool, data: &mut BitData) -> Option<Self> {
     frame_cropping_flag.then(|| Self {
       left: data.exponential_golomb(),
       right: data.exponential_golomb(),

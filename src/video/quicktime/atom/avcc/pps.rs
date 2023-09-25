@@ -1,4 +1,5 @@
 use super::*;
+use crate::byte::BitData;
 
 #[derive(Debug)]
 pub struct PictureParameterSet {
@@ -21,7 +22,7 @@ pub struct PictureParameterSet {
 }
 
 impl PictureParameterSet {
-  pub fn decode(data: &mut AtomBitData) -> AtomResult<Self> {
+  pub fn decode(data: &mut BitData) -> AtomResult<Self> {
     Ok(Self {
       length: data.next_into()?,
       id: data.exponential_golomb(),
@@ -66,7 +67,7 @@ pub enum SliceGroup {
 }
 
 impl SliceGroup {
-  pub fn new(num_slice_groups_minus1: u16, data: &mut AtomBitData) -> Option<Self> {
+  pub fn new(num_slice_groups_minus1: u16, data: &mut BitData) -> Option<Self> {
     (num_slice_groups_minus1 > 0).then(|| match data.exponential_golomb() {
       0 => Self::Interleaved {
         run_length_minus1: (0..num_slice_groups_minus1)

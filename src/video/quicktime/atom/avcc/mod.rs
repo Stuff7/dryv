@@ -6,6 +6,8 @@ pub use pps::*;
 pub use sps::*;
 pub use vui::*;
 
+use crate::byte::BitData;
+
 use super::*;
 
 #[derive(Debug)]
@@ -33,7 +35,7 @@ impl AvcCAtom {
       nal_length_size_minus_one: data.byte() & 0b0000_0011,
       num_sps: data.byte() & 0b0001_1111,
       sps: {
-        bit_data = (&data).into();
+        bit_data = BitData::new(&data);
         SequenceParameterSet::decode(&mut bit_data)?
       },
       num_pps: bit_data.byte()?,
