@@ -414,7 +414,7 @@ impl<T: FromSlice> Iterator for SampleTable<T> {
   }
 
   fn nth(&mut self, n: usize) -> Option<Self::Item> {
-    self.start += n as u64;
+    self.start += (n * self.chunk_size) as u64;
     self.next()
   }
 }
