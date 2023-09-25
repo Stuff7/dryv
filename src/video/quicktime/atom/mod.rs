@@ -1,3 +1,4 @@
+mod avcc;
 mod decoder;
 mod edts;
 mod iter;
@@ -11,6 +12,7 @@ mod stbl;
 mod stsd;
 mod trak;
 
+pub use avcc::*;
 pub use decoder::*;
 pub use edts::*;
 pub use iter::*;
