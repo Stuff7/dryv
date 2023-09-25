@@ -82,3 +82,43 @@ pub fn remove_emulation_prevention_bytes(input: &[u8]) -> Box<[u8]> {
     })
     .collect()
 }
+
+pub trait LossyFrom<T> {
+  fn lossy_from(value: T) -> Self;
+}
+
+impl LossyFrom<u128> for u8 {
+  fn lossy_from(value: u128) -> Self {
+    value as u8
+  }
+}
+
+impl LossyFrom<u128> for u16 {
+  fn lossy_from(value: u128) -> Self {
+    value as u16
+  }
+}
+
+impl LossyFrom<u128> for u32 {
+  fn lossy_from(value: u128) -> Self {
+    value as u32
+  }
+}
+
+impl LossyFrom<u128> for u64 {
+  fn lossy_from(value: u128) -> Self {
+    value as u64
+  }
+}
+
+impl LossyFrom<u128> for u128 {
+  fn lossy_from(value: u128) -> Self {
+    value
+  }
+}
+
+impl LossyFrom<u128> for usize {
+  fn lossy_from(value: u128) -> Self {
+    value as usize
+  }
+}

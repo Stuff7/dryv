@@ -1,4 +1,3 @@
-use super::*;
 use crate::byte::BitData;
 
 #[derive(Debug)]
@@ -22,9 +21,9 @@ pub struct PictureParameterSet {
 }
 
 impl PictureParameterSet {
-  pub fn decode(data: &mut BitData) -> AtomResult<Self> {
-    Ok(Self {
-      length: data.next_into()?,
+  pub fn decode(data: &mut BitData) -> Self {
+    Self {
+      length: data.next_into(),
       id: data.exponential_golomb(),
       seq_parameter_set_id: data.exponential_golomb(),
       entropy_coding_mode_flag: data.bit_flag(),
@@ -33,14 +32,14 @@ impl PictureParameterSet {
       num_ref_idx_10_default_active_minus1: data.exponential_golomb(),
       num_ref_idx_11_default_active_minus1: data.exponential_golomb(),
       weighted_pred_flag: data.bit_flag(),
-      weighted_bipred_idc: data.bits_into(2)?,
+      weighted_bipred_idc: data.bits_into(2),
       pic_init_qp_minus26: data.exponential_golomb(),
       pic_init_qs_minus26: data.exponential_golomb(),
       chroma_qp_index_offset: data.exponential_golomb(),
       deblocking_filter_control_present_flag: data.bit_flag(),
       constrained_intra_pred_flag: data.bit_flag(),
       redundant_pic_cnt_present_flag: data.bit_flag(),
-    })
+    }
   }
 }
 

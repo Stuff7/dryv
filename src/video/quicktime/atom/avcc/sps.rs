@@ -40,7 +40,7 @@ pub struct SequenceParameterSet {
 }
 
 impl SequenceParameterSet {
-  pub fn decode(data: &mut BitData) -> AtomResult<Self> {
+  pub fn decode(data: &mut BitData) -> Self {
     // use std::io::Write;
     // let mut img = std::fs::File::create("temp/img.264").expect("IMG CREATION");
     // let mut d = vec![0, 0, 1];
@@ -58,13 +58,13 @@ impl SequenceParameterSet {
     let mut seq_scaling_matrix_present_flag = 0;
     let mut scaling_list_4x4 = None;
     let mut scaling_list_16x16 = None;
-    Ok(Self {
-      length: data.next_into()?,
+    Self {
+      length: data.next_into(),
       forbidden_zero_bit: data.bit(),
       nal_ref_idc: data.bits(2),
       nal_unit_type: data.bits(5),
       profile_idc: {
-        profile_idc = data.byte()?;
+        profile_idc = data.byte();
         profile_idc
       },
       constraint_set0_flag: data.bit_flag(),
@@ -74,7 +74,7 @@ impl SequenceParameterSet {
       constraint_set4_flag: data.bit_flag(),
       constraint_set5_flag: data.bit_flag(),
       reserved_zero_2bits: data.bits(2) != 0,
-      level_idc: data.byte()?,
+      level_idc: data.byte(),
       id: data.exponential_golomb(),
       chroma_format_idc: {
         match profile_idc {
@@ -131,13 +131,13 @@ impl SequenceParameterSet {
       direct_8x8_inference_flag: data.bit_flag(),
       frame_cropping: FrameCropping::decode(data.bit_flag(), data),
       vui_parameters: {
-        let vui = VuiParameters::decode(data.bit_flag(), data)?;
+        let vui = VuiParameters::decode(data.bit_flag(), data);
         if data.bit() == 1 {
           data.skip_trailing_bits();
         }
         vui
       },
-    })
+    }
   }
 }
 

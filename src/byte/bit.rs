@@ -1,10 +1,5 @@
 use super::*;
-use std::{
-  num::TryFromIntError,
-  ops::{BitOr, Deref, Shl, Sub},
-};
-
-pub type BitResult<T = ()> = Result<T, TryFromIntError>;
+use std::ops::{BitOr, Deref, Shl, Sub};
 
 #[derive(Debug)]
 pub struct BitData {
@@ -39,7 +34,7 @@ impl BitData {
     self
   }
 
-  pub fn byte(&mut self) -> BitResult<u8> {
+  pub fn byte(&mut self) -> u8 {
     self.bits_into(8)
   }
 
@@ -61,13 +56,15 @@ impl BitData {
     bit
   }
 
-  pub fn bits_into<T: TryFrom<u128, Error = TryFromIntError>>(
-    &mut self,
-    bits: usize,
-  ) -> BitResult<T> {
+  pub fn bits_into<T: LossyFrom<u128>>(&mut self, bits: usize) -> T {
     let number = pack_bits(&self.data[self.offset..], self.bit_offset, bits);
     self.consume_bits(bits);
-    number.try_into()
+    T::lossy_from(number)
+  }
+
+  pub fn peek_bits(&mut self, n: u8) -> u8 {
+    let byte = self.data[self.offset];
+    byte << self.bit_offset >> (8 - n)
   }
 
   pub fn exponential_golomb<
@@ -84,7 +81,7 @@ impl BitData {
     x - T::from(1)
   }
 
-  pub fn next_into<T: TryFrom<u128, Error = TryFromIntError> + Sized>(&mut self) -> BitResult<T> {
+  pub fn next_into<T: LossyFrom<u128> + Sized>(&mut self) -> T {
     self.bits_into(std::mem::size_of::<T>() * 8)
   }
 

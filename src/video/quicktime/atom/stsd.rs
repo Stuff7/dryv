@@ -114,7 +114,7 @@ impl Avc1Atom {
               .transpose()
           })
           .ok_or(AtomError::Required(AvcCAtom::TYPE))??;
-        AvcCAtom::decode(AtomData::new(data, atom.offset))?
+        AvcCAtom::decode(AtomData::new(data, atom.offset))
       },
     })
   }

@@ -1,4 +1,3 @@
-use super::*;
 use crate::byte::BitData;
 
 #[derive(Debug)]
@@ -19,50 +18,47 @@ pub struct VuiParameters {
 }
 
 impl VuiParameters {
-  pub fn decode(vui_parameters_present_flag: bool, data: &mut BitData) -> AtomResult<Option<Self>> {
-    vui_parameters_present_flag
-      .then(|| -> AtomResult<Self> {
-        let aspect_ratio_info_present_flag;
-        let aspect_ratio_idc;
-        let overscan_info_present_flag;
-        let nal_hrd_parameters_present_flag;
-        let vcl_hrd_parameters_present_flag;
-        Ok(Self {
-          aspect_ratio_info_present_flag: {
-            aspect_ratio_info_present_flag = data.bit_flag();
-            aspect_ratio_info_present_flag
-          },
-          aspect_ratio_idc: {
-            aspect_ratio_idc = aspect_ratio_info_present_flag
-              .then(|| data.byte())
-              .transpose()?
-              .unwrap_or_default();
-            aspect_ratio_idc
-          },
-          sample_aspect_ratio: SampleAspectRatio::decode(aspect_ratio_idc, data)?,
-          overscan_info_present_flag: {
-            overscan_info_present_flag = data.bit_flag();
-            overscan_info_present_flag
-          },
-          overscan_appropriate_flag: overscan_info_present_flag && data.bit_flag(),
-          video_signal_type: VideoSignalType::decode(data.bit_flag(), data)?,
-          chroma_loc_info: ChromaLocInfo::decode(data.bit_flag(), data),
-          timing_info: TimingInfo::decode(data.bit_flag(), data)?,
-          nal_hrd_parameters: {
-            nal_hrd_parameters_present_flag = data.bit_flag();
-            HrdParameters::decode(nal_hrd_parameters_present_flag, data)
-          },
-          vcl_hrd_parameters: {
-            vcl_hrd_parameters_present_flag = data.bit_flag();
-            HrdParameters::decode(vcl_hrd_parameters_present_flag, data)
-          },
-          low_delay_hrd_flag: (nal_hrd_parameters_present_flag || vcl_hrd_parameters_present_flag)
-            && data.bit_flag(),
-          pic_struct_present_flag: data.bit_flag(),
-          bitstream_restriction: BitstreamRestriction::decode(data.bit_flag(), data),
-        })
-      })
-      .transpose()
+  pub fn decode(vui_parameters_present_flag: bool, data: &mut BitData) -> Option<Self> {
+    vui_parameters_present_flag.then(|| {
+      let aspect_ratio_info_present_flag;
+      let aspect_ratio_idc;
+      let overscan_info_present_flag;
+      let nal_hrd_parameters_present_flag;
+      let vcl_hrd_parameters_present_flag;
+      Self {
+        aspect_ratio_info_present_flag: {
+          aspect_ratio_info_present_flag = data.bit_flag();
+          aspect_ratio_info_present_flag
+        },
+        aspect_ratio_idc: {
+          aspect_ratio_idc = aspect_ratio_info_present_flag
+            .then(|| data.byte())
+            .unwrap_or_default();
+          aspect_ratio_idc
+        },
+        sample_aspect_ratio: SampleAspectRatio::decode(aspect_ratio_idc, data),
+        overscan_info_present_flag: {
+          overscan_info_present_flag = data.bit_flag();
+          overscan_info_present_flag
+        },
+        overscan_appropriate_flag: overscan_info_present_flag && data.bit_flag(),
+        video_signal_type: VideoSignalType::decode(data.bit_flag(), data),
+        chroma_loc_info: ChromaLocInfo::decode(data.bit_flag(), data),
+        timing_info: TimingInfo::decode(data.bit_flag(), data),
+        nal_hrd_parameters: {
+          nal_hrd_parameters_present_flag = data.bit_flag();
+          HrdParameters::decode(nal_hrd_parameters_present_flag, data)
+        },
+        vcl_hrd_parameters: {
+          vcl_hrd_parameters_present_flag = data.bit_flag();
+          HrdParameters::decode(vcl_hrd_parameters_present_flag, data)
+        },
+        low_delay_hrd_flag: (nal_hrd_parameters_present_flag || vcl_hrd_parameters_present_flag)
+          && data.bit_flag(),
+        pic_struct_present_flag: data.bit_flag(),
+        bitstream_restriction: BitstreamRestriction::decode(data.bit_flag(), data),
+      }
+    })
   }
 }
 
@@ -74,15 +70,11 @@ pub struct SampleAspectRatio {
 
 impl SampleAspectRatio {
   const EXTENDED_SAR: u8 = 255;
-  pub fn decode(aspect_ratio_idc: u8, data: &mut BitData) -> AtomResult<Option<Self>> {
-    (aspect_ratio_idc == Self::EXTENDED_SAR)
-      .then(|| -> AtomResult<Self> {
-        Ok(Self {
-          width: data.next_into()?,
-          height: data.next_into()?,
-        })
-      })
-      .transpose()
+  pub fn decode(aspect_ratio_idc: u8, data: &mut BitData) -> Option<Self> {
+    (aspect_ratio_idc == Self::EXTENDED_SAR).then(|| Self {
+      width: data.next_into(),
+      height: data.next_into(),
+    })
   }
 }
 
@@ -94,19 +86,12 @@ pub struct VideoSignalType {
 }
 
 impl VideoSignalType {
-  pub fn decode(
-    video_signal_type_present_flag: bool,
-    data: &mut BitData,
-  ) -> AtomResult<Option<Self>> {
-    video_signal_type_present_flag
-      .then(|| -> AtomResult<Self> {
-        Ok(Self {
-          video_format: data.bits(3),
-          video_full_range_flag: data.bit(),
-          color_description: ColorDescription::decode(data.bit_flag(), data)?,
-        })
-      })
-      .transpose()
+  pub fn decode(video_signal_type_present_flag: bool, data: &mut BitData) -> Option<Self> {
+    video_signal_type_present_flag.then(|| Self {
+      video_format: data.bits(3),
+      video_full_range_flag: data.bit(),
+      color_description: ColorDescription::decode(data.bit_flag(), data),
+    })
   }
 }
 
@@ -118,19 +103,12 @@ pub struct ColorDescription {
 }
 
 impl ColorDescription {
-  pub fn decode(
-    color_description_present_flag: bool,
-    data: &mut BitData,
-  ) -> AtomResult<Option<Self>> {
-    color_description_present_flag
-      .then(|| -> AtomResult<Self> {
-        Ok(Self {
-          primaries: data.byte()?,
-          transfer_characteristics: data.byte()?,
-          matrix_coefficients: data.byte()?,
-        })
-      })
-      .transpose()
+  pub fn decode(color_description_present_flag: bool, data: &mut BitData) -> Option<Self> {
+    color_description_present_flag.then(|| Self {
+      primaries: data.byte(),
+      transfer_characteristics: data.byte(),
+      matrix_coefficients: data.byte(),
+    })
   }
 }
 
@@ -157,16 +135,12 @@ pub struct TimingInfo {
 }
 
 impl TimingInfo {
-  pub fn decode(timing_info_present_flag: bool, data: &mut BitData) -> AtomResult<Option<Self>> {
-    timing_info_present_flag
-      .then(|| -> AtomResult<Self> {
-        Ok(Self {
-          num_units_in_tick: data.next_into()?,
-          time_scale: data.next_into()?,
-          fixed_frame_rate_flag: data.bit(),
-        })
-      })
-      .transpose()
+  pub fn decode(timing_info_present_flag: bool, data: &mut BitData) -> Option<Self> {
+    timing_info_present_flag.then(|| Self {
+      num_units_in_tick: data.next_into(),
+      time_scale: data.next_into(),
+      fixed_frame_rate_flag: data.bit(),
+    })
   }
 }
 
