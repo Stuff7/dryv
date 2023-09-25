@@ -128,7 +128,7 @@ impl<'a> NALUnitIter<'a> {
 impl<'a> Iterator for NALUnitIter<'a> {
   type Item = NALUnit<'a>;
   fn next(&mut self) -> Option<Self::Item> {
-    (self.offset < self.data.len()).then(|| {
+    (self.offset + self.nal_length_size < self.data.len()).then(|| {
       let s = self.offset;
       self.offset += self.nal_length_size;
       let mut nal_size = usize::from_be_bytes(padded_array_from_slice(&self.data[s..self.offset]));
