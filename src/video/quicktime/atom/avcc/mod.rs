@@ -6,9 +6,8 @@ pub use pps::*;
 pub use sps::*;
 pub use vui::*;
 
-use crate::byte::BitData;
-
 use super::*;
+use crate::byte::BitData;
 
 #[derive(Debug)]
 pub struct AvcCAtom {
