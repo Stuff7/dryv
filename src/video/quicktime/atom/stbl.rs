@@ -59,7 +59,7 @@ impl AtomDecoder for StblAtom {
       stsc,
       stss,
       stsz: stsz.ok_or(AtomError::Required(StszAtom::NAME))?,
-      stco: stco.ok_or(AtomError::Required(StszAtom::NAME))?,
+      stco: stco.ok_or(AtomError::Required(StcoAtom::NAME))?,
       sgpd,
       sbgp,
     })
