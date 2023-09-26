@@ -98,33 +98,36 @@ impl Decoder {
   }
 
   pub fn decode_sample(&mut self, stbl: &mut StblAtom) -> DecoderResult {
-    let sample = SampleIter::new(self, stbl)?.next().expect("NO SAMPLE");
-    if let Some(CodecData::Avc1(avc1)) = stbl
-      .stsd
-      .decode(self)?
-      .sample_description_table
-      .get(0)
-      .map(|d| &d.data)
-    {
-      let nal_length_size = avc1.avcc.nal_length_size_minus_one as usize + 1;
-      for nal in NALUnitIter::new(&sample, nal_length_size) {
-        print!("NAL: {:?} => ", nal.unit_type);
-        match nal.unit_type {
-          NALUnitType::Sei => {
-            let mut bit_data = BitData::new(nal.data);
-            let sei_msg = SeiMessage::decode(nal.size, &mut bit_data);
-            if let SeiPayload::UserDataUnregistered {
-              uuid_iso_iec_11578, ..
-            } = sei_msg.payload
-            {
-              println!("UUID: {:016x}", uuid_iso_iec_11578);
-            } else {
-              println!("{sei_msg:?}");
+    for (i, sample) in SampleIter::new(self, stbl)?.skip(250).take(52).enumerate() {
+      println!("SAMPLE #{} ({} bytes)", i + 1, sample.len());
+      if let Some(CodecData::Avc1(avc1)) = stbl
+        .stsd
+        .decode(self)?
+        .sample_description_table
+        .get(0)
+        .map(|d| &d.data)
+      {
+        let nal_length_size = avc1.avcc.nal_length_size_minus_one as usize + 1;
+        for nal in NALUnitIter::new(&sample, nal_length_size) {
+          print!("NAL [{:?}] ({} bytes) => ", nal.unit_type, nal.size);
+          match nal.unit_type {
+            NALUnitType::Sei => {
+              let mut bit_data = BitData::new(nal.data);
+              let sei_msg = SeiMessage::decode(nal.size, &mut bit_data);
+              if let SeiPayload::UserDataUnregistered {
+                uuid_iso_iec_11578, ..
+              } = sei_msg.payload
+              {
+                println!("UUID: {:016x}", uuid_iso_iec_11578);
+              } else {
+                println!("{sei_msg:?}");
+              }
             }
+            _ => println!("Unused"),
           }
-          _ => println!("Unused"),
         }
       }
+      println!();
     }
     Ok(())
   }
