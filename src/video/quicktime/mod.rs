@@ -162,17 +162,14 @@ impl Decoder {
     let minf = mdia.minf.decode(self)?;
     let stbl = minf.stbl.decode(self)?;
     log!(File@"STBL Size: {}", stbl.atom.size);
-    {
-      let stts = stbl.stts.decode(self)?;
-      log!(File@"ROOT.TRAK.MDIA.MINF.STBL.STTS {} {:#?}",
-        stts.number_of_entries,
-        stts.time_to_sample_table(self)?.take(10).collect::<Vec<_>>()
-      );
-    }
     stbl.stsd.decode(self)?;
     for stsd in &mut *stbl.stsd.decode(self)?.sample_description_table {
       log!(File@"ROOT.TRAK.MDIA.MINF.STBL.STSD {:#?}", stsd);
     }
+    log!(File@"ROOT.TRAK.MDIA.MINF.STBL.STTS {} {:#?}",
+      stbl.stts.number_of_entries,
+      stbl.stts.time_to_sample_table(self)?.take(10).collect::<Vec<_>>()
+    );
     log!(File@"ROOT.TRAK.MDIA.MINF.STBL.STCO {} {:#?}",
       stbl.stco.number_of_entries,
       stbl.stco.chunk_offset_table(self)?.take(10).collect::<Vec<_>>()

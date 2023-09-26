@@ -10,7 +10,7 @@ use crate::log;
 pub struct StblAtom {
   pub atom: Atom,
   pub stsd: EncodedAtom<StsdAtom>,
-  pub stts: EncodedAtom<SttsAtom>,
+  pub stts: SttsAtom,
   pub ctts: Option<CttsAtom>,
   pub stsc: EncodedAtom<StscAtom>,
   pub stss: Option<StssAtom>,
@@ -24,7 +24,7 @@ impl AtomDecoder for StblAtom {
   const NAME: [u8; 4] = *b"stbl";
   fn decode_unchecked(atom: Atom, decoder: &mut Decoder) -> AtomResult<Self> {
     let mut stsd = EncodedAtom::Required;
-    let mut stts = EncodedAtom::Required;
+    let mut stts = None;
     let mut ctts = None;
     let mut stsc = EncodedAtom::Required;
     let mut stss = None;
@@ -37,7 +37,7 @@ impl AtomDecoder for StblAtom {
       match atom {
         Ok(atom) => match &*atom.name {
           b"stsd" => stsd = EncodedAtom::Encoded(atom),
-          b"stts" => stts = EncodedAtom::Encoded(atom),
+          b"stts" => stts = Some(SttsAtom::decode_unchecked(atom, atoms.reader)?),
           b"ctts" => ctts = Some(CttsAtom::decode_unchecked(atom, atoms.reader)?),
           b"stsc" => stsc = EncodedAtom::Encoded(atom),
           b"stss" => stss = Some(StssAtom::decode_unchecked(atom, atoms.reader)?),
@@ -54,7 +54,7 @@ impl AtomDecoder for StblAtom {
     Ok(Self {
       atom,
       stsd,
-      stts,
+      stts: stts.ok_or(AtomError::Required(SttsAtom::NAME))?,
       ctts,
       stsc,
       stss,
