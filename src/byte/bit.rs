@@ -1,5 +1,5 @@
 use super::*;
-use std::ops::{BitOr, Deref, Shl, Sub};
+use std::ops::{Add, BitAnd, BitOr, Deref, Neg, Shl, Shr, Sub};
 
 #[derive(Debug)]
 pub struct BitData {
@@ -68,7 +68,7 @@ impl BitData {
   }
 
   pub fn exponential_golomb<
-    T: Shl<u8, Output = T> + BitOr<T, Output = T> + Sub<T, Output = T> + From<u8>,
+    T: Shl<u8, Output = T> + BitOr<Output = T> + Sub<Output = T> + From<u8>,
   >(
     &mut self,
   ) -> T {
@@ -79,6 +79,30 @@ impl BitData {
       .fold(T::from(1), |x, bit| x << 1 | T::from(bit));
     self.consume_bits(k + k + 1);
     x - T::from(1)
+  }
+
+  pub fn signed_exponential_golomb<
+    T: Shl<u8, Output = T>
+      + Shr<u8, Output = T>
+      + BitAnd<Output = T>
+      + BitOr<Output = T>
+      + Add<Output = T>
+      + Sub<Output = T>
+      + From<u8>
+      + Copy
+      + PartialEq
+      + Neg<Output = T>,
+  >(
+    &mut self,
+  ) -> T {
+    let n: T = self.exponential_golomb();
+    let one = T::from(1);
+    let signed = (n >> 1) + (n & one);
+    if ((n + one) & one) == one {
+      -signed
+    } else {
+      signed
+    }
   }
 
   pub fn next_into<T: LossyFrom<u128> + Sized>(&mut self) -> T {

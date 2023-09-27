@@ -155,7 +155,7 @@ impl<const S: usize> ScalingList<S> {
     let mut next_scale = 8;
     for (i, scale) in data.iter_mut().enumerate() {
       if next_scale != 0 {
-        let delta_scale: i16 = bits.exponential_golomb();
+        let delta_scale: i16 = bits.signed_exponential_golomb();
         next_scale = (last_scale + delta_scale + 256) % 256;
         use_default_scaling_matrix_flag = i == 0 && next_scale == 0;
       }

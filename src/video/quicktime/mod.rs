@@ -98,7 +98,7 @@ impl Decoder {
   }
 
   pub fn decode_sample(&mut self, stbl: &mut StblAtom) -> DecoderResult {
-    for (i, sample) in SampleIter::new(self, stbl)?.skip(250).take(52).enumerate() {
+    for (i, sample) in SampleIter::new(self, stbl)?.take(52).enumerate() {
       println!("SAMPLE #{} ({} bytes)", i + 1, sample.len());
       if let Some(CodecData::Avc1(avc1)) = stbl
         .stsd
@@ -115,13 +115,20 @@ impl Decoder {
               let mut bit_data = BitData::new(nal.data);
               let sei_msg = SeiMessage::decode(nal.size, &mut bit_data);
               if let SeiPayload::UserDataUnregistered {
-                uuid_iso_iec_11578, ..
+                uuid_iso_iec_11578,
+                data,
               } = sei_msg.payload
               {
-                println!("UUID: {:016x}", uuid_iso_iec_11578);
+                log!(File@"SEI.UUID: \"{:016x}\"\nSEI.DATA: \"{}\"", uuid_iso_iec_11578, String::from_utf8_lossy(&data));
               } else {
                 println!("{sei_msg:?}");
               }
+            }
+            NALUnitType::IDRPicture => {
+              use std::io::Write;
+              let name = format!("temp/idr-{i}.h264");
+              let mut img = std::fs::File::create(name).expect("IDR CREATION");
+              img.write_all(nal.data).expect("IDR SAVING");
             }
             _ => println!("Unused"),
           }
