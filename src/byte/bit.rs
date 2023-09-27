@@ -26,6 +26,10 @@ impl Deref for BitData {
 }
 
 impl BitData {
+  pub fn has_bits(&self) -> bool {
+    self.bit_offset < 8 || self.offset < self.data.len()
+  }
+
   pub fn skip_trailing_bits(&mut self) -> &mut Self {
     if self.bit_offset != 0 {
       self.bit_offset = 0;

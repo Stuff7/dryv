@@ -22,8 +22,8 @@ pub struct SliceHeader {
   pub redundant_pic_cnt: Option<u16>,
   pub direct_spatial_mv_pref_flag: bool,
   pub num_ref_idx_active_override_flag: bool,
-  pub num_ref_idx_10_active_minus1: Option<u16>,
-  pub num_ref_idx_11_active_minus1: Option<u16>,
+  pub num_ref_idx_l0_active_minus1: Option<u16>,
+  pub num_ref_idx_l1_active_minus1: Option<u16>,
   pub ref_pic_list_mvc_modification: Option<RefPicListMvcModification>,
   pub ref_pic_list_modification: Option<RefPicListModification>,
   pub pred_weight_table: Option<PredWeightTable>,
@@ -91,9 +91,9 @@ impl SliceHeader {
         };
         num_ref_idx_active_override_flag
       },
-      num_ref_idx_10_active_minus1: num_ref_idx_active_override_flag
+      num_ref_idx_l0_active_minus1: num_ref_idx_active_override_flag
         .then(|| data.exponential_golomb()),
-      num_ref_idx_11_active_minus1: (num_ref_idx_active_override_flag
+      num_ref_idx_l1_active_minus1: (num_ref_idx_active_override_flag
         && matches!(slice_type, SliceType::B))
       .then(|| data.exponential_golomb()),
       ref_pic_list_mvc_modification: RefPicListMvcModification::new(data, &nal.unit_type),
@@ -156,8 +156,8 @@ impl SliceType {
 
 #[derive(Debug)]
 pub struct RefPicListModification {
-  pub ref_pic_list_modification_flag_10: bool,
-  pub ref_pic_list_modification_flag_11: bool,
+  pub ref_pic_list_modification_flag_l0: bool,
+  pub ref_pic_list_modification_flag_l1: bool,
   pub modification_of_pic_nums_idc: Option<u16>,
   pub abs_diff_pic_num_minus1: Option<u16>,
   pub long_term_pic_num: Option<u16>,
@@ -171,17 +171,17 @@ impl RefPicListModification {
     ))
     .then(|| {
       let mut list = Self {
-        ref_pic_list_modification_flag_10: false,
-        ref_pic_list_modification_flag_11: false,
+        ref_pic_list_modification_flag_l0: false,
+        ref_pic_list_modification_flag_l1: false,
         modification_of_pic_nums_idc: None,
         abs_diff_pic_num_minus1: None,
         long_term_pic_num: None,
       };
       if !matches!(slice_type, SliceType::I | SliceType::SI) {
-        list.ref_pic_list_modification_flag_10 = list.create(data)
+        list.ref_pic_list_modification_flag_l0 = list.create(data)
       }
       if matches!(slice_type, SliceType::B) {
-        list.ref_pic_list_modification_flag_11 = list.create(data)
+        list.ref_pic_list_modification_flag_l1 = list.create(data)
       }
       list
     })

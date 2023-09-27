@@ -26,6 +26,7 @@ impl AvcCAtom {
   pub const TYPE: [u8; 4] = *b"avcC";
   pub fn decode(mut data: AtomData) -> Self {
     let mut bit_data;
+    let chroma_format_idc;
     Self {
       configuration_version: data.byte(),
       profile_indication: data.byte(),
@@ -35,10 +36,12 @@ impl AvcCAtom {
       num_sps: data.byte() & 0b0001_1111,
       sps: {
         bit_data = BitData::new(&data);
-        SequenceParameterSet::decode(&mut bit_data)
+        let sps = SequenceParameterSet::decode(&mut bit_data);
+        chroma_format_idc = sps.chroma_format_idc;
+        sps
       },
       num_pps: bit_data.byte(),
-      pps: PictureParameterSet::decode(&mut bit_data),
+      pps: PictureParameterSet::decode(&mut bit_data, chroma_format_idc),
     }
   }
 }

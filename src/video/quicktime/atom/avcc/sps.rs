@@ -22,9 +22,7 @@ pub struct SequenceParameterSet {
   pub bit_depth_luma_minus8: u16,
   pub bit_depth_chroma_minus8: u16,
   pub qpprime_y_zero_transform_bypass_flag: u8,
-  pub seq_scaling_matrix_present_flag: u8,
-  pub scaling_list_4x4: Option<Box<[ScalingList<16>]>>,
-  pub scaling_list_16x16: Option<Box<[ScalingList<64>]>>,
+  pub seq_scaling_matrix: Option<ScalingLists>,
   pub log2_max_frame_num_minus4: u16,
   pub pic_order_cnt_type: u16,
   pub log2_max_pic_order_cnt_lsb_minus4: Option<u16>,
@@ -56,9 +54,6 @@ impl SequenceParameterSet {
     let mut bit_depth_luma_minus8 = 0;
     let mut bit_depth_chroma_minus8 = 0;
     let mut qpprime_y_zero_transform_bypass_flag = 0;
-    let mut seq_scaling_matrix_present_flag = 0;
-    let mut scaling_list_4x4 = None;
-    let mut scaling_list_16x16 = None;
     Self {
       length: data.next_into(),
       forbidden_zero_bit: data.bit(),
@@ -87,20 +82,6 @@ impl SequenceParameterSet {
             bit_depth_luma_minus8 = data.exponential_golomb();
             bit_depth_chroma_minus8 = data.exponential_golomb();
             qpprime_y_zero_transform_bypass_flag = data.bit();
-            seq_scaling_matrix_present_flag = data.bit();
-            if seq_scaling_matrix_present_flag == 1 {
-              let size = if chroma_format_idc != 3 { 8 } else { 12 };
-              scaling_list_4x4 = Some(
-                (0..6)
-                  .filter_map(|_| (data.bit() == 1).then(|| ScalingList::new(data)))
-                  .collect(),
-              );
-              scaling_list_16x16 = Some(
-                (6..size)
-                  .filter_map(|_| (data.bit() == 1).then(|| ScalingList::new(data)))
-                  .collect(),
-              );
-            }
           }
           _ => (),
         }
@@ -110,9 +91,7 @@ impl SequenceParameterSet {
       bit_depth_luma_minus8,
       bit_depth_chroma_minus8,
       qpprime_y_zero_transform_bypass_flag,
-      seq_scaling_matrix_present_flag,
-      scaling_list_4x4,
-      scaling_list_16x16,
+      seq_scaling_matrix: ScalingLists::new(data, if chroma_format_idc != 3 { 8 } else { 12 }),
       log2_max_frame_num_minus4: data.exponential_golomb(),
       pic_order_cnt_type: {
         pic_order_cnt_type = data.exponential_golomb();
@@ -201,6 +180,25 @@ impl<const S: usize> ScalingList<S> {
       data,
       use_default_scaling_matrix_flag,
     }
+  }
+}
+
+#[derive(Debug)]
+pub struct ScalingLists {
+  pub scaling_list_4x4: Box<[ScalingList<16>]>,
+  pub scaling_list_8x8: Box<[ScalingList<64>]>,
+}
+
+impl ScalingLists {
+  pub fn new(data: &mut BitData, size: u8) -> Option<Self> {
+    data.bit_flag().then(|| Self {
+      scaling_list_4x4: (0..6)
+        .filter_map(|_| data.bit_flag().then(|| ScalingList::new(data)))
+        .collect(),
+      scaling_list_8x8: (6..size)
+        .filter_map(|_| data.bit_flag().then(|| ScalingList::new(data)))
+        .collect(),
+    })
   }
 }
 
