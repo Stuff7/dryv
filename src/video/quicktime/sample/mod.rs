@@ -1,9 +1,11 @@
 mod nal;
+mod slice;
 
 pub use nal::*;
+pub use slice::*;
 
 use super::*;
-use std::fs::File;
+use std::{fs::File, ops::Deref};
 
 #[derive(Debug, Error)]
 pub enum SampleError {
@@ -16,6 +18,23 @@ pub enum SampleError {
 }
 
 pub type SampleResult<T = ()> = Result<T, SampleError>;
+
+pub struct Sample {
+  data: Box<[u8]>,
+}
+
+impl Sample {
+  pub fn units(&self, nal_length_size: usize) -> NALUnitIter {
+    NALUnitIter::new(&self.data, nal_length_size)
+  }
+}
+
+impl Deref for Sample {
+  type Target = Box<[u8]>;
+  fn deref(&self) -> &Self::Target {
+    &self.data
+  }
+}
 
 #[derive(Debug)]
 pub struct SampleIter {
@@ -49,7 +68,7 @@ impl SampleIter {
 }
 
 impl Iterator for SampleIter {
-  type Item = Box<[u8]>;
+  type Item = Sample;
   fn next(&mut self) -> Option<Self::Item> {
     if self.sample_offset >= self.samples_in_chunk {
       self.sample_offset = 0;
@@ -80,6 +99,8 @@ impl Iterator for SampleIter {
     let mut buffer = vec![0; sample_size as usize];
     self.reader.read_exact(&mut buffer).ok()?;
 
-    Some(buffer.into_boxed_slice())
+    Some(Sample {
+      data: buffer.into_boxed_slice(),
+    })
   }
 }

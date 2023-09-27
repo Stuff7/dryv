@@ -18,7 +18,7 @@ pub struct SequenceParameterSet {
   pub level_idc: u8,
   pub id: u16,
   pub chroma_format_idc: u16,
-  pub separate_color_plane_flag: u8,
+  pub separate_color_plane_flag: bool,
   pub bit_depth_luma_minus8: u16,
   pub bit_depth_chroma_minus8: u16,
   pub qpprime_y_zero_transform_bypass_flag: u8,
@@ -28,6 +28,7 @@ pub struct SequenceParameterSet {
   pub log2_max_frame_num_minus4: u16,
   pub pic_order_cnt_type: u16,
   pub log2_max_pic_order_cnt_lsb_minus4: Option<u16>,
+  pub pic_order_cnt_type_one: Option<PicOrderCntTypeOne>,
   pub max_num_ref_frames: u16,
   pub gaps_in_frame_num_value_allowed_flag: bool,
   pub pic_width_in_mbs_minus1: u16,
@@ -51,7 +52,7 @@ impl SequenceParameterSet {
     let profile_idc;
 
     let mut chroma_format_idc = 1;
-    let mut separate_color_plane_flag = 0;
+    let mut separate_color_plane_flag = false;
     let mut bit_depth_luma_minus8 = 0;
     let mut bit_depth_chroma_minus8 = 0;
     let mut qpprime_y_zero_transform_bypass_flag = 0;
@@ -81,7 +82,7 @@ impl SequenceParameterSet {
           100 | 110 | 122 | 244 | 44 | 83 | 86 | 118 | 128 | 138 | 139 | 134 | 135 => {
             chroma_format_idc = data.exponential_golomb();
             if chroma_format_idc == 3 {
-              separate_color_plane_flag = data.bit();
+              separate_color_plane_flag = data.bit_flag();
             }
             bit_depth_luma_minus8 = data.exponential_golomb();
             bit_depth_chroma_minus8 = data.exponential_golomb();
@@ -119,6 +120,7 @@ impl SequenceParameterSet {
       },
       log2_max_pic_order_cnt_lsb_minus4: (pic_order_cnt_type == 0)
         .then(|| data.exponential_golomb()),
+      pic_order_cnt_type_one: PicOrderCntTypeOne::new(data, pic_order_cnt_type),
       max_num_ref_frames: data.exponential_golomb(),
       gaps_in_frame_num_value_allowed_flag: data.bit_flag(),
       pic_width_in_mbs_minus1: data.exponential_golomb(),
@@ -138,6 +140,35 @@ impl SequenceParameterSet {
         vui
       },
     }
+  }
+}
+
+#[derive(Debug)]
+pub struct PicOrderCntTypeOne {
+  pub delta_pic_order_always_zero_flag: bool,
+  pub offset_for_non_ref_pic: i16,
+  pub offset_for_top_to_bottom_field: i16,
+  pub num_ref_frames_in_pic_order_cnt_cycle: u16,
+  pub offset_for_ref_frame: Box<[i16]>,
+}
+
+impl PicOrderCntTypeOne {
+  pub fn new(data: &mut BitData, pic_order_cnt_type: u16) -> Option<Self> {
+    (pic_order_cnt_type == 1).then(|| {
+      let num_ref_frames_in_pic_order_cnt_cycle;
+      Self {
+        delta_pic_order_always_zero_flag: data.bit_flag(),
+        offset_for_non_ref_pic: data.signed_exponential_golomb(),
+        offset_for_top_to_bottom_field: data.signed_exponential_golomb(),
+        num_ref_frames_in_pic_order_cnt_cycle: {
+          num_ref_frames_in_pic_order_cnt_cycle = data.exponential_golomb();
+          num_ref_frames_in_pic_order_cnt_cycle
+        },
+        offset_for_ref_frame: (0..num_ref_frames_in_pic_order_cnt_cycle)
+          .map(|_| data.signed_exponential_golomb())
+          .collect(),
+      }
+    })
   }
 }
 

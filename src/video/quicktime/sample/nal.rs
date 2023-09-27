@@ -48,7 +48,7 @@ impl SeiPayload {
   }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum NALUnitType {
   Unspecified,
   NonIDRPicture,
@@ -99,10 +99,15 @@ impl NALUnitType {
       _ => Self::Unspecified,
     }
   }
+
+  pub fn is_idr(&self) -> bool {
+    matches!(self, NALUnitType::IDRPicture)
+  }
 }
 
 #[derive(Debug)]
 pub struct NALUnit<'a> {
+  pub idc: u8,
   pub unit_type: NALUnitType,
   pub size: usize,
   pub data: &'a [u8],
@@ -133,8 +138,10 @@ impl<'a> Iterator for NALUnitIter<'a> {
       self.offset += self.nal_length_size;
       let mut nal_size = usize::from_be_bytes(padded_array_from_slice(&self.data[s..self.offset]));
       nal_size >>= (std::mem::size_of::<usize>() - self.nal_length_size) * 8;
+      let idc = self.data[self.offset] & 0x60 >> 5;
       let nal_type = self.data[self.offset] & 0x1F;
       let nal_unit = NALUnit {
+        idc,
         unit_type: NALUnitType::new(nal_type),
         size: nal_size,
         data: &self.data[self.offset + 1..],

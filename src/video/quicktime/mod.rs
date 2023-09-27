@@ -21,6 +21,8 @@ pub enum DecoderError {
   Unsupported(Str<4>),
   #[error(transparent)]
   Sample(#[from] SampleError),
+  #[error("Missing decoder config")]
+  MissingConfig,
 }
 
 pub type DecoderResult<T = ()> = Result<T, DecoderError>;
@@ -80,61 +82,50 @@ impl Decoder {
     Ok(root)
   }
 
-  pub fn decode_moov_meta<'a>(
-    &mut self,
-    root: &'a mut RootAtom,
-  ) -> DecoderResult<Option<&'a mut MetaAtom>> {
-    log!(File@"{:-^100}", "meta");
-    root
-      .moov
-      .meta
-      .as_mut()
-      .map(|meta| {
-        log!(File@"MOOV.META TAGS {:#?}", meta.tags());
-        log!(File@"MOOV.META {:#?}", meta);
-        Ok(meta)
-      })
-      .transpose()
-  }
-
   pub fn decode_sample(&mut self, stbl: &mut StblAtom) -> DecoderResult {
-    for (i, sample) in SampleIter::new(self, stbl)?.take(52).enumerate() {
-      println!("SAMPLE #{} ({} bytes)", i + 1, sample.len());
-      if let Some(CodecData::Avc1(avc1)) = stbl
-        .stsd
-        .decode(self)?
-        .sample_description_table
-        .get(0)
-        .map(|d| &d.data)
-      {
-        let nal_length_size = avc1.avcc.nal_length_size_minus_one as usize + 1;
-        for nal in NALUnitIter::new(&sample, nal_length_size) {
-          print!("NAL [{:?}] ({} bytes) => ", nal.unit_type, nal.size);
-          match nal.unit_type {
-            NALUnitType::Sei => {
-              let mut bit_data = BitData::new(nal.data);
-              let sei_msg = SeiMessage::decode(nal.size, &mut bit_data);
-              if let SeiPayload::UserDataUnregistered {
-                uuid_iso_iec_11578,
-                data,
-              } = sei_msg.payload
-              {
-                log!(File@"SEI.UUID: \"{:016x}\"\nSEI.DATA: \"{}\"", uuid_iso_iec_11578, String::from_utf8_lossy(&data));
-              } else {
-                println!("{sei_msg:?}");
-              }
+    let samples = SampleIter::new(self, stbl)?.take(52).enumerate();
+    let Some(CodecData::Avc1(avc1)) = stbl
+      .stsd
+      .decode(self)?
+      .sample_description_table
+      .get(0)
+      .map(|d| &d.data) else {
+        return Err(DecoderError::MissingConfig)
+      };
+    let nal_length_size = avc1.avcc.nal_length_size_minus_one as usize + 1;
+
+    for (i, sample) in samples {
+      log!(File@"{:-^100}", format!("SAMPLE #{} ({} bytes)", i + 1, sample.len()));
+      for nal in sample.units(nal_length_size) {
+        let msg = format!(
+          "[{:?} idc={}] ({} bytes) => ",
+          nal.unit_type, nal.idc, nal.size
+        );
+        match nal.unit_type {
+          NALUnitType::Sei => {
+            let mut bit_data = BitData::new(nal.data);
+            let sei_msg = SeiMessage::decode(nal.size, &mut bit_data);
+            if let SeiPayload::UserDataUnregistered {
+              uuid_iso_iec_11578,
+              data,
+            } = sei_msg.payload
+            {
+              log!(File@"{msg}SEI: (\"{:016x}\", \"{}\")", uuid_iso_iec_11578, String::from_utf8_lossy(&data));
+            } else {
+              log!(File@"{msg}{sei_msg:?}");
             }
-            NALUnitType::IDRPicture => {
-              use std::io::Write;
-              let name = format!("temp/idr-{i}.h264");
-              let mut img = std::fs::File::create(name).expect("IDR CREATION");
-              img.write_all(nal.data).expect("IDR SAVING");
-            }
-            _ => println!("Unused"),
           }
+          NALUnitType::IDRPicture => {
+            let mut bit_data = BitData::new(nal.data);
+            log!(File@"{msg}{:#?}", Slice::new(&mut bit_data, &nal, &avc1.avcc.sps, &avc1.avcc.pps));
+            use std::io::Write;
+            let name = format!("temp/idr-{i}.h264");
+            let mut img = std::fs::File::create(name).expect("IDR CREATION");
+            img.write_all(nal.data).expect("IDR SAVING");
+          }
+          _ => log!(File@"{msg} [UNUSED]"),
         }
       }
-      println!();
     }
     Ok(())
   }
@@ -175,29 +166,29 @@ impl Decoder {
     }
     log!(File@"ROOT.TRAK.MDIA.MINF.STBL.STTS {} {:#?}",
       stbl.stts.number_of_entries,
-      stbl.stts.time_to_sample_table(self)?.take(10).collect::<Vec<_>>()
+      stbl.stts.time_to_sample_table(self)?.take(4).collect::<Vec<_>>()
     );
     log!(File@"ROOT.TRAK.MDIA.MINF.STBL.STCO {} {:#?}",
       stbl.stco.number_of_entries,
-      stbl.stco.chunk_offset_table(self)?.take(10).collect::<Vec<_>>()
+      stbl.stco.chunk_offset_table(self)?.take(4).collect::<Vec<_>>()
     );
     log!(File@"ROOT.TRAK.MDIA.MINF.STBL.STSZ {} {} {:#?}",
       stbl.stsz.atom.size,
       stbl.stsz.number_of_entries,
-      stbl.stsz.sample_size_table(self)?.take(10).collect::<Vec<_>>()
+      stbl.stsz.sample_size_table(self)?.take(4).collect::<Vec<_>>()
     );
     {
       let stsc = stbl.stsc.decode(self)?;
       log!(File@"ROOT.TRAK.MDIA.MINF.STBL.STSC {} {:#?}",
         stsc.number_of_entries,
-        stsc.sample_to_chunk_table(self)?.take(10).collect::<Vec<_>>(),
+        stsc.sample_to_chunk_table(self)?.take(4).collect::<Vec<_>>(),
       );
     }
     if let Some(stss) = &mut stbl.stss {
       let stss = stss;
       log!(File@"ROOT.TRAK.MDIA.MINF.STBL.STSS {} {:#?}",
         stss.number_of_entries,
-        stss.sync_sample_table(self)?.take(10).collect::<Vec<_>>()
+        stss.sync_sample_table(self)?.take(4).collect::<Vec<_>>()
       );
     }
     Ok(stbl)
