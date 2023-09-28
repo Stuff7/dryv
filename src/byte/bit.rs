@@ -130,7 +130,7 @@ impl BitData {
 
   fn slice(&mut self, bit_size: usize) -> Box<[u8]> {
     let size = (bit_size + 7) >> 3;
-    let size = self.offset + size;
+    let size = self.offset + size + if bit_size > 8 - self.bit_offset { 1 } else { 0 };
     if self.offset > 1 {
       let mut skipped = 0;
       return (self.offset..size)
