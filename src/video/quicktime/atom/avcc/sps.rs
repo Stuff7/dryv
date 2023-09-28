@@ -21,7 +21,7 @@ pub struct SequenceParameterSet {
   pub separate_color_plane_flag: bool,
   pub bit_depth_luma_minus8: u16,
   pub bit_depth_chroma_minus8: u16,
-  pub qpprime_y_zero_transform_bypass_flag: u8,
+  pub qpprime_y_zero_transform_bypass_flag: bool,
   pub seq_scaling_matrix: Option<ScalingLists>,
   pub log2_max_frame_num_minus4: u16,
   pub pic_order_cnt_type: u16,
@@ -53,7 +53,7 @@ impl SequenceParameterSet {
     let mut separate_color_plane_flag = false;
     let mut bit_depth_luma_minus8 = 0;
     let mut bit_depth_chroma_minus8 = 0;
-    let mut qpprime_y_zero_transform_bypass_flag = 0;
+    let mut qpprime_y_zero_transform_bypass_flag = false;
     Self {
       length: data.next_into(),
       forbidden_zero_bit: data.bit(),
@@ -81,7 +81,7 @@ impl SequenceParameterSet {
             }
             bit_depth_luma_minus8 = data.exponential_golomb();
             bit_depth_chroma_minus8 = data.exponential_golomb();
-            qpprime_y_zero_transform_bypass_flag = data.bit();
+            qpprime_y_zero_transform_bypass_flag = data.bit_flag();
           }
           _ => (),
         }

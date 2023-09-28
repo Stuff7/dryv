@@ -81,7 +81,7 @@ impl SampleAspectRatio {
 #[derive(Debug)]
 pub struct VideoSignalType {
   pub video_format: u8,
-  pub video_full_range_flag: u8,
+  pub video_full_range_flag: bool,
   pub color_description: Option<ColorDescription>,
 }
 
@@ -89,7 +89,7 @@ impl VideoSignalType {
   pub fn decode(video_signal_type_present_flag: bool, data: &mut BitData) -> Option<Self> {
     video_signal_type_present_flag.then(|| Self {
       video_format: data.bits(3),
-      video_full_range_flag: data.bit(),
+      video_full_range_flag: data.bit_flag(),
       color_description: ColorDescription::decode(data.bit_flag(), data),
     })
   }
@@ -131,7 +131,7 @@ impl ChromaLocInfo {
 pub struct TimingInfo {
   pub num_units_in_tick: u32,
   pub time_scale: u32,
-  pub fixed_frame_rate_flag: u8,
+  pub fixed_frame_rate_flag: bool,
 }
 
 impl TimingInfo {
@@ -139,7 +139,7 @@ impl TimingInfo {
     timing_info_present_flag.then(|| Self {
       num_units_in_tick: data.next_into(),
       time_scale: data.next_into(),
-      fixed_frame_rate_flag: data.bit(),
+      fixed_frame_rate_flag: data.bit_flag(),
     })
   }
 }
@@ -151,7 +151,7 @@ pub struct HrdParameters {
   pub cpb_size_scale: u8,
   pub bit_rate_value_minus1: Box<[u16]>,
   pub cpb_size_value_minus1: Box<[u16]>,
-  pub cbr_flag: Box<[u8]>,
+  pub cbr_flag: Box<[bool]>,
   pub initial_cpb_removal_delay_length_minus1: u8,
   pub cpb_removal_delay_length_minus1: u8,
   pub dpb_output_delay_length_minus1: u8,
@@ -176,7 +176,7 @@ impl HrdParameters {
           for _ in 0..=cpb_cnt_minus1 {
             bit_rate_value_minus1.push(data.exponential_golomb());
             cpb_size_value_minus1.push(data.exponential_golomb());
-            cbr_flag.push(data.bit());
+            cbr_flag.push(data.bit_flag());
           }
           cpb_size_scale
         },
