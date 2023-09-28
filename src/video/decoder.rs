@@ -1,13 +1,9 @@
-pub mod atom;
-pub mod sample;
-
+use super::atom::*;
+use super::sample::*;
 use crate::byte::{BitData, Str};
 use crate::log;
-use atom::*;
-use sample::*;
 use std::fs::File;
-use std::io::{Read, Seek, SeekFrom};
-use std::num::TryFromIntError;
+use std::io::{Read, Seek};
 use std::path::Path;
 use thiserror::Error;
 

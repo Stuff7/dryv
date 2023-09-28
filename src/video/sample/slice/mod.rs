@@ -5,7 +5,7 @@ pub use header::*;
 use super::NALUnit;
 use crate::{
   byte::BitData,
-  video::quicktime::atom::{PictureParameterSet, SequenceParameterSet},
+  video::atom::{PictureParameterSet, SequenceParameterSet},
 };
 
 #[derive(Debug)]

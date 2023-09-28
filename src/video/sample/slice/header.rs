@@ -1,6 +1,6 @@
 use crate::{
   byte::BitData,
-  video::quicktime::{
+  video::{
     atom::{PictureParameterSet, SequenceParameterSet, SliceGroup},
     sample::{NALUnit, NALUnitType},
   },

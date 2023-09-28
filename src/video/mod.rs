@@ -1,15 +1,17 @@
+pub mod atom;
 pub mod codec;
-pub mod quicktime;
+pub mod decoder;
+pub mod sample;
 
-use self::quicktime::atom::AtomError;
 use crate::{
   ascii::{Color, RESET},
   log,
   math::Matrix3x3,
   time::Duration,
 };
+use atom::AtomError;
 use codec::VideoCodec;
-use quicktime::*;
+use decoder::{Decoder, DecoderError};
 use std::{fmt, path::Path, str::FromStr};
 use thiserror::Error;
 

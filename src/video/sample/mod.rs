@@ -4,8 +4,13 @@ mod slice;
 pub use nal::*;
 pub use slice::*;
 
-use super::*;
-use std::{fs::File, ops::Deref};
+use super::atom::*;
+use super::decoder::*;
+use std::io::Read;
+use std::io::Seek;
+use std::io::SeekFrom;
+use std::{fs::File, num::TryFromIntError, ops::Deref};
+use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum SampleError {
