@@ -1,6 +1,8 @@
 use super::*;
 use std::ops::{Add, BitAnd, BitOr, Deref, Neg, Shl, Shr, Sub};
 
+const EPB: [u8; 3] = [0x00, 0x00, 0x03];
+
 #[derive(Debug)]
 pub struct BitData {
   data: Box<[u8]>,
@@ -11,7 +13,7 @@ pub struct BitData {
 impl BitData {
   pub fn new(data: &[u8]) -> Self {
     Self {
-      data: remove_emulation_prevention_bytes(data),
+      data: data.into(),
       offset: 0,
       bit_offset: 0,
     }
@@ -47,27 +49,27 @@ impl BitData {
   }
 
   pub fn bit(&mut self) -> u8 {
-    let byte = self.data[self.offset];
+    let byte = self.current_byte();
     let bit = (byte >> (7 - self.bit_offset)) & 1;
     self.consume_bits(1);
     bit
   }
 
   pub fn bits(&mut self, n: u8) -> u8 {
-    let byte = self.data[self.offset];
+    let byte = self.current_byte();
     let bit = byte << self.bit_offset >> (8 - n);
     self.consume_bits(n as usize);
     bit
   }
 
   pub fn bits_into<T: LossyFrom<u128>>(&mut self, bits: usize) -> T {
-    let number = pack_bits(&self.data[self.offset..], self.bit_offset, bits);
+    let number = pack_bits(&self.slice(bits), self.bit_offset, bits);
     self.consume_bits(bits);
     T::lossy_from(number)
   }
 
   pub fn peek_bits(&mut self, n: u8) -> u8 {
-    let byte = self.data[self.offset];
+    let byte = self.current_byte();
     byte << self.bit_offset >> (8 - n)
   }
 
@@ -117,6 +119,31 @@ impl BitData {
     let read_bits = self.bit_offset + bits;
     self.bit_offset = read_bits % 8;
     self.offset += read_bits >> 3;
+  }
+
+  fn current_byte(&mut self) -> u8 {
+    if self.offset > 1 && self.data[self.offset - 2..=self.offset] == EPB {
+      self.offset += 1;
+    }
+    self.data[self.offset]
+  }
+
+  fn slice(&mut self, bit_size: usize) -> Box<[u8]> {
+    let size = (bit_size + 7) >> 3;
+    let size = self.offset + size;
+    if self.offset > 1 {
+      let mut skipped = 0;
+      return (self.offset..size)
+        .map(|i| {
+          if self.data[i - 2..=i] == EPB {
+            self.offset += 1;
+            skipped += 1;
+          }
+          self.data[i + skipped]
+        })
+        .collect();
+    }
+    (&self.data[self.offset..size]).into()
   }
 }
 

@@ -72,17 +72,6 @@ pub fn padded_array_from_slice<const N: usize>(slice: &[u8]) -> [u8; N] {
   array
 }
 
-pub fn remove_emulation_prevention_bytes(input: &[u8]) -> Box<[u8]> {
-  input
-    .iter()
-    .copied()
-    .enumerate()
-    .filter_map(|(i, byte)| {
-      (!(i > 1 && byte == 0x03 && input[i - 1] == 0x00 && input[i - 2] == 0x00)).then_some(byte)
-    })
-    .collect()
-}
-
 pub trait LossyFrom<T> {
   fn lossy_from(value: T) -> Self;
 }
