@@ -1,7 +1,7 @@
 use super::atom::*;
 use super::sample::*;
 use super::slice::*;
-use crate::byte::{BitData, Str};
+use crate::byte::{BitStream, Str};
 use crate::log;
 use std::fs::File;
 use std::io::{Read, Seek};
@@ -100,7 +100,7 @@ impl Decoder {
         );
         match nal.unit_type {
           NALUnitType::Sei => {
-            let mut bit_data = BitData::new(nal.data);
+            let mut bit_data = BitStream::new(nal.data);
             let sei_msg = SeiMessage::decode(nal.size, &mut bit_data);
             if let SeiPayload::UserDataUnregistered {
               uuid_iso_iec_11578,

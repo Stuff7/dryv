@@ -1,5 +1,5 @@
 use super::*;
-use crate::byte::BitData;
+use crate::byte::BitStream;
 
 #[derive(Debug)]
 pub struct SequenceParameterSet {
@@ -39,7 +39,7 @@ pub struct SequenceParameterSet {
 }
 
 impl SequenceParameterSet {
-  pub fn decode(data: &mut BitData) -> Self {
+  pub fn decode(data: &mut BitStream) -> Self {
     // use std::io::Write;
     // let mut img = std::fs::File::create("temp/img.264").expect("IMG CREATION");
     // let mut d = vec![0, 0, 1];
@@ -132,7 +132,7 @@ pub struct PicOrderCntTypeOne {
 }
 
 impl PicOrderCntTypeOne {
-  pub fn new(data: &mut BitData, pic_order_cnt_type: u16) -> Option<Self> {
+  pub fn new(data: &mut BitStream, pic_order_cnt_type: u16) -> Option<Self> {
     (pic_order_cnt_type == 1).then(|| {
       let num_ref_frames_in_pic_order_cnt_cycle;
       Self {
@@ -158,7 +158,7 @@ pub struct ScalingList<const S: usize> {
 }
 
 impl<const S: usize> ScalingList<S> {
-  pub fn new(bits: &mut BitData) -> Self {
+  pub fn new(bits: &mut BitStream) -> Self {
     let mut data = [0; S];
     let mut use_default_scaling_matrix_flag = false;
     let mut last_scale = 8;
@@ -190,7 +190,7 @@ pub struct ScalingLists {
 }
 
 impl ScalingLists {
-  pub fn new(data: &mut BitData, size: u8) -> Option<Self> {
+  pub fn new(data: &mut BitStream, size: u8) -> Option<Self> {
     data.bit_flag().then(|| Self {
       scaling_list_4x4: (0..6)
         .filter_map(|_| data.bit_flag().then(|| ScalingList::new(data)))
@@ -211,7 +211,7 @@ pub struct FrameCropping {
 }
 
 impl FrameCropping {
-  pub fn decode(frame_cropping_flag: bool, data: &mut BitData) -> Option<Self> {
+  pub fn decode(frame_cropping_flag: bool, data: &mut BitStream) -> Option<Self> {
     frame_cropping_flag.then(|| Self {
       left: data.exponential_golomb(),
       right: data.exponential_golomb(),

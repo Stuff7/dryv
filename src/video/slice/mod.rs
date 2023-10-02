@@ -3,7 +3,7 @@ pub mod header;
 use std::ops::Deref;
 
 use crate::{
-  byte::BitData,
+  byte::BitStream,
   video::atom::{PictureParameterSet, SequenceParameterSet},
   video::sample::NALUnit,
 };
@@ -14,7 +14,7 @@ pub struct Slice<'a> {
   pub header: SliceHeader,
   pub sps: &'a SequenceParameterSet,
   pub pps: &'a PictureParameterSet,
-  pub stream: BitData<'a>,
+  pub stream: BitStream<'a>,
   pub sliceqpy: i16,
   pub cabac_init_mode: usize,
 }
@@ -26,7 +26,7 @@ impl<'a> Slice<'a> {
     sps: &'a SequenceParameterSet,
     pps: &'a PictureParameterSet,
   ) -> Self {
-    let mut stream = BitData::new(data);
+    let mut stream = BitStream::new(data);
     let header = SliceHeader::new(&mut stream, nal, sps, pps);
     Self {
       sliceqpy: 26 + pps.pic_init_qp_minus26 + header.slice_qp_delta,

@@ -1,4 +1,4 @@
-use crate::byte::BitData;
+use crate::byte::BitStream;
 
 use super::ScalingLists;
 
@@ -27,7 +27,7 @@ pub struct PictureParameterSet {
 }
 
 impl PictureParameterSet {
-  pub fn decode(data: &mut BitData, chroma_format_idc: u16) -> Self {
+  pub fn decode(data: &mut BitStream, chroma_format_idc: u16) -> Self {
     Self {
       length: data.next_into(),
       forbidden_zero_bit: data.bit(),
@@ -61,7 +61,7 @@ pub struct ExtraRbspData {
 }
 
 impl ExtraRbspData {
-  pub fn new(data: &mut BitData, chroma_format_idc: u16) -> Option<Self> {
+  pub fn new(data: &mut BitStream, chroma_format_idc: u16) -> Option<Self> {
     data.has_bits().then(|| {
       let transform_8x8_mode;
       Self {
@@ -102,7 +102,7 @@ pub enum SliceGroup {
 }
 
 impl SliceGroup {
-  pub fn new(num_slice_groups_minus1: u16, data: &mut BitData) -> Option<Self> {
+  pub fn new(num_slice_groups_minus1: u16, data: &mut BitStream) -> Option<Self> {
     (num_slice_groups_minus1 > 0).then(|| match data.exponential_golomb() {
       0 => Self::Interleaved {
         run_length_minus1: (0..num_slice_groups_minus1)

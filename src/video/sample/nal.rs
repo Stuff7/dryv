@@ -1,4 +1,4 @@
-use crate::byte::{padded_array_from_slice, BitData};
+use crate::byte::{padded_array_from_slice, BitStream};
 
 #[derive(Debug)]
 pub struct SeiMessage {
@@ -7,7 +7,7 @@ pub struct SeiMessage {
 }
 
 impl SeiMessage {
-  pub fn decode(size: usize, data: &mut BitData) -> Self {
+  pub fn decode(size: usize, data: &mut BitStream) -> Self {
     let mut payload_type = 0;
     while data.peek_bits(8) == 0xFF {
       payload_type += data.byte() as u32;
@@ -37,7 +37,7 @@ pub enum SeiPayload {
 }
 
 impl SeiPayload {
-  pub fn new(payload_type: u32, payload_size: u32, data: &mut BitData) -> Self {
+  pub fn new(payload_type: u32, payload_size: u32, data: &mut BitStream) -> Self {
     match payload_type {
       5 => Self::UserDataUnregistered {
         uuid_iso_iec_11578: data.next_into(),

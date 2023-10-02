@@ -3,13 +3,13 @@ use std::ops::{Add, BitAnd, BitOr, Deref, Neg, Shl, Shr, Sub};
 
 const EPB: [u8; 3] = [0x00, 0x00, 0x03];
 
-pub struct BitData<'a> {
+pub struct BitStream<'a> {
   data: &'a [u8],
   offset: usize,
   bit_offset: usize,
 }
 
-impl<'a> std::fmt::Debug for BitData<'a> {
+impl<'a> std::fmt::Debug for BitStream<'a> {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     f.debug_struct("BitData")
       .field("data", &self.data.len())
@@ -19,7 +19,7 @@ impl<'a> std::fmt::Debug for BitData<'a> {
   }
 }
 
-impl<'a> BitData<'a> {
+impl<'a> BitStream<'a> {
   pub fn new(data: &'a [u8]) -> Self {
     Self {
       data,
@@ -29,14 +29,14 @@ impl<'a> BitData<'a> {
   }
 }
 
-impl<'a> Deref for BitData<'a> {
+impl<'a> Deref for BitStream<'a> {
   type Target = [u8];
   fn deref(&self) -> &Self::Target {
     &self.data[self.offset..]
   }
 }
 
-impl<'a> BitData<'a> {
+impl<'a> BitStream<'a> {
   pub fn has_bits(&self) -> bool {
     self.bit_offset < 8 || self.offset < self.data.len()
   }

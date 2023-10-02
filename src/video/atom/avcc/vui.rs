@@ -1,4 +1,4 @@
-use crate::byte::BitData;
+use crate::byte::BitStream;
 
 #[derive(Debug)]
 pub struct VuiParameters {
@@ -18,7 +18,7 @@ pub struct VuiParameters {
 }
 
 impl VuiParameters {
-  pub fn decode(vui_parameters_present_flag: bool, data: &mut BitData) -> Option<Self> {
+  pub fn decode(vui_parameters_present_flag: bool, data: &mut BitStream) -> Option<Self> {
     vui_parameters_present_flag.then(|| {
       let aspect_ratio_info_present_flag;
       let aspect_ratio_idc;
@@ -70,7 +70,7 @@ pub struct SampleAspectRatio {
 
 impl SampleAspectRatio {
   const EXTENDED_SAR: u8 = 255;
-  pub fn decode(aspect_ratio_idc: u8, data: &mut BitData) -> Option<Self> {
+  pub fn decode(aspect_ratio_idc: u8, data: &mut BitStream) -> Option<Self> {
     (aspect_ratio_idc == Self::EXTENDED_SAR).then(|| Self {
       width: data.next_into(),
       height: data.next_into(),
@@ -86,7 +86,7 @@ pub struct VideoSignalType {
 }
 
 impl VideoSignalType {
-  pub fn decode(video_signal_type_present_flag: bool, data: &mut BitData) -> Option<Self> {
+  pub fn decode(video_signal_type_present_flag: bool, data: &mut BitStream) -> Option<Self> {
     video_signal_type_present_flag.then(|| Self {
       video_format: data.bits(3),
       video_full_range_flag: data.bit_flag(),
@@ -103,7 +103,7 @@ pub struct ColorDescription {
 }
 
 impl ColorDescription {
-  pub fn decode(color_description_present_flag: bool, data: &mut BitData) -> Option<Self> {
+  pub fn decode(color_description_present_flag: bool, data: &mut BitStream) -> Option<Self> {
     color_description_present_flag.then(|| Self {
       primaries: data.byte(),
       transfer_characteristics: data.byte(),
@@ -119,7 +119,7 @@ pub struct ChromaLocInfo {
 }
 
 impl ChromaLocInfo {
-  pub fn decode(chroma_loc_info_present_flag: bool, data: &mut BitData) -> Option<Self> {
+  pub fn decode(chroma_loc_info_present_flag: bool, data: &mut BitStream) -> Option<Self> {
     chroma_loc_info_present_flag.then(|| Self {
       top_field: data.exponential_golomb(),
       bottom_field: data.exponential_golomb(),
@@ -135,7 +135,7 @@ pub struct TimingInfo {
 }
 
 impl TimingInfo {
-  pub fn decode(timing_info_present_flag: bool, data: &mut BitData) -> Option<Self> {
+  pub fn decode(timing_info_present_flag: bool, data: &mut BitStream) -> Option<Self> {
     timing_info_present_flag.then(|| Self {
       num_units_in_tick: data.next_into(),
       time_scale: data.next_into(),
@@ -159,7 +159,7 @@ pub struct HrdParameters {
 }
 
 impl HrdParameters {
-  pub fn decode(nal_hrd_parameters_present_flag: bool, data: &mut BitData) -> Option<Self> {
+  pub fn decode(nal_hrd_parameters_present_flag: bool, data: &mut BitStream) -> Option<Self> {
     nal_hrd_parameters_present_flag.then(|| {
       let cpb_cnt_minus1;
       let mut bit_rate_value_minus1 = Vec::new();
@@ -204,7 +204,7 @@ pub struct BitstreamRestriction {
 }
 
 impl BitstreamRestriction {
-  pub fn decode(bitstream_restriction_flag: bool, data: &mut BitData) -> Option<Self> {
+  pub fn decode(bitstream_restriction_flag: bool, data: &mut BitStream) -> Option<Self> {
     bitstream_restriction_flag.then(|| Self {
       motion_vectors_over_pic_boundaries_flag: data.bit_flag(),
       max_bytes_per_pic_denom: data.exponential_golomb(),

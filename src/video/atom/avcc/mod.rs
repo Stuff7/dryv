@@ -7,7 +7,7 @@ pub use sps::*;
 pub use vui::*;
 
 use super::*;
-use crate::byte::BitData;
+use crate::byte::BitStream;
 
 #[derive(Debug)]
 pub struct AvcCAtom {
@@ -35,7 +35,7 @@ impl AvcCAtom {
       nal_length_size_minus_one: data.byte() & 0b0000_0011,
       num_sps: data.byte() & 0b0001_1111,
       sps: {
-        bit_data = BitData::new(&data);
+        bit_data = BitStream::new(&data);
         let sps = SequenceParameterSet::decode(&mut bit_data);
         chroma_format_idc = sps.chroma_format_idc;
         sps

@@ -1,5 +1,5 @@
 use crate::{
-  byte::BitData,
+  byte::BitStream,
   video::{
     atom::{PictureParameterSet, SequenceParameterSet, SliceGroup},
     sample::{NALUnit, NALUnitType},
@@ -38,7 +38,7 @@ pub struct SliceHeader {
 
 impl SliceHeader {
   pub fn new(
-    data: &mut BitData,
+    data: &mut BitStream,
     nal: &NALUnit,
     sps: &SequenceParameterSet,
     pps: &PictureParameterSet,
@@ -164,7 +164,7 @@ pub struct RefPicListModification {
 }
 
 impl RefPicListModification {
-  pub fn new(data: &mut BitData, nal_type: &NALUnitType, slice_type: &SliceType) -> Option<Self> {
+  pub fn new(data: &mut BitStream, nal_type: &NALUnitType, slice_type: &SliceType) -> Option<Self> {
     (!matches!(
       nal_type,
       NALUnitType::CodedSliceExtension | NALUnitType::DepthOrTextureViewComponent
@@ -187,7 +187,7 @@ impl RefPicListModification {
     })
   }
 
-  fn create(&mut self, data: &mut BitData) -> bool {
+  fn create(&mut self, data: &mut BitStream) -> bool {
     let ref_pic_list_modification_flag = data.bit_flag();
     if ref_pic_list_modification_flag {
       loop {
@@ -211,7 +211,7 @@ impl RefPicListModification {
 pub struct RefPicListMvcModification;
 
 impl RefPicListMvcModification {
-  pub fn new(_: &mut BitData, nal_type: &NALUnitType) -> Option<Self> {
+  pub fn new(_: &mut BitStream, nal_type: &NALUnitType) -> Option<Self> {
     matches!(
       nal_type,
       NALUnitType::CodedSliceExtension | NALUnitType::DepthOrTextureViewComponent
@@ -225,7 +225,7 @@ pub struct PredWeightTable;
 
 impl PredWeightTable {
   pub fn new(
-    _: &mut BitData,
+    _: &mut BitStream,
     weighted_pred_flag: bool,
     slice_type: &SliceType,
     weighted_bipred_idc: u8,
@@ -253,7 +253,7 @@ pub enum DecRefPicMarking {
 }
 
 impl DecRefPicMarking {
-  pub fn new(data: &mut BitData, nal: &NALUnit) -> Option<Self> {
+  pub fn new(data: &mut BitStream, nal: &NALUnit) -> Option<Self> {
     (nal.idc != 0).then(|| {
       if nal.unit_type.is_idr() {
         Self::Idr {
@@ -303,7 +303,7 @@ pub struct DeblockingFilterControl {
 }
 
 impl DeblockingFilterControl {
-  pub fn new(data: &mut BitData, deblocking_filter_control_present_flag: bool) -> Option<Self> {
+  pub fn new(data: &mut BitStream, deblocking_filter_control_present_flag: bool) -> Option<Self> {
     deblocking_filter_control_present_flag.then(|| {
       let disable_deblocking_filter_idc = data.exponential_golomb();
       Self {
@@ -321,7 +321,7 @@ pub struct DeblockingFilterControlSlice {
 }
 
 impl DeblockingFilterControlSlice {
-  pub fn new(data: &mut BitData, disable_deblocking_filter_idc: u16) -> Option<Self> {
+  pub fn new(data: &mut BitStream, disable_deblocking_filter_idc: u16) -> Option<Self> {
     (disable_deblocking_filter_idc != 1).then(|| Self {
       alpha_c0_offset_div2: data.signed_exponential_golomb(),
       beta_offset_div2: data.signed_exponential_golomb(),
