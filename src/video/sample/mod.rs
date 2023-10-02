@@ -1,11 +1,8 @@
 mod nal;
-mod slice;
-
-pub use nal::*;
-pub use slice::*;
 
 use super::atom::*;
 use super::decoder::*;
+pub use nal::*;
 use std::io::Read;
 use std::io::Seek;
 use std::io::SeekFrom;

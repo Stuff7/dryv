@@ -3,31 +3,40 @@ use std::ops::{Add, BitAnd, BitOr, Deref, Neg, Shl, Shr, Sub};
 
 const EPB: [u8; 3] = [0x00, 0x00, 0x03];
 
-#[derive(Debug)]
-pub struct BitData {
-  data: Box<[u8]>,
+pub struct BitData<'a> {
+  data: &'a [u8],
   offset: usize,
   bit_offset: usize,
 }
 
-impl BitData {
-  pub fn new(data: &[u8]) -> Self {
+impl<'a> std::fmt::Debug for BitData<'a> {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.debug_struct("BitData")
+      .field("data", &self.data.len())
+      .field("offset", &self.offset)
+      .field("bit_offset", &self.bit_offset)
+      .finish()
+  }
+}
+
+impl<'a> BitData<'a> {
+  pub fn new(data: &'a [u8]) -> Self {
     Self {
-      data: data.into(),
+      data,
       offset: 0,
       bit_offset: 0,
     }
   }
 }
 
-impl Deref for BitData {
+impl<'a> Deref for BitData<'a> {
   type Target = [u8];
   fn deref(&self) -> &Self::Target {
     &self.data[self.offset..]
   }
 }
 
-impl BitData {
+impl<'a> BitData<'a> {
   pub fn has_bits(&self) -> bool {
     self.bit_offset < 8 || self.offset < self.data.len()
   }
@@ -65,7 +74,7 @@ impl BitData {
   pub fn bits_into<T: LossyFrom<u128>>(&mut self, bits: usize) -> T {
     let number = pack_bits(&self.slice(bits), self.bit_offset, bits);
     self.consume_bits(bits);
-    T::lossy_from(number)
+    number
   }
 
   pub fn peek_bits(&mut self, n: u8) -> u8 {
@@ -187,10 +196,10 @@ impl<'a> Iterator for BitIter<'a> {
   }
 }
 
-pub fn pack_bits(data: &[u8], bit_offset: usize, bit_size: usize) -> u128 {
+pub fn pack_bits<T: LossyFrom<u128>>(data: &[u8], bit_offset: usize, bit_size: usize) -> T {
   let mut value = u128::from_be_bytes(padded_array_from_slice(data));
   value <<= bit_offset;
   value >>= 128 - bit_size;
 
-  value
+  T::lossy_from(value)
 }

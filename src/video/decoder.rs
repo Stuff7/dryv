@@ -1,5 +1,6 @@
 use super::atom::*;
 use super::sample::*;
+use super::slice::*;
 use crate::byte::{BitData, Str};
 use crate::log;
 use std::fs::File;
@@ -112,8 +113,7 @@ impl Decoder {
             }
           }
           NALUnitType::IDRPicture => {
-            let mut bit_data = BitData::new(nal.data);
-            log!(File@"{msg}{:#?}", Slice::new(&mut bit_data, &nal, &avc1.avcc.sps, &avc1.avcc.pps));
+            log!(File@"{msg}{:#?}", Slice::new(nal.data, &nal, &avc1.avcc.sps, &avc1.avcc.pps));
             use std::io::Write;
             let name = format!("temp/idr-{i}.h264");
             let mut img = std::fs::File::create(name).expect("IDR CREATION");
