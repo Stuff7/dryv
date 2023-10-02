@@ -11,7 +11,7 @@ pub struct BitStream<'a> {
 
 impl<'a> std::fmt::Debug for BitStream<'a> {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    f.debug_struct("BitData")
+    f.debug_struct("BitStream")
       .field("data", &self.data.len())
       .field("offset", &self.offset)
       .field("bit_offset", &self.bit_offset)
