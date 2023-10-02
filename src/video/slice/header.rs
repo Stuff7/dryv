@@ -152,6 +152,10 @@ impl SliceType {
       _ => Self::Unknown,
     }
   }
+
+  pub fn is_intra(&self) -> bool {
+    matches!(self, SliceType::I | SliceType::SI)
+  }
 }
 
 #[derive(Debug)]
