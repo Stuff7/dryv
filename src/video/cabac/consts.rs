@@ -1,3 +1,5 @@
+use crate::video::slice::consts::*;
+
 // Table 9-11 mb_type
 pub const CTXIDX_MB_TYPE_SI_PRE: i16 = 0;
 pub const CTXIDX_MB_TYPE_I: i16 = 3; // and SI suffix
@@ -138,89 +140,6 @@ pub const CTXIDX_RESIDUAL_PREDICTION_FLAG: i16 = 1029;
 
 pub const CTXIDX_NUM: i16 = 1031;
 
-/* I */
-pub const MB_TYPE_I_NXN: u8 = 0;
-pub const MB_TYPE_I_16X16_0_0_0: u8 = 1;
-pub const MB_TYPE_I_16X16_1_0_0: u8 = 2;
-pub const MB_TYPE_I_16X16_2_0_0: u8 = 3;
-pub const MB_TYPE_I_16X16_3_0_0: u8 = 4;
-pub const MB_TYPE_I_16X16_0_1_0: u8 = 5;
-pub const MB_TYPE_I_16X16_1_1_0: u8 = 6;
-pub const MB_TYPE_I_16X16_2_1_0: u8 = 7;
-pub const MB_TYPE_I_16X16_3_1_0: u8 = 8;
-pub const MB_TYPE_I_16X16_0_2_0: u8 = 9;
-pub const MB_TYPE_I_16X16_1_2_0: u8 = 10;
-pub const MB_TYPE_I_16X16_2_2_0: u8 = 11;
-pub const MB_TYPE_I_16X16_3_2_0: u8 = 12;
-pub const MB_TYPE_I_16X16_0_0_1: u8 = 13;
-pub const MB_TYPE_I_16X16_1_0_1: u8 = 14;
-pub const MB_TYPE_I_16X16_2_0_1: u8 = 15;
-pub const MB_TYPE_I_16X16_3_0_1: u8 = 16;
-pub const MB_TYPE_I_16X16_0_1_1: u8 = 17;
-pub const MB_TYPE_I_16X16_1_1_1: u8 = 18;
-pub const MB_TYPE_I_16X16_2_1_1: u8 = 19;
-pub const MB_TYPE_I_16X16_3_1_1: u8 = 20;
-pub const MB_TYPE_I_16X16_0_2_1: u8 = 21;
-pub const MB_TYPE_I_16X16_1_2_1: u8 = 22;
-pub const MB_TYPE_I_16X16_2_2_1: u8 = 23;
-pub const MB_TYPE_I_16X16_3_2_1: u8 = 24;
-pub const MB_TYPE_I_PCM: u8 = 25;
-/* SI */
-pub const MB_TYPE_SI: u8 = 26;
-/* P */
-pub const MB_TYPE_P_L0_16X16: u8 = 27;
-pub const MB_TYPE_P_L0_L0_16X8: u8 = 28;
-pub const MB_TYPE_P_L0_L0_8X16: u8 = 29;
-pub const MB_TYPE_P_8X8: u8 = 30;
-pub const MB_TYPE_P_8X8REF0: u8 = 31;
-pub const MB_TYPE_P_SKIP: u8 = 32;
-/* B */
-pub const MB_TYPE_B_DIRECT_16X16: u8 = 33;
-pub const MB_TYPE_B_L0_16X16: u8 = 34;
-pub const MB_TYPE_B_L1_16X16: u8 = 35;
-pub const MB_TYPE_B_BI_16X16: u8 = 36;
-pub const MB_TYPE_B_L0_L0_16X8: u8 = 37;
-pub const MB_TYPE_B_L0_L0_8X16: u8 = 38;
-pub const MB_TYPE_B_L1_L1_16X8: u8 = 39;
-pub const MB_TYPE_B_L1_L1_8X16: u8 = 40;
-pub const MB_TYPE_B_L0_L1_16X8: u8 = 41;
-pub const MB_TYPE_B_L0_L1_8X16: u8 = 42;
-pub const MB_TYPE_B_L1_L0_16X8: u8 = 43;
-pub const MB_TYPE_B_L1_L0_8X16: u8 = 44;
-pub const MB_TYPE_B_L0_BI_16X8: u8 = 45;
-pub const MB_TYPE_B_L0_BI_8X16: u8 = 46;
-pub const MB_TYPE_B_L1_BI_16X8: u8 = 47;
-pub const MB_TYPE_B_L1_BI_8X16: u8 = 48;
-pub const MB_TYPE_B_BI_L0_16X8: u8 = 49;
-pub const MB_TYPE_B_BI_L0_8X16: u8 = 50;
-pub const MB_TYPE_B_BI_L1_16X8: u8 = 51;
-pub const MB_TYPE_B_BI_L1_8X16: u8 = 52;
-pub const MB_TYPE_B_BI_BI_16X8: u8 = 53;
-pub const MB_TYPE_B_BI_BI_8X16: u8 = 54;
-pub const MB_TYPE_B_8X8: u8 = 55;
-pub const MB_TYPE_B_SKIP: u8 = 56;
-pub const MB_TYPE_B_END: u8 = 57;
-/* P */
-pub const SUB_MB_TYPE_P_L0_8X8: u8 = 0;
-pub const SUB_MB_TYPE_P_L0_8X4: u8 = 1;
-pub const SUB_MB_TYPE_P_L0_4X8: u8 = 2;
-pub const SUB_MB_TYPE_P_L0_4X4: u8 = 3;
-/* B */
-pub const SUB_MB_TYPE_B_DIRECT_8X8: u8 = 4;
-pub const SUB_MB_TYPE_B_L0_8X8: u8 = 5;
-pub const SUB_MB_TYPE_B_L1_8X8: u8 = 6;
-pub const SUB_MB_TYPE_B_BI_8X8: u8 = 7;
-pub const SUB_MB_TYPE_B_L0_8X4: u8 = 8;
-pub const SUB_MB_TYPE_B_L0_4X8: u8 = 9;
-pub const SUB_MB_TYPE_B_L1_8X4: u8 = 10;
-pub const SUB_MB_TYPE_B_L1_4X8: u8 = 11;
-pub const SUB_MB_TYPE_B_BI_8X4: u8 = 12;
-pub const SUB_MB_TYPE_B_BI_4X8: u8 = 13;
-pub const SUB_MB_TYPE_B_L0_4X4: u8 = 14;
-pub const SUB_MB_TYPE_B_L1_4X4: u8 = 15;
-pub const SUB_MB_TYPE_B_BI_4X4: u8 = 16;
-pub const SUB_MB_TYPE_B_END: u8 = 17;
-
 pub const RANGE_TAB_LPS: [[u8; 4]; 64] = [
   [128, 176, 208, 240],
   [128, 167, 197, 227],
@@ -299,3 +218,63 @@ pub const TRANS_IDX_MPS: [u8; 64] = [
   27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50,
   51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 62, 63,
 ];
+
+const fn mb_info<const N: usize>(elements: &'static [(u8, &[u8])]) -> [&'static [u8]; N] {
+  let mut arr: [&[u8]; N] = [&[]; N];
+  let mut i = 0;
+
+  while i < elements.len() {
+    let (index, value) = elements[i];
+    arr[index as usize] = value;
+    i += 1;
+  }
+
+  arr
+}
+
+pub const MB_PART_INFO: [&[u8]; 55] = mb_info(&[
+  (MB_TYPE_P_L0_16X16, &[0, 1]),
+  (MB_TYPE_B_L0_16X16, &[0, 1]),
+  (MB_TYPE_B_L1_16X16, &[0, 2]),
+  (MB_TYPE_B_BI_16X16, &[0, 3]),
+  (MB_TYPE_P_L0_L0_16X8, &[1, 1, 1]),
+  (MB_TYPE_B_L0_L0_16X8, &[1, 1, 1]),
+  (MB_TYPE_B_L0_L1_16X8, &[1, 1, 2]),
+  (MB_TYPE_B_L0_BI_16X8, &[1, 1, 3]),
+  (MB_TYPE_B_L1_L0_16X8, &[1, 2, 1]),
+  (MB_TYPE_B_L1_L1_16X8, &[1, 2, 2]),
+  (MB_TYPE_B_L1_BI_16X8, &[1, 2, 3]),
+  (MB_TYPE_B_BI_L0_16X8, &[1, 3, 1]),
+  (MB_TYPE_B_BI_L1_16X8, &[1, 3, 2]),
+  (MB_TYPE_B_BI_BI_16X8, &[1, 3, 3]),
+  (MB_TYPE_P_L0_L0_8X16, &[2, 1, 1]),
+  (MB_TYPE_B_L0_L0_8X16, &[2, 1, 1]),
+  (MB_TYPE_B_L0_L1_8X16, &[2, 1, 2]),
+  (MB_TYPE_B_L0_BI_8X16, &[2, 1, 3]),
+  (MB_TYPE_B_L1_L0_8X16, &[2, 2, 1]),
+  (MB_TYPE_B_L1_L1_8X16, &[2, 2, 2]),
+  (MB_TYPE_B_L1_BI_8X16, &[2, 2, 3]),
+  (MB_TYPE_B_BI_L0_8X16, &[2, 3, 1]),
+  (MB_TYPE_B_BI_L1_8X16, &[2, 3, 2]),
+  (MB_TYPE_B_BI_BI_8X16, &[2, 3, 3]),
+]);
+
+pub const SUB_MB_PART_INFO: [&[u8]; 17] = mb_info(&[
+  (SUB_MB_TYPE_B_DIRECT_8X8, &[0, 0]),
+  (SUB_MB_TYPE_P_L0_8X8, &[0, 1]),
+  (SUB_MB_TYPE_B_L0_8X8, &[0, 1]),
+  (SUB_MB_TYPE_B_L1_8X8, &[0, 2]),
+  (SUB_MB_TYPE_B_BI_8X8, &[0, 3]),
+  (SUB_MB_TYPE_P_L0_8X4, &[1, 1]),
+  (SUB_MB_TYPE_B_L0_8X4, &[1, 1]),
+  (SUB_MB_TYPE_B_L1_8X4, &[1, 2]),
+  (SUB_MB_TYPE_B_BI_8X4, &[1, 3]),
+  (SUB_MB_TYPE_P_L0_4X8, &[2, 1]),
+  (SUB_MB_TYPE_B_L0_4X8, &[2, 1]),
+  (SUB_MB_TYPE_B_L1_4X8, &[2, 2]),
+  (SUB_MB_TYPE_B_BI_4X8, &[2, 3]),
+  (SUB_MB_TYPE_P_L0_4X4, &[3, 1]),
+  (SUB_MB_TYPE_B_L0_4X4, &[3, 1]),
+  (SUB_MB_TYPE_B_L1_4X4, &[3, 2]),
+  (SUB_MB_TYPE_B_BI_4X4, &[3, 3]),
+]);

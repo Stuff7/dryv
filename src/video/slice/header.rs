@@ -133,12 +133,32 @@ impl SliceHeader {
 
 #[derive(Debug, Clone, Copy)]
 pub enum SliceType {
+  /// P-slice (Predictive Coded Slice):
+  /// A slice type containing inter-coded macroblocks for motion compensation,
+  /// typically referring to previously coded P or I slices.
   P,
+
+  /// B-slice (Bi-directional Predictive Coded Slice):
+  /// A slice type containing inter-coded macroblocks for motion compensation,
+  /// considering both past and future reference frames, allowing for more
+  /// complex temporal predictions.
   B,
+
+  /// I-slice (Intra-coded Slice):
+  /// A slice type containing intra-coded macroblocks, meaning that each macroblock
+  /// is independently coded without reference to other slices, providing a clean
+  /// entry point for error resilience.
   I,
+
+  /// SP-slice (Switching P-slice):
+  /// A slice type that serves as a switch from P-slice to I-slice coding modes
+  /// and vice versa, typically used for video streams with varying scene complexity.
   SP,
+
+  /// SI-slice (Switching I-slice):
+  /// A slice type that serves as a switch from I-slice to P-slice coding modes
+  /// and vice versa, similarly used for video streams with changing scene conditions.
   SI,
-  Unknown,
 }
 
 impl SliceType {
@@ -149,12 +169,28 @@ impl SliceType {
       2 | 7 => Self::I,
       3 | 8 => Self::SP,
       4 | 9 => Self::SI,
-      _ => Self::Unknown,
+      n => panic!("Unknown slice type {n}"),
     }
   }
 
+  /// Checks if the slice type is an intra-coded slice (I-slice or SI-slice).
   pub fn is_intra(&self) -> bool {
     matches!(self, SliceType::I | SliceType::SI)
+  }
+
+  /// Checks if the slice type is a predictive slice (P-slice or SP-slice).
+  pub fn is_predictive(&self) -> bool {
+    matches!(self, SliceType::P | SliceType::SP)
+  }
+
+  /// Checks if the slice type is a switching slice (SP-slice or SI-slice).
+  pub fn is_switching(&self) -> bool {
+    matches!(self, SliceType::SP | SliceType::SI)
+  }
+
+  /// Checks if the slice type is a bidirectional slice (B-slice).
+  pub fn is_bidirectional(&self) -> bool {
+    matches!(self, SliceType::B)
   }
 }
 

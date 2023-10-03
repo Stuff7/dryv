@@ -1,4 +1,4 @@
-use super::consts::*;
+use crate::video::slice::consts::*;
 
 #[derive(Debug, Clone, Copy)]
 pub struct SEBit {
