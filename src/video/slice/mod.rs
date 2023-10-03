@@ -107,10 +107,9 @@ impl<'a> Slice<'a> {
     self.curr_mb_addr = (self.first_mb_in_slice * (1 + self.mbaff_frame_flag as u16)) as usize;
     self.last_mb_in_slice = self.curr_mb_addr;
 
-    let skip_type = if matches!(self.slice_type, SliceType::B) {
-      MB_TYPE_B_SKIP
-    } else {
-      MB_TYPE_P_SKIP
+    let skip_type = match self.slice_type {
+      SliceType::B => MB_TYPE_B_SKIP,
+      _ => MB_TYPE_P_SKIP,
     };
     if self.pps.entropy_coding_mode_flag {
       let mut cabac = CabacContext::new(self)?;
