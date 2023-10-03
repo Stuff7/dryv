@@ -54,7 +54,7 @@ pub struct CabacContext {
 }
 
 impl CabacContext {
-  pub fn new(slice: &mut Slice<'_>) -> CabacResult<Self> {
+  pub fn new(slice: &mut Slice) -> CabacResult<Self> {
     if !slice.stream.skip_trailing_bits().bit_flag() {
       return Err(CabacError::AlignmentOneBit);
     }
@@ -170,7 +170,7 @@ impl CabacContext {
     Ok(())
   }
 
-  pub fn mb_skip_flag(&mut self, slice: &mut Slice<'_>, bin_val: &mut u8) -> CabacResult {
+  pub fn mb_skip_flag(&mut self, slice: &mut Slice, bin_val: &mut u8) -> CabacResult {
     let ctx_idx_offset;
     let ctx_idx_inc;
     if slice.slice_type.is_predictive() {
@@ -188,7 +188,7 @@ impl CabacContext {
     self.decision(slice, ctx_idx_offset + ctx_idx_inc, bin_val)
   }
 
-  pub fn mb_field_decoding_flag(&mut self, slice: &mut Slice<'_>, bin_val: &mut u8) -> CabacResult {
+  pub fn mb_field_decoding_flag(&mut self, slice: &mut Slice, bin_val: &mut u8) -> CabacResult {
     let ctx_idx_offset = CTXIDX_MB_FIELD_DECODING_FLAG;
     let cond_term_flag_a = slice.mb_nb_p(MbPosition::A, 0).mb_field_decoding_flag;
     let cond_term_flag_b = slice.mb_nb_p(MbPosition::B, 0).mb_field_decoding_flag;
@@ -198,7 +198,7 @@ impl CabacContext {
 
   pub fn se(
     &mut self,
-    slice: &mut Slice<'_>,
+    slice: &mut Slice,
     table: &[SEValue],
     ctx_indices: &[i16],
     val: &mut u8,
@@ -235,7 +235,7 @@ impl CabacContext {
 
   pub fn ueg(
     &mut self,
-    slice: &mut Slice<'_>,
+    slice: &mut Slice,
     ctx_indices: &[i16],
     num_idx: u8,
     mut k: i16,
@@ -282,7 +282,7 @@ impl CabacContext {
 
   pub fn tu(
     &mut self,
-    slice: &mut Slice<'_>,
+    slice: &mut Slice,
     ctx_indices: &[i16],
     num_idx: u8,
     c_max: u8,
@@ -305,7 +305,7 @@ impl CabacContext {
     Ok(())
   }
 
-  pub fn decision(&mut self, slice: &mut Slice<'_>, ctx_idx: i16, bin_val: &mut u8) -> CabacResult {
+  pub fn decision(&mut self, slice: &mut Slice, ctx_idx: i16, bin_val: &mut u8) -> CabacResult {
     if ctx_idx == -1 {
       return self.bypass(slice, bin_val);
     }
@@ -339,7 +339,7 @@ impl CabacContext {
     Ok(())
   }
 
-  pub fn bypass(&mut self, slice: &mut Slice<'_>, bin_val: &mut u8) -> CabacResult {
+  pub fn bypass(&mut self, slice: &mut Slice, bin_val: &mut u8) -> CabacResult {
     self.cod_i_offset <<= 1;
     let bit = slice.stream.bit();
     if bit == 1 {
@@ -356,7 +356,7 @@ impl CabacContext {
     Ok(())
   }
 
-  pub fn terminate(&mut self, slice: &mut Slice<'_>, bin_val: &mut u8) -> CabacResult {
+  pub fn terminate(&mut self, slice: &mut Slice, bin_val: &mut u8) -> CabacResult {
     self.cod_i_range -= 2;
     if self.cod_i_offset >= self.cod_i_range {
       *bin_val = 1;
@@ -368,7 +368,7 @@ impl CabacContext {
     Ok(())
   }
 
-  pub fn renorm(&mut self, slice: &mut Slice<'_>) -> CabacResult {
+  pub fn renorm(&mut self, slice: &mut Slice) -> CabacResult {
     while self.cod_i_range < 256 {
       self.cod_i_range <<= 1;
       self.cod_i_offset <<= 1;
