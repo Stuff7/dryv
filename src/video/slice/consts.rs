@@ -93,3 +93,11 @@ pub const fn is_skip_mb_type(mb_type: u8) -> bool {
 pub const fn is_submb_mb_type(mb_type: u8) -> bool {
   matches!(mb_type, MB_TYPE_P_8X8 | MB_TYPE_P_8X8REF0 | MB_TYPE_B_8X8)
 }
+
+pub const fn is_intra_16x16_mb_type(mb_type: u8) -> bool {
+  mb_type >= MB_TYPE_I_16X16_0_0_0 && mb_type <= MB_TYPE_I_16X16_3_2_1
+}
+
+pub const fn is_inter_mb_type(mb_type: u8) -> bool {
+  mb_type >= MB_TYPE_P_L0_16X16
+}

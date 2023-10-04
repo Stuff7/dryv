@@ -14,18 +14,18 @@ pub struct Macroblock {
   pub index: usize,
   pub mb_field_decoding_flag: bool,
   pub mb_type: u8,
-  pub coded_block_pattern: u16,
-  pub transform_size_8x8_flag: u16,
+  pub coded_block_pattern: u8,
+  pub transform_size_8x8_flag: u8,
   pub mb_qp_delta: i16,
   pub pcm_sample_luma: [u16; 256],
   pub pcm_sample_chroma: [u16; 512],
-  pub prev_intra4x4_pred_mode_flag: [u16; 16],
-  pub rem_intra4x4_pred_mode: [u16; 16],
-  pub prev_intra8x8_pred_mode_flag: [u16; 4],
-  pub rem_intra8x8_pred_mode: [u16; 4],
-  pub intra_chroma_pred_mode: u16,
+  pub prev_intra4x4_pred_mode_flag: [u8; 16],
+  pub rem_intra4x4_pred_mode: [u8; 16],
+  pub prev_intra8x8_pred_mode_flag: [u8; 4],
+  pub rem_intra8x8_pred_mode: [u8; 4],
+  pub intra_chroma_pred_mode: u8,
   pub sub_mb_type: [u8; 4],
-  pub ref_idx: [[u16; 4]; 2],
+  pub ref_idx: [[u8; 4]; 2],
   pub mvd: [[[i16; 2]; 16]; 2],
   /// [0 luma, 1 cb, 2 cr][coeff]
   pub block_luma_dc: [[i16; 16]; 3],
@@ -42,11 +42,11 @@ pub struct Macroblock {
   /// [0 luma, 1 cb, 2 cr][blkIdx]
   pub total_coeff: [[i16; 16]; 3],
   /// [0 luma, 1 cb, 2 cr][blkIdx], with blkIdx == 16 being DC
-  pub coded_block_flag: [[i16; 17]; 3],
+  pub coded_block_flag: [[u8; 17]; 3],
 }
 
 impl Macroblock {
-  pub const fn empty(coded_block_flag: i16) -> Self {
+  pub const fn empty(coded_block_flag: u8) -> Self {
     Self {
       index: 0,
       mb_field_decoding_flag: false,
@@ -120,15 +120,87 @@ impl Macroblock {
   }
 }
 
+/// Represents the position of a macroblock (MB) within a block grid.
 #[derive(Debug, Clone, Copy)]
 pub enum MbPosition {
+  /// The macroblock itself (current position).
   This,
-  /// Left
+  /// Position A: Refers to the macroblock to the left of the current macroblock.
   A,
-  /// Above
+  /// Position B: Refers to the macroblock above the current macroblock.
   B,
-  /// Right and above
+  /// Position C: Refers to the macroblock diagonally above and to the right of the current macroblock.
   C,
-  /// Left and above
+  /// Position D: Refers to the macroblock diagonally above and to the left of the current macroblock.
   D,
+}
+
+/// Represents the mode of a macroblock (MB) in the context of interlaced video coding.
+#[derive(Debug, Clone, Copy)]
+pub enum MbMode {
+  /// Same mode: Indicates that the macroblock is in the same mode as the previous macroblock.
+  Same,
+  /// Frame from Field mode: Indicates that the macroblock constructs a frame from two fields.
+  FrameFromField,
+  /// Field from Frame mode: Indicates that the macroblock constructs two fields from a frame.
+  FieldFromFrame,
+}
+
+impl MbMode {
+  pub fn new(mb_t: &Macroblock, mb_p: &Macroblock) -> Self {
+    if !mb_t.mb_field_decoding_flag
+      && mb_p.mb_field_decoding_flag
+      && mb_p.mb_type != MB_TYPE_UNAVAILABLE
+    {
+      Self::FrameFromField
+    } else if mb_t.mb_field_decoding_flag
+      && !mb_p.mb_field_decoding_flag
+      && mb_p.mb_type != MB_TYPE_UNAVAILABLE
+    {
+      Self::FieldFromFrame
+    } else {
+      Self::Same
+    }
+  }
+}
+
+/// Represents the size of a block within a macroblock (MB).
+#[derive(Debug, Clone, Copy)]
+pub enum BlockSize {
+  /// 4x4 block size: Used for luma (brightness) macroblocks.
+  B4x4,
+  /// Chroma block size: Used for chroma (color) macroblocks.
+  Chroma,
+  /// 8x8 block size: Typically used for luminance (Y) macroblocks in certain macroblock configurations.
+  B8x8,
+}
+
+impl BlockSize {
+  /// Checks if the block size represents a luma (brightness) block.
+  pub fn is_luma(&self) -> bool {
+    matches!(self, BlockSize::B4x4 | BlockSize::B8x8)
+  }
+
+  /// Checks if the block size represents a chroma (color) block.
+  pub fn is_chroma(&self) -> bool {
+    matches!(self, BlockSize::Chroma)
+  }
+
+  /// Gets the width of the block size in pixels.
+  pub fn width(&self) -> u32 {
+    match self {
+      BlockSize::B4x4 => 4,
+      BlockSize::Chroma => 8, // Chroma blocks typically have the same width as luma blocks.
+      BlockSize::B8x8 => 8,
+    }
+  }
+
+  /// Gets the height of the block size in pixels.
+  pub fn height(&self) -> u32 {
+    match self {
+      BlockSize::B4x4 => 4,
+      BlockSize::Chroma => 8, // Chroma blocks typically have the same height as luma blocks.
+      BlockSize::B8x8 => 8,
+    }
+  }
 }

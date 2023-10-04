@@ -6,7 +6,7 @@ use super::slice::{
   consts::*,
   consts::{is_skip_mb_type, MB_TYPE_UNAVAILABLE},
   header::SliceType,
-  macroblock::{MacroblockError, MbPosition},
+  macroblock::{BlockSize, Macroblock, MacroblockError, MbPosition},
   Slice,
 };
 use crate::math::clamp;
@@ -24,6 +24,8 @@ pub enum CabacError {
   Renorm,
   #[error("Bypass failed")]
   Bypass,
+  #[error("Cabac Bypass failed")]
+  CabacBypass,
   #[error("Inconsistent SE table")]
   SETable,
   #[error("No value from binarization")]
@@ -71,7 +73,798 @@ impl CabacContext {
     })
   }
 
-  pub fn sub_mb_type(&mut self, slice: &mut Slice, val: &mut u8) -> CabacResult {
+  pub fn mb_pred(&mut self, slice: &mut Slice) -> CabacResult {
+    if slice.mb().mb_type < MB_TYPE_P_L0_16X16 {
+      if !is_intra_16x16_mb_type(slice.mb().mb_type) {
+        if slice.mb().transform_size_8x8_flag == 0 {
+          for i in 0..16 {
+            slice.mb_mut().prev_intra4x4_pred_mode_flag[i] =
+              self.prev_intra_pred_mode_flag(slice)?;
+            if slice.mb().prev_intra4x4_pred_mode_flag[i] == 0 {
+              slice.mb_mut().rem_intra4x4_pred_mode[i] = self.rem_intra_pred_mode(slice)?;
+            }
+          }
+        } else {
+          for i in 0..4 {
+            slice.mb_mut().prev_intra8x8_pred_mode_flag[i] =
+              self.prev_intra_pred_mode_flag(slice)?;
+            if slice.mb().prev_intra8x8_pred_mode_flag[i] == 0 {
+              slice.mb_mut().rem_intra8x8_pred_mode[i] = self.rem_intra_pred_mode(slice)?;
+            }
+          }
+        }
+      }
+      if slice.chroma_array_type == 1 || slice.chroma_array_type == 2 {
+        slice.mb_mut().intra_chroma_pred_mode = self.intra_chroma_pred_mode(slice)?;
+      } else {
+        slice.mb_mut().intra_chroma_pred_mode = 0;
+      }
+      slice.infer_intra(0);
+      slice.infer_intra(1);
+    } else if slice.mb().mb_type != MB_TYPE_B_DIRECT_16X16 {
+      let mut ifrom = [0; 4];
+      let mut pmode = [0; 4];
+      ifrom[0] = -1isize as usize;
+      pmode[0] = MB_PART_INFO[slice.mb().mb_type as usize][1];
+      let mb_type = slice.mb().mb_type as usize;
+      match MB_PART_INFO[mb_type][0] {
+        0 => {
+          // 16x16
+          ifrom[1] = 0;
+          ifrom[2] = 0;
+          ifrom[3] = 0;
+        }
+        1 => {
+          // 16x8
+          ifrom[1] = 0;
+          ifrom[2] = -1isize as usize;
+          ifrom[3] = 2;
+          pmode[2] = MB_PART_INFO[mb_type][2];
+        }
+        2 => {
+          ifrom[1] = -1isize as usize;
+          ifrom[2] = 0;
+          ifrom[3] = 1;
+          pmode[1] = MB_PART_INFO[mb_type][2];
+        }
+        _ => unreachable!(),
+      }
+      let mut max = slice.num_ref_idx_l0_active_minus1.unwrap_or_default();
+      if slice.mbaff_frame_flag && slice.mb().mb_field_decoding_flag {
+        max *= 2;
+        max += 1;
+      }
+      for i in 0..4 {
+        if ifrom[i] == -1isize as usize {
+          if (pmode[i] & 1) != 0 {
+            slice.mb_mut().ref_idx[0][i] = self.ref_idx(slice, i, 0, max)?;
+          } else {
+            slice.mb_mut().ref_idx[0][i] = 0;
+          }
+        } else {
+          slice.mb_mut().ref_idx[0][i] = slice.mb().ref_idx[0][ifrom[i]];
+        }
+      }
+      max = slice.num_ref_idx_l1_active_minus1.unwrap_or_default();
+      if slice.mbaff_frame_flag && slice.mb().mb_field_decoding_flag {
+        max *= 2;
+        max += 1;
+      }
+      for i in 0..4 {
+        if ifrom[i] == -1isize as usize {
+          if (pmode[i] & 2) != 0 {
+            slice.mb_mut().ref_idx[1][i] = self.ref_idx(slice, i, 1, max)?;
+          } else {
+            slice.mb_mut().ref_idx[1][i] = 0;
+          }
+        } else {
+          slice.mb_mut().ref_idx[1][i] = slice.mb().ref_idx[1][ifrom[i]];
+        }
+      }
+      for i in 0..4 {
+        if ifrom[i] == -1isize as usize {
+          if (pmode[i] & 1) != 0 {
+            slice.mb_mut().mvd[0][i * 4][0] =
+              self.mvd(slice, i * 4, 0, 0, slice.mb().mvd[0][i * 4][0])?;
+            slice.mb_mut().mvd[0][i * 4][1] =
+              self.mvd(slice, i * 4, 1, 0, slice.mb().mvd[0][i * 4][1])?;
+          } else {
+            slice.mb_mut().mvd[0][i * 4][0] = 0;
+            slice.mb_mut().mvd[0][i * 4][1] = 0;
+          }
+        } else {
+          slice.mb_mut().mvd[0][i * 4][0] = slice.mb().mvd[0][ifrom[i] * 4][0];
+          slice.mb_mut().mvd[0][i * 4][1] = slice.mb().mvd[0][ifrom[i] * 4][1];
+        }
+        for j in 1..4 {
+          slice.mb_mut().mvd[0][i * 4 + j][0] = slice.mb().mvd[0][i * 4][0];
+          slice.mb_mut().mvd[0][i * 4 + j][1] = slice.mb().mvd[0][i * 4][1];
+        }
+      }
+      for i in 0..4 {
+        if ifrom[i] == -1isize as usize {
+          if (pmode[i] & 2) != 0 {
+            slice.mb_mut().mvd[1][i * 4][0] =
+              self.mvd(slice, i * 4, 0, 1, slice.mb().mvd[1][i * 4][0])?;
+            slice.mb_mut().mvd[1][i * 4][1] =
+              self.mvd(slice, i * 4, 1, 1, slice.mb().mvd[1][i * 4][1])?;
+          } else {
+            slice.mb_mut().mvd[1][i * 4][0] = 0;
+            slice.mb_mut().mvd[1][i * 4][1] = 0;
+          }
+        } else {
+          slice.mb_mut().mvd[1][i * 4][0] = slice.mb().mvd[1][ifrom[i] * 4][0];
+          slice.mb_mut().mvd[1][i * 4][1] = slice.mb().mvd[1][ifrom[i] * 4][1];
+        }
+        for j in 1..4 {
+          slice.mb_mut().mvd[1][i * 4 + j][0] = slice.mb().mvd[1][i * 4][0];
+          slice.mb_mut().mvd[1][i * 4 + j][1] = slice.mb().mvd[1][i * 4][1];
+        }
+      }
+      slice.mb_mut().intra_chroma_pred_mode = 0;
+    } else {
+      slice.mb_mut().intra_chroma_pred_mode = 0;
+      slice.infer_intra(0);
+      slice.infer_intra(1);
+    }
+    Ok(())
+  }
+
+  pub fn sub_mb_pred(&mut self, slice: &mut Slice) -> CabacResult {
+    let mut pmode = [0; 4];
+    let mut ifrom = [0; 16];
+    for i in 0..4 {
+      slice.mb_mut().sub_mb_type[i] = self.sub_mb_type(slice)?;
+      pmode[i] = SUB_MB_PART_INFO[slice.mb().sub_mb_type[i] as usize][1];
+      let sm = SUB_MB_PART_INFO[slice.mb().sub_mb_type[i] as usize][0];
+      ifrom[i * 4] = -1isize as usize;
+      match sm {
+        0 => {
+          ifrom[i * 4 + 1] = i * 4;
+          ifrom[i * 4 + 2] = i * 4;
+          ifrom[i * 4 + 3] = i * 4;
+        }
+        1 => {
+          ifrom[i * 4 + 1] = i * 4;
+          ifrom[i * 4 + 2] = -1isize as usize;
+          ifrom[i * 4 + 3] = i * 4 + 2;
+        }
+        2 => {
+          ifrom[i * 4 + 1] = -1isize as usize;
+          ifrom[i * 4 + 2] = i * 4;
+          ifrom[i * 4 + 3] = i * 4 + 1;
+        }
+        3 => {
+          ifrom[i * 4 + 1] = -1isize as usize;
+          ifrom[i * 4 + 2] = -1isize as usize;
+          ifrom[i * 4 + 3] = -1isize as usize;
+        }
+        _ => unreachable!(),
+      }
+    }
+    let mut max = slice.num_ref_idx_l0_active_minus1.unwrap_or_default();
+    if slice.mbaff_frame_flag && slice.mb().mb_field_decoding_flag {
+      max *= 2;
+      max += 1;
+    }
+    for (i, pmode) in pmode.iter().enumerate() {
+      if (pmode & 1) != 0 && slice.mb().mb_type != MB_TYPE_P_8X8REF0 {
+        slice.mb_mut().ref_idx[0][i] = self.ref_idx(slice, i, 0, max)?;
+      } else {
+        slice.mb_mut().ref_idx[0][i] = 0;
+      }
+    }
+    max = slice.num_ref_idx_l1_active_minus1.unwrap_or_default();
+    if slice.mbaff_frame_flag && slice.mb().mb_field_decoding_flag {
+      max *= 2;
+      max += 1;
+    }
+    for (i, pmode) in pmode.iter().enumerate() {
+      if (pmode & 2) != 0 {
+        slice.mb_mut().ref_idx[1][i] = self.ref_idx(slice, i, 1, max)?;
+      } else {
+        slice.mb_mut().ref_idx[1][i] = 0;
+      }
+    }
+    for i in 0..16 {
+      if ifrom[i] == -1isize as usize {
+        if (pmode[i / 4] & 1) != 0 {
+          slice.mb_mut().mvd[0][i][0] = self.mvd(slice, i, 0, 0, slice.mb().mvd[0][i][0])?;
+          slice.mb_mut().mvd[0][i][1] = self.mvd(slice, i, 1, 0, slice.mb().mvd[0][i][1])?;
+        } else {
+          slice.mb_mut().mvd[0][i][0] = 0;
+          slice.mb_mut().mvd[0][i][1] = 0;
+        }
+      } else {
+        slice.mb_mut().mvd[0][i][0] = slice.mb().mvd[0][ifrom[i]][0];
+        slice.mb_mut().mvd[0][i][1] = slice.mb().mvd[0][ifrom[i]][1];
+      }
+    }
+    for i in 0..16 {
+      if ifrom[i] == -1isize as usize {
+        if (pmode[i / 4] & 2) != 0 {
+          slice.mb_mut().mvd[1][i][0] = self.mvd(slice, i, 0, 1, slice.mb().mvd[1][i][0])?;
+          slice.mb_mut().mvd[1][i][1] = self.mvd(slice, i, 1, 1, slice.mb().mvd[1][i][1])?;
+        } else {
+          slice.mb_mut().mvd[1][i][0] = 0;
+          slice.mb_mut().mvd[1][i][1] = 0;
+        }
+      } else {
+        slice.mb_mut().mvd[1][i][0] = slice.mb().mvd[1][ifrom[i]][0];
+        slice.mb_mut().mvd[1][i][1] = slice.mb().mvd[1][ifrom[i]][1];
+      }
+    }
+    slice.mb_mut().intra_chroma_pred_mode = 0;
+    Ok(())
+  }
+
+  // pub fn residual(&mut self, slice: &mut Slice, start: u8, end: u8) {
+  //   if (h264_residual_luma(str, cabac, slice, mb, start, end, 0)) return 1;
+  //   if (slice.chroma_array_type == 1 || slice.chroma_array_type == 2) {
+  //     for i in 0..2 {
+  //       if (self.residual_cabac(slice, mb, slice.mb().block_chroma_dc[i], 0, H264_CTXBLOCKCAT_CHROMA_DC, i, 0, 4 * slice.chroma_array_type - 1, 4 * slice.chroma_array_type, (slice.mb().coded_block_pattern & 0x30) && start == 0)) return 1;
+  //     }
+  //     for (i = 0; i < 2; i++) {
+  //       for (j = 0; j < 4 * slice.chroma_array_type; j++) {
+  //         if (self.residual_cabac(slice, mb, slice.mb().block_chroma_ac[i][j], &slice.mb().total_coeff[i+1][j], H264_CTXBLOCKCAT_CHROMA_AC, i * 8 + j, (start?start-1:0), end-1, 15, slice.mb().coded_block_pattern & 0x20)) return 1;
+  //       }
+  //     }
+  //   } else if (slice.chroma_array_type == 3) {
+  //     if (h264_residual_luma(str, cabac, slice, mb, start, end, 1)) return 1;
+  //     if (h264_residual_luma(str, cabac, slice, mb, start, end, 2)) return 1;
+  //   }
+  //   return 0;
+  // }
+
+  // pub fn residual_luma(
+  //   &mut self,
+  //   slice: &mut Slice,
+  //   start: usize,
+  //   end: usize,
+  //   which: usize,
+  // ) -> CabacResult {
+  //   if start == 0 && is_intra_16x16_mb_type(slice.mb().mb_type) {
+  //     self.residual_cabac(
+  //       slice,
+  //       &mut slice.mb().block_luma_dc[which],
+  //       LUMA_CAT_TAB[which][0],
+  //       0,
+  //       0,
+  //       15,
+  //       16,
+  //       1,
+  //     )?;
+  //   } else {
+  //     slice.mb_mut().coded_block_flag[which][16] = 0;
+  //   }
+  //   let n = if is_intra_16x16_mb_type(slice.mb().mb_type) {
+  //     15
+  //   } else {
+  //     16
+  //   };
+  //   let ss = if is_intra_16x16_mb_type(slice.mb().mb_type) {
+  //     if start != 0 {
+  //       start - 1
+  //     } else {
+  //       0
+  //     }
+  //   } else {
+  //     start
+  //   };
+  //   let se = if is_intra_16x16_mb_type(slice.mb().mb_type) {
+  //     end - 1
+  //   } else {
+  //     end
+  //   };
+  //   if slice.mb().transform_size_8x8_flag == 0 {
+  //     for i in 0..16 {
+  //       let mut tmp = [0; 16];
+  //       let mut cat;
+  //       if slice.mb().transform_size_8x8_flag != 0 {
+  //         for j in 0..16 {
+  //           tmp[j] = slice.mb().block_luma_8x8[which][i >> 2][4 * j + (i & 3)];
+  //         }
+  //         cat = LUMA_CAT_TAB[which][3];
+  //       } else if is_intra_16x16_mb_type(slice.mb().mb_type) {
+  //         for j in 0..15 {
+  //           tmp[j] = slice.mb().block_luma_ac[which][i][j];
+  //         }
+  //         cat = LUMA_CAT_TAB[which][1];
+  //       } else {
+  //         for j in 0..16 {
+  //           tmp[j] = slice.mb().block_luma_4x4[which][i][j];
+  //         }
+  //         cat = LUMA_CAT_TAB[which][2];
+  //       }
+  //       self.residual_cabac(
+  //         slice,
+  //         &mut tmp,
+  //         cat,
+  //         i,
+  //         ss,
+  //         se,
+  //         n,
+  //         (slice.mb().coded_block_pattern >> (i >> 2) & 1) as usize,
+  //       )?;
+  //       if slice.mb().transform_size_8x8_flag != 0 {
+  //         for j in 0..16 {
+  //           slice.mb_mut().block_luma_8x8[which][i >> 2][4 * j + (i & 3)] = tmp[j];
+  //         }
+  //       } else if is_intra_16x16_mb_type(slice.mb().mb_type) {
+  //         for j in 0..15 {
+  //           slice.mb_mut().block_luma_ac[which][i][j] = tmp[j];
+  //         }
+  //       } else {
+  //         for j in 0..16 {
+  //           slice.mb_mut().block_luma_4x4[which][i][j] = tmp[j];
+  //         }
+  //       }
+  //     }
+  //   } else {
+  //     for i in 0..4 {
+  //       self.residual_cabac(
+  //         slice,
+  //         &mut slice.mb().block_luma_8x8[which][i],
+  //         LUMA_CAT_TAB[which][3],
+  //         i,
+  //         4 * start,
+  //         4 * end + 3,
+  //         64,
+  //         (slice.mb().coded_block_pattern >> i & 1) as usize,
+  //       )?;
+  //     }
+  //   }
+  //   Ok(())
+  // }
+
+  pub fn residual_cabac(
+    &mut self,
+    slice: &mut Slice,
+    blocks: &mut [i16],
+    cat: u8,
+    idx: usize,
+    start: usize,
+    end: usize,
+    maxnumcoeff: usize,
+    coded: usize,
+  ) -> CabacResult {
+    let mut coded_block_flag = 0;
+    for i in 0..maxnumcoeff {
+      if blocks[i] != 0 {
+        coded_block_flag = 1;
+      }
+    }
+    if coded != 0 {
+      if maxnumcoeff != 64 || slice.chroma_array_type == 3 {
+        coded_block_flag = self.coded_block_flag(slice, cat, idx)?;
+      } else {
+        coded_block_flag = 1;
+      }
+    } else {
+      coded_block_flag = 0;
+    }
+    match cat {
+      CTXBLOCKCAT_LUMA_DC => {
+        slice.mb_mut().coded_block_flag[0][16] = coded_block_flag;
+      }
+      CTXBLOCKCAT_LUMA_AC | CTXBLOCKCAT_LUMA_4X4 => {
+        slice.mb_mut().coded_block_flag[0][idx] = coded_block_flag;
+      }
+      CTXBLOCKCAT_LUMA_8X8 => {
+        slice.mb_mut().coded_block_flag[0][idx * 4 + 0] = coded_block_flag;
+        slice.mb_mut().coded_block_flag[0][idx * 4 + 1] = coded_block_flag;
+        slice.mb_mut().coded_block_flag[0][idx * 4 + 2] = coded_block_flag;
+        slice.mb_mut().coded_block_flag[0][idx * 4 + 3] = coded_block_flag;
+      }
+      CTXBLOCKCAT_CB_DC => {
+        slice.mb_mut().coded_block_flag[1][16] = coded_block_flag;
+      }
+      CTXBLOCKCAT_CB_AC | CTXBLOCKCAT_CB_4X4 => {
+        slice.mb_mut().coded_block_flag[1][idx] = coded_block_flag;
+      }
+      CTXBLOCKCAT_CB_8X8 => {
+        slice.mb_mut().coded_block_flag[1][idx * 4 + 0] = coded_block_flag;
+        slice.mb_mut().coded_block_flag[1][idx * 4 + 1] = coded_block_flag;
+        slice.mb_mut().coded_block_flag[1][idx * 4 + 2] = coded_block_flag;
+        slice.mb_mut().coded_block_flag[1][idx * 4 + 3] = coded_block_flag;
+      }
+      CTXBLOCKCAT_CR_DC => {
+        slice.mb_mut().coded_block_flag[2][16] = coded_block_flag;
+      }
+      CTXBLOCKCAT_CR_AC | CTXBLOCKCAT_CR_4X4 => {
+        slice.mb_mut().coded_block_flag[2][idx] = coded_block_flag;
+      }
+      CTXBLOCKCAT_CR_8X8 => {
+        slice.mb_mut().coded_block_flag[2][idx * 4 + 0] = coded_block_flag;
+        slice.mb_mut().coded_block_flag[2][idx * 4 + 1] = coded_block_flag;
+        slice.mb_mut().coded_block_flag[2][idx * 4 + 2] = coded_block_flag;
+        slice.mb_mut().coded_block_flag[2][idx * 4 + 3] = coded_block_flag;
+      }
+      CTXBLOCKCAT_CHROMA_DC => {
+        slice.mb_mut().coded_block_flag[idx + 1][16] = coded_block_flag;
+      }
+      CTXBLOCKCAT_CHROMA_AC => {
+        slice.mb_mut().coded_block_flag[(idx >> 3) + 1][idx & 7] = coded_block_flag;
+      }
+      cat => panic!("Invalid ctx_block_cat passed to residual_cabac {cat}"),
+    }
+    if coded_block_flag != 0 {
+      let field = slice.mb().mb_field_decoding_flag || slice.field_pic_flag;
+      let mut significant_coeff_flag = [0; 64];
+      let mut last_significant_coeff_flag = [0; 64];
+      let mut numcoeff = end + 1;
+      for i in start..numcoeff - 1 {
+        significant_coeff_flag[i] =
+          self.significant_coeff_flag(slice, field as usize, cat, i, 0)?;
+        if significant_coeff_flag[i] != 0 {
+          last_significant_coeff_flag[i] =
+            self.significant_coeff_flag(slice, field as usize, cat, i, 1)?;
+          if last_significant_coeff_flag[i] != 0 {
+            numcoeff = i + 1;
+          }
+        }
+      }
+      significant_coeff_flag[numcoeff - 1] = 1;
+      for block in blocks.iter_mut().take(maxnumcoeff) {
+        *block = 0;
+      }
+      let mut num1 = 0;
+      let mut numgt1 = 0;
+      let mut i = numcoeff - 1;
+      while i >= start {
+        if significant_coeff_flag[i] != 0 {
+          let cam1 = blocks[i].abs() - 1;
+          let mut s = (blocks[i] < 0) as u8;
+          let cam1 = self.coeff_abs_level_minus1(slice, cat, num1, numgt1, cam1)?;
+          self.cabac_bypass(slice, &mut s)?;
+          if cam1 != 0 {
+            numgt1 += 1;
+          } else {
+            num1 += 1;
+          }
+          blocks[i] = if s != 0 { -(cam1 + 1) } else { cam1 + 1 };
+        }
+        i -= 1;
+      }
+    } else {
+      for i in 0..maxnumcoeff {
+        blocks[i] = 0;
+      }
+    }
+    Ok(())
+  }
+
+  pub fn cabac_bypass(&mut self, slice: &mut Slice, bin_val: &mut u8) -> CabacResult {
+    self.cod_i_offset <<= 1;
+    let tmp = slice.stream.bit();
+    if tmp != 0 {
+      return Err(CabacError::CabacBypass);
+    }
+    self.cod_i_offset |= tmp as u16;
+    if self.cod_i_offset >= self.cod_i_range {
+      *bin_val = 1;
+      self.cod_i_offset -= self.cod_i_range;
+    } else {
+      *bin_val = 0;
+    }
+    self.bin_count += 1;
+    Ok(())
+  }
+
+  pub fn coeff_abs_level_minus1(
+    &mut self,
+    slice: &mut Slice,
+    cat: u8,
+    num1: i16,
+    numgt1: i16,
+    val: i16,
+  ) -> CabacResult<i16> {
+    let mut ctx_idx = [0; 2];
+    ctx_idx[0] = COEFF_ABS_LEVEL_MINUS1_BASE_CTX[cat as usize]
+      + if numgt1 != 0 {
+        0
+      } else if num1 >= 4 {
+        4
+      } else {
+        num1 + 1
+      };
+    let clamp = if cat == CTXBLOCKCAT_CHROMA_DC { 3 } else { 4 };
+    ctx_idx[1] = COEFF_ABS_LEVEL_MINUS1_BASE_CTX[cat as usize]
+      + 5
+      + if numgt1 > clamp { clamp } else { numgt1 };
+    self.ueg(slice, &ctx_idx, 2, 0, 0, 14, val)
+  }
+
+  pub fn significant_coeff_flag(
+    &mut self,
+    slice: &mut Slice,
+    field: usize,
+    cat: u8,
+    idx: usize,
+    last: usize,
+  ) -> CabacResult<u8> {
+    let mut ctx_inc: i16;
+    match cat {
+      CTXBLOCKCAT_LUMA_DC
+      | CTXBLOCKCAT_LUMA_AC
+      | CTXBLOCKCAT_LUMA_4X4
+      | CTXBLOCKCAT_CB_DC
+      | CTXBLOCKCAT_CB_AC
+      | CTXBLOCKCAT_CB_4X4
+      | CTXBLOCKCAT_CR_DC
+      | CTXBLOCKCAT_CR_AC
+      | CTXBLOCKCAT_CR_4X4
+      | CTXBLOCKCAT_CHROMA_AC => {
+        ctx_inc = idx as i16;
+      }
+      CTXBLOCKCAT_CHROMA_DC => {
+        ctx_inc = idx as i16 / slice.chroma_array_type as i16;
+        if ctx_inc > 2 {
+          ctx_inc = 2;
+        }
+      }
+      CTXBLOCKCAT_LUMA_8X8 | CTXBLOCKCAT_CB_8X8 | CTXBLOCKCAT_CR_8X8 => {
+        if last != 0 {
+          ctx_inc = SIGNIFICANT_COEFF_FLAG_TAB8X8[idx][2] as i16;
+        } else {
+          ctx_inc = SIGNIFICANT_COEFF_FLAG_TAB8X8[idx][field] as i16;
+        }
+      }
+      cat => panic!("Invalid ctx_block_cat passed to significant_coeff_flag {cat}"),
+    }
+    let ctx_idx = SIGNIFICANT_COEFF_FLAG_BASE_CTX[last][field][cat as usize] + ctx_inc;
+    self.decision(slice, ctx_idx)
+  }
+
+  pub fn coded_block_flag(
+    &mut self,
+    slice: &mut Slice,
+    cat: u8,
+    mut idx: usize,
+  ) -> CabacResult<u8> {
+    let mb_t = slice.mb_nb_p(MbPosition::This, 0);
+    let inter = is_inter_mb_type(mb_t.mb_type) as u8;
+    let which;
+    match cat {
+      CTXBLOCKCAT_LUMA_DC | CTXBLOCKCAT_LUMA_AC | CTXBLOCKCAT_LUMA_4X4 | CTXBLOCKCAT_LUMA_8X8 => {
+        which = 0;
+      }
+      CTXBLOCKCAT_CB_DC | CTXBLOCKCAT_CB_AC | CTXBLOCKCAT_CB_4X4 | CTXBLOCKCAT_CB_8X8 => {
+        which = 1;
+      }
+      CTXBLOCKCAT_CR_DC | CTXBLOCKCAT_CR_AC | CTXBLOCKCAT_CR_4X4 | CTXBLOCKCAT_CR_8X8 => {
+        which = 2;
+      }
+      CTXBLOCKCAT_CHROMA_DC => {
+        which = idx + 1;
+      }
+      CTXBLOCKCAT_CHROMA_AC => {
+        which = (idx >> 3) + 1;
+        idx &= 7;
+      }
+      cat => panic!("Invalid ctx_block_cat passed to coded_block_flag {cat}"),
+    }
+    let mut mb_a;
+    let mut mb_b;
+    let mut idx_a = 0;
+    let mut idx_b = 0;
+    match cat {
+      CTXBLOCKCAT_LUMA_DC | CTXBLOCKCAT_CB_DC | CTXBLOCKCAT_CR_DC | CTXBLOCKCAT_CHROMA_DC => {
+        slice.mb_nb(MbPosition::A, inter)?;
+        slice.mb_nb(MbPosition::B, inter)?;
+        idx_a = 16;
+        idx_b = 16;
+      }
+      CTXBLOCKCAT_LUMA_AC | CTXBLOCKCAT_LUMA_4X4 | CTXBLOCKCAT_CB_AC | CTXBLOCKCAT_CB_4X4
+      | CTXBLOCKCAT_CR_AC | CTXBLOCKCAT_CR_4X4 => {
+        slice.mb_nb_b(MbPosition::A, BlockSize::B4x4, inter, idx, &mut idx_a)?;
+        slice.mb_nb_b(MbPosition::B, BlockSize::B4x4, inter, idx, &mut idx_b)?;
+      }
+      CTXBLOCKCAT_LUMA_8X8 | CTXBLOCKCAT_CB_8X8 | CTXBLOCKCAT_CR_8X8 => {
+        mb_a = slice.mb_nb_b(MbPosition::A, BlockSize::B8x8, inter, idx, &mut idx_a)?;
+        mb_b = slice.mb_nb_b(MbPosition::B, BlockSize::B8x8, inter, idx, &mut idx_b)?;
+        idx_a *= 4;
+        idx_b *= 4;
+        if mb_a.transform_size_8x8_flag == 0
+          && mb_a.mb_type != MB_TYPE_I_PCM
+          && mb_a.mb_type != MB_TYPE_UNAVAILABLE
+        {
+          Macroblock::unavailable(1);
+        }
+        if mb_b.transform_size_8x8_flag == 0
+          && mb_b.mb_type != MB_TYPE_I_PCM
+          && mb_b.mb_type != MB_TYPE_UNAVAILABLE
+        {
+          Macroblock::unavailable(1);
+        }
+      }
+      CTXBLOCKCAT_CHROMA_AC => {
+        mb_a = slice.mb_nb_b(MbPosition::A, BlockSize::Chroma, inter, idx, &mut idx_a)?;
+        mb_b = slice.mb_nb_b(MbPosition::B, BlockSize::Chroma, inter, idx, &mut idx_b)?;
+      }
+      cat => panic!("Invalid ctx_block_cat passed to coded_block_flag {cat}"),
+    }
+    mb_a = slice.inter_filter(inter);
+    mb_b = slice.inter_filter(inter);
+    let cond_term_flag_a = mb_a.coded_block_flag[which][idx_a] as i16;
+    let cond_term_flag_b = mb_b.coded_block_flag[which][idx_b] as i16;
+    let ctx_idx = CODED_BLOCK_FLAG_BASE_CTX[cat as usize] + cond_term_flag_a + cond_term_flag_b * 2;
+    self.decision(slice, ctx_idx)
+  }
+
+  pub fn mb_qp_delta(&mut self, slice: &mut Slice, mut val: i16) -> CabacResult<i16> {
+    let mut ctx_idx = [0; 3];
+    if slice.prev_mb_addr != -1isize as usize && slice.mb().mb_qp_delta != 0 {
+      ctx_idx[0] = CTXIDX_MB_QP_DELTA + 1;
+    } else {
+      ctx_idx[0] = CTXIDX_MB_QP_DELTA;
+    }
+    ctx_idx[1] = CTXIDX_MB_QP_DELTA + 2;
+    ctx_idx[2] = CTXIDX_MB_QP_DELTA + 3;
+    let tmp = self.tu(slice, &ctx_idx, 3, -1i8 as u8)? as i16;
+    if (tmp & 1) != 0 {
+      val = (tmp + 1) >> 1;
+    } else {
+      val = -(tmp >> 1);
+    }
+    Ok(val)
+  }
+
+  #[allow(clippy::cast_ref_to_mut)]
+  pub fn coded_block_pattern(&mut self, slice: &mut Slice, has_chroma: bool) -> CabacResult<u8> {
+    let mut bit = [0u8; 6];
+    let mut ctx_idx;
+    let mb_t = slice.mb_nb(MbPosition::This, 0)?;
+    let mut idx_a = 0;
+    let mut idx_b = 0;
+    let mut mb_a;
+    let mut mb_b;
+    for i in 0..4 {
+      mb_a = slice.mb_nb_b(MbPosition::A, BlockSize::B8x8, 0, i, &mut idx_a)?;
+      mb_b = slice.mb_nb_b(MbPosition::B, BlockSize::B8x8, 0, i, &mut idx_b)?;
+      let cond_term_flag_a = ((if std::ptr::eq(mb_a as *const _, mb_t as *const _) {
+        bit[idx_a]
+      } else {
+        mb_a.coded_block_pattern >> idx_a & 1
+      }) == 0) as i16;
+      let cond_term_flag_b = ((if std::ptr::eq(mb_b as *const _, mb_t as *const _) {
+        bit[idx_b]
+      } else {
+        mb_b.coded_block_pattern >> idx_b & 1
+      }) == 0) as i16;
+      ctx_idx = CTXIDX_CODED_BLOCK_PATTERN_LUMA + cond_term_flag_a + cond_term_flag_b * 2;
+      bit[i] = self.decision(unsafe { &mut *(slice as *const _ as *mut _) }, ctx_idx)?;
+    }
+    if has_chroma {
+      mb_a = slice.mb_nb(MbPosition::A, 0)?;
+      mb_b = slice.mb_nb(MbPosition::B, 0)?;
+      let cond_term_flag_a = ((mb_a.coded_block_pattern >> 4) > 0) as i16;
+      let cond_term_flag_b = ((mb_b.coded_block_pattern >> 4) > 0) as i16;
+      ctx_idx = CTXIDX_CODED_BLOCK_PATTERN_CHROMA + cond_term_flag_a + cond_term_flag_b * 2;
+      bit[4] = self.decision(unsafe { &mut *(slice as *const _ as *mut _) }, ctx_idx)?;
+      if bit[4] != 0 {
+        let cond_term_flag_a = ((mb_a.coded_block_pattern >> 4) > 1) as i16;
+        let cond_term_flag_b = ((mb_b.coded_block_pattern >> 4) > 1) as i16;
+        ctx_idx = CTXIDX_CODED_BLOCK_PATTERN_CHROMA + cond_term_flag_a + cond_term_flag_b * 2 + 4;
+        bit[5] = self.decision(slice, ctx_idx)?;
+      }
+    }
+    Ok(bit[0] | bit[1] << 1 | bit[2] << 2 | bit[3] << 3 | bit[4] << (4 + bit[5]))
+  }
+
+  pub fn intra_chroma_pred_mode(&mut self, slice: &mut Slice) -> CabacResult<u8> {
+    let cond_term_flag_a = (slice.mb_nb(MbPosition::A, 0)?.intra_chroma_pred_mode != 0) as i16;
+    let cond_term_flag_b = (slice.mb_nb(MbPosition::B, 0)?.intra_chroma_pred_mode != 0) as i16;
+    let ctx_idx = [
+      CTXIDX_INTRA_CHROMA_PRED_MODE + cond_term_flag_a + cond_term_flag_b,
+      CTXIDX_INTRA_CHROMA_PRED_MODE + 3,
+    ];
+    self.tu(slice, &ctx_idx, 2, 3)
+  }
+
+  pub fn rem_intra_pred_mode(&mut self, slice: &mut Slice) -> CabacResult<u8> {
+    let bit = [
+      self.decision(slice, CTXIDX_REM_INTRA_PRED_MODE)?,
+      self.decision(slice, CTXIDX_REM_INTRA_PRED_MODE)?,
+      self.decision(slice, CTXIDX_REM_INTRA_PRED_MODE)?,
+    ];
+    Ok(bit[0] | bit[1] << 1 | bit[2] << 2)
+  }
+
+  pub fn prev_intra_pred_mode_flag(&mut self, slice: &mut Slice) -> CabacResult<u8> {
+    self.decision(slice, CTXIDX_PREV_INTRA_PRED_MODE_FLAG)
+  }
+
+  pub fn transform_size_8x8_flag(&mut self, slice: &mut Slice) -> CabacResult<u8> {
+    let ctx_idx_offset = CTXIDX_TRANSFORM_SIZE_8X8_FLAG;
+    let cond_term_flag_a = slice.mb_nb(MbPosition::A, 0)?.transform_size_8x8_flag;
+    let cond_term_flag_b = slice.mb_nb(MbPosition::B, 0)?.transform_size_8x8_flag;
+    let ctx_idx_inc = cond_term_flag_a + cond_term_flag_b;
+    self.decision(slice, ctx_idx_offset + ctx_idx_inc as i16)
+  }
+
+  pub fn mvd(
+    &mut self,
+    slice: &mut Slice,
+    idx: usize,
+    comp: usize,
+    which: usize,
+    val: i16,
+  ) -> CabacResult<i16> {
+    let base_idx = if comp != 0 {
+      CTXIDX_MVD_Y
+    } else {
+      CTXIDX_MVD_X
+    };
+    let mut idx_a = 0;
+    let mut idx_b = 0;
+    let mb_t = slice.mb_nb(MbPosition::This, 0)?;
+    let mb_a = slice.mb_nb_b(MbPosition::A, BlockSize::B4x4, 0, idx, &mut idx_a)?;
+    let mb_b = slice.mb_nb_b(MbPosition::B, BlockSize::B4x4, 0, idx, &mut idx_b)?;
+    let mut abs_mvd_comp_a = mb_a.mvd[which][idx_a][comp].unsigned_abs();
+    let mut abs_mvd_comp_b = mb_b.mvd[which][idx_b][comp].unsigned_abs();
+    if comp != 0 {
+      if mb_t.mb_field_decoding_flag && !mb_a.mb_field_decoding_flag {
+        abs_mvd_comp_a /= 2;
+      }
+      if !mb_t.mb_field_decoding_flag && mb_a.mb_field_decoding_flag {
+        abs_mvd_comp_a *= 2;
+      }
+      if mb_t.mb_field_decoding_flag && !mb_b.mb_field_decoding_flag {
+        abs_mvd_comp_b /= 2;
+      }
+      if !mb_t.mb_field_decoding_flag && mb_b.mb_field_decoding_flag {
+        abs_mvd_comp_b *= 2;
+      }
+    }
+    let sum = abs_mvd_comp_a + abs_mvd_comp_b;
+    let inc;
+    if sum < 3 {
+      inc = 0;
+    } else if sum <= 32 {
+      inc = 1;
+    } else {
+      inc = 2;
+    }
+    let ctx_idx = [
+      base_idx + inc,
+      base_idx + 3,
+      base_idx + 4,
+      base_idx + 5,
+      base_idx + 6,
+    ];
+    self.ueg(slice, &ctx_idx, 5, 3, 1, 9, val)
+  }
+
+  pub fn ref_idx(
+    &mut self,
+    slice: &mut Slice,
+    idx: usize,
+    which: usize,
+    max: u16,
+  ) -> CabacResult<u8> {
+    if max == 0 {
+      return Ok(0);
+    }
+    let mut idx_a = 0;
+    let mut idx_b = 0;
+    let mb_t = slice.mb_nb(MbPosition::This, 0)?;
+    let mb_a = slice.mb_nb_b(MbPosition::A, BlockSize::B8x8, 0, idx, &mut idx_a)?;
+    let mb_b = slice.mb_nb_b(MbPosition::B, BlockSize::B8x8, 0, idx, &mut idx_b)?;
+    let thr_a = !mb_t.mb_field_decoding_flag && mb_a.mb_field_decoding_flag;
+    let thr_b = !mb_t.mb_field_decoding_flag && mb_b.mb_field_decoding_flag;
+    let cond_term_flag_a = (mb_a.ref_idx[which][idx_a] > thr_a as u8) as i16;
+    let cond_term_flag_b = (mb_b.ref_idx[which][idx_b] > thr_b as u8) as i16;
+    let ctx_idx = [
+      CTXIDX_REF_IDX + cond_term_flag_a + 2 * cond_term_flag_b,
+      CTXIDX_REF_IDX + 4,
+      CTXIDX_REF_IDX + 5,
+    ];
+    self.tu(slice, &ctx_idx, 3, -1i8 as u8)
+  }
+
+  pub fn sub_mb_type(&mut self, slice: &mut Slice) -> CabacResult<u8> {
+    let mut val = 0;
     let slice_type = slice.slice_type;
     if slice_type.is_predictive() {
       let bidx = [
@@ -79,7 +872,8 @@ impl CabacContext {
         CTXIDX_SUB_MB_TYPE_P + 1,
         CTXIDX_SUB_MB_TYPE_P + 2,
       ];
-      self.se(slice, SUB_MB_TYPE_P_TABLE, &bidx, val)
+      self.se(slice, SUB_MB_TYPE_P_TABLE, &bidx, &mut val)?;
+      Ok(val)
     } else if slice_type.is_bidirectional() {
       let bidx = [
         CTXIDX_SUB_MB_TYPE_B,
@@ -87,7 +881,8 @@ impl CabacContext {
         CTXIDX_SUB_MB_TYPE_B + 2,
         CTXIDX_SUB_MB_TYPE_B + 3,
       ];
-      self.se(slice, SUB_MB_TYPE_B_TABLE, &bidx, val)
+      self.se(slice, SUB_MB_TYPE_B_TABLE, &bidx, &mut val)?;
+      Ok(val)
     } else {
       Err(CabacError::SubMbType)
     }
@@ -170,9 +965,8 @@ impl CabacContext {
     Ok(())
   }
 
-  pub fn mb_skip_flag(&mut self, slice: &mut Slice, bin_val: &mut u8) -> CabacResult {
+  pub fn mb_skip_flag(&mut self, slice: &mut Slice) -> CabacResult<u8> {
     let ctx_idx_offset;
-    let ctx_idx_inc;
     if slice.slice_type.is_predictive() {
       ctx_idx_offset = CTXIDX_MB_SKIP_FLAG_P;
     } else if slice.slice_type.is_bidirectional() {
@@ -184,16 +978,16 @@ impl CabacContext {
     let mb_b = slice.mb_nb(MbPosition::B, 0)?;
     let cond_term_flag_a = mb_a.mb_type != MB_TYPE_UNAVAILABLE && !is_skip_mb_type(mb_a.mb_type);
     let cond_term_flag_b = mb_b.mb_type != MB_TYPE_UNAVAILABLE && !is_skip_mb_type(mb_b.mb_type);
-    ctx_idx_inc = cond_term_flag_a as i16 + cond_term_flag_b as i16;
-    self.decision(slice, ctx_idx_offset + ctx_idx_inc, bin_val)
+    let ctx_idx_inc = cond_term_flag_a as i16 + cond_term_flag_b as i16;
+    self.decision(slice, ctx_idx_offset + ctx_idx_inc)
   }
 
-  pub fn mb_field_decoding_flag(&mut self, slice: &mut Slice, bin_val: &mut u8) -> CabacResult {
+  pub fn mb_field_decoding_flag(&mut self, slice: &mut Slice) -> CabacResult<u8> {
     let ctx_idx_offset = CTXIDX_MB_FIELD_DECODING_FLAG;
     let cond_term_flag_a = slice.mb_nb_p(MbPosition::A, 0).mb_field_decoding_flag;
     let cond_term_flag_b = slice.mb_nb_p(MbPosition::B, 0).mb_field_decoding_flag;
     let ctx_idx_inc = cond_term_flag_a as i16 + cond_term_flag_b as i16;
-    self.decision(slice, ctx_idx_offset + ctx_idx_inc, bin_val)
+    self.decision(slice, ctx_idx_offset + ctx_idx_inc)
   }
 
   pub fn se(
@@ -210,7 +1004,7 @@ impl CabacContext {
       for bit in se_value.bits {
         if bin_idx[j] == -1 {
           bin_idx[j] = bit.bin_idx as i16;
-          self.decision(slice, ctx_indices[bin_idx[j] as usize], &mut byte[j])?;
+          byte[j] = self.decision(slice, ctx_indices[bin_idx[j] as usize])?;
         }
         if bin_idx[j] != bit.bin_idx as i16 {
           return Err(CabacError::SETable);
@@ -241,19 +1035,17 @@ impl CabacContext {
     mut k: i16,
     sign: i16,
     u_coff: u8,
-    val: &mut i16,
-  ) -> CabacResult {
+    mut val: i16,
+  ) -> CabacResult<i16> {
     let mut tuval = val.unsigned_abs() as u8;
     if tuval > u_coff {
       tuval = u_coff;
     }
-    self.tu(slice, ctx_indices, num_idx, u_coff, &mut tuval)?;
+    let tuval = self.tu(slice, ctx_indices, num_idx, u_coff)?;
     let mut rval = tuval;
     if tuval >= u_coff {
-      let mut tmp = 0;
       loop {
-        self.bypass(slice, &mut tmp)?;
-        if tmp == 0 {
+        if self.bypass(slice)? == 0 {
           break;
         }
         rval += 1 << k;
@@ -261,23 +1053,20 @@ impl CabacContext {
       }
       while k > 0 {
         k -= 1;
-        self.bypass(slice, &mut tmp)?;
-        rval += tmp << k;
+        rval += self.bypass(slice)? << k;
       }
     }
     let rval = rval as i16;
     if rval != 0 && sign != 0 {
-      let mut s = (*val < 0) as u8;
-      self.bypass(slice, &mut s)?;
-      if s != 0 {
-        *val = -rval;
+      if self.bypass(slice)? != 0 {
+        val = -rval;
       } else {
-        *val = rval;
+        val = rval;
       }
     } else {
-      *val = rval;
+      val = rval;
     }
-    Ok(())
+    Ok(val)
   }
 
   pub fn tu(
@@ -286,31 +1075,28 @@ impl CabacContext {
     ctx_indices: &[i16],
     num_idx: u8,
     c_max: u8,
-    val: &mut u8,
-  ) -> CabacResult {
-    let mut bit = 1u8;
+  ) -> CabacResult<u8> {
     let mut i = 0;
     while i < c_max {
-      self.decision(
+      if self.decision(
         slice,
         ctx_indices[if i >= num_idx { num_idx - 1 } else { i } as usize],
-        &mut bit,
-      )?;
-      if bit == 0 {
+      )? == 0
+      {
         break;
       }
       i += 1;
     }
-    *val = i;
-    Ok(())
+    Ok(i)
   }
 
-  pub fn decision(&mut self, slice: &mut Slice, ctx_idx: i16, bin_val: &mut u8) -> CabacResult {
+  pub fn decision(&mut self, slice: &mut Slice, ctx_idx: i16) -> CabacResult<u8> {
+    let mut bin_val = 0;
     if ctx_idx == -1 {
-      return self.bypass(slice, bin_val);
+      return self.bypass(slice);
     }
     if ctx_idx == CTXIDX_TERMINATE {
-      return self.terminate(slice, bin_val);
+      return self.terminate(slice);
     }
 
     let ctx_idx = ctx_idx as usize;
@@ -320,13 +1106,13 @@ impl CabacContext {
     let cod_i_range_lps = RANGE_TAB_LPS[p_state_idx][q_cod_i_range_idx] as u16;
     self.cod_i_range -= cod_i_range_lps;
     if self.cod_i_offset >= self.cod_i_range {
-      *bin_val = (self.val_mps[ctx_idx] == 0) as u8;
+      bin_val = (self.val_mps[ctx_idx] == 0) as u8;
       self.cod_i_offset -= self.cod_i_range;
       self.cod_i_range = cod_i_range_lps;
     } else {
-      *bin_val = self.val_mps[ctx_idx];
+      bin_val = self.val_mps[ctx_idx];
     }
-    if *bin_val == self.val_mps[ctx_idx] {
+    if bin_val == self.val_mps[ctx_idx] {
       self.p_state_idx[ctx_idx] = TRANS_IDX_MPS[p_state_idx] as i16;
     } else {
       if p_state_idx == 0 {
@@ -336,36 +1122,38 @@ impl CabacContext {
     }
     self.renorm(slice)?;
     self.bin_count += 1;
-    Ok(())
+    Ok(bin_val)
   }
 
-  pub fn bypass(&mut self, slice: &mut Slice, bin_val: &mut u8) -> CabacResult {
+  pub fn bypass(&mut self, slice: &mut Slice) -> CabacResult<u8> {
+    let mut bin_val = 0;
     self.cod_i_offset <<= 1;
     let bit = slice.stream.bit();
     if bit == 1 {
       return Err(CabacError::Bypass);
     }
     self.cod_i_offset |= bit as u16;
-    if (self.cod_i_offset >= self.cod_i_range) {
-      *bin_val = 1;
+    if self.cod_i_offset >= self.cod_i_range {
+      bin_val = 1;
       self.cod_i_offset -= self.cod_i_range;
     } else {
-      *bin_val = 0;
+      bin_val = 0;
     }
     self.bin_count += 1;
-    Ok(())
+    Ok(bin_val)
   }
 
-  pub fn terminate(&mut self, slice: &mut Slice, bin_val: &mut u8) -> CabacResult {
+  pub fn terminate(&mut self, slice: &mut Slice) -> CabacResult<u8> {
+    let bin_val;
     self.cod_i_range -= 2;
     if self.cod_i_offset >= self.cod_i_range {
-      *bin_val = 1;
+      bin_val = 1;
     } else {
-      *bin_val = 0;
+      bin_val = 0;
       self.renorm(slice)?;
     }
     self.bin_count += 1;
-    Ok(())
+    Ok(bin_val)
   }
 
   pub fn renorm(&mut self, slice: &mut Slice) -> CabacResult {

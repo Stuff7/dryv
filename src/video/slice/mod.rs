@@ -2,7 +2,7 @@ pub mod consts;
 pub mod header;
 pub mod macroblock;
 
-use self::macroblock::MacroblockError;
+use self::macroblock::{BlockSize, MacroblockError, MbMode};
 use consts::*;
 use macroblock::MbPosition;
 
@@ -19,11 +19,11 @@ use header::*;
 use macroblock::Macroblock;
 use std::ops::Deref;
 
-#[derive(Debug)]
 pub struct Slice<'a> {
   pub header: SliceHeader,
   pub sps: &'a SequenceParameterSet,
   pub pps: &'a PictureParameterSet,
+  pub nal_unit_type: NALUnitType,
   pub stream: BitStream<'a>,
   pub cabac_init_mode: usize,
   pub chroma_array_type: u16,
@@ -39,7 +39,7 @@ pub struct Slice<'a> {
   pub curr_mb_addr: usize,
   /// Macroblocks
   pub sgmap: &'a [u8],
-  pub macroblocks: &'a mut [Macroblock],
+  pub macroblocks: Box<[Macroblock]>,
 }
 
 impl<'a> Slice<'a> {
@@ -51,6 +51,7 @@ impl<'a> Slice<'a> {
   ) -> Self {
     let pic_width_in_mbs;
     let mut pic_height_in_mbs;
+    let pic_size_in_mbs;
     let mut stream = BitStream::new(data);
     let header = SliceHeader::new(&mut stream, nal, sps, pps);
     Self {
@@ -79,18 +80,22 @@ impl<'a> Slice<'a> {
         }
         pic_height_in_mbs
       },
-      pic_size_in_mbs: pic_width_in_mbs * pic_height_in_mbs,
+      pic_size_in_mbs: {
+        pic_size_in_mbs = pic_width_in_mbs * pic_height_in_mbs;
+        pic_size_in_mbs
+      },
       sliceqpy: 26 + pps.pic_init_qp_minus26 + header.slice_qp_delta,
       mbaff_frame_flag: sps.mb_adaptive_frame_field_flag && !header.field_pic_flag,
       last_mb_in_slice: 0,
       header,
       sps,
       pps,
+      nal_unit_type: nal.unit_type,
       stream,
       prev_mb_addr: 0,
       curr_mb_addr: 0,
       sgmap: &[],
-      macroblocks: &mut [],
+      macroblocks: (0..pic_size_in_mbs).map(|_| Macroblock::empty(0)).collect(),
     }
   }
 
@@ -126,7 +131,7 @@ impl<'a> Slice<'a> {
             self.inferred_mb_field_decoding_flag()
           };
           self.macroblocks[self.curr_mb_addr].mb_field_decoding_flag = ival;
-          cabac.mb_skip_flag(self, &mut mb_skip_flag)?;
+          mb_skip_flag = cabac.mb_skip_flag(self)?;
           self.macroblocks[self.curr_mb_addr].mb_field_decoding_flag = save;
         }
         if mb_skip_flag != 0 {
@@ -135,14 +140,12 @@ impl<'a> Slice<'a> {
           if self.mbaff_frame_flag {
             let first_addr = self.curr_mb_addr & !1;
             if self.curr_mb_addr == first_addr {
-              let mut tmp = 0;
-              cabac.mb_field_decoding_flag(self, &mut tmp)?;
-              self.macroblocks[first_addr].mb_field_decoding_flag = tmp != 0;
+              self.macroblocks[first_addr].mb_field_decoding_flag =
+                cabac.mb_field_decoding_flag(self)? != 0;
             } else {
               if self.macroblocks[first_addr].mb_type == skip_type {
-                let mut tmp = 0;
-                cabac.mb_field_decoding_flag(self, &mut tmp)?;
-                self.macroblocks[first_addr].mb_field_decoding_flag = tmp != 0
+                self.macroblocks[first_addr].mb_field_decoding_flag =
+                  cabac.mb_field_decoding_flag(self)? != 0
               }
               self.macroblocks[first_addr + 1].mb_field_decoding_flag =
                 self.macroblocks[first_addr].mb_field_decoding_flag;
@@ -153,8 +156,7 @@ impl<'a> Slice<'a> {
           todo!("h264_macroblock_layer(&self.macroblocks[self.curr_mb_addr])?;");
         }
         if !self.mbaff_frame_flag || (self.curr_mb_addr & 1) != 0 {
-          let mut end_of_slice_flag = (self.last_mb_in_slice == self.curr_mb_addr) as u8;
-          cabac.terminate(self, &mut end_of_slice_flag)?;
+          let end_of_slice_flag = cabac.terminate(self)?;
           if end_of_slice_flag != 0 {
             self.last_mb_in_slice = self.curr_mb_addr;
             self.stream.skip_trailing_bits();
@@ -312,6 +314,18 @@ impl<'a> Slice<'a> {
     }
   }
 
+  pub fn inter_filter(&self, inter: u8) -> &Macroblock {
+    if inter == 0
+      && self.pps.constrained_intra_pred_flag
+      && matches!(self.nal_unit_type, NALUnitType::DataPartitionA)
+      && is_inter_mb_type(self.mb().mb_type)
+    {
+      Macroblock::unavailable(1)
+    } else {
+      self.mb()
+    }
+  }
+
   pub fn mb_nb(&self, position: MbPosition, inter: u8) -> CabacResult<&Macroblock> {
     let mbp = self.mb_nb_p(position, inter);
     let mbt = &self.macroblocks[self.curr_mb_addr];
@@ -323,7 +337,7 @@ impl<'a> Slice<'a> {
           && (self.curr_mb_addr & 1) != 0
           && mbp.mb_field_decoding_flag == mbt.mb_field_decoding_flag
         {
-          mbp.offset(self.macroblocks, 1)?
+          mbp.offset(&self.macroblocks, 1)?
         } else {
           mbp
         }
@@ -336,12 +350,12 @@ impl<'a> Slice<'a> {
             {
               mbp
             } else {
-              mbp.offset(self.macroblocks, 1)?
+              mbp.offset(&self.macroblocks, 1)?
             }
           } else if (self.curr_mb_addr & 1) != 0 {
-            mbt.offset(self.macroblocks, -1)?
+            mbt.offset(&self.macroblocks, -1)?
           } else if mbp.mb_type != MB_TYPE_UNAVAILABLE {
-            mbp.offset(self.macroblocks, 1)?
+            mbp.offset(&self.macroblocks, 1)?
           } else {
             mbp
           }
@@ -351,6 +365,127 @@ impl<'a> Slice<'a> {
       }
       _ => panic!("Slice::mb_nb received bad position {position:?}"),
     })
+  }
+
+  pub fn mb_nb_b(
+    &self,
+    position: MbPosition,
+    mut block_size: BlockSize,
+    inter: u8,
+    idx: usize,
+    pidx: &mut usize,
+  ) -> CabacResult<&Macroblock> {
+    let mb_p = self.mb_nb_p(position, inter);
+    let mb_o = self.mb_nb(position, inter)?;
+    let mb_t = self.mb();
+    if self.chroma_array_type == 1 && block_size.is_chroma() {
+      block_size = BlockSize::B8x8;
+    }
+    let mode = MbMode::new(mb_t, mb_p);
+    let par = self.curr_mb_addr & 1;
+    match position {
+      MbPosition::A => match block_size {
+        BlockSize::B4x4 => {
+          if (idx & 1) != 0 {
+            *pidx = idx - 1;
+            Ok(mb_t)
+          } else if (idx & 4) != 0 {
+            *pidx = idx - 3;
+            Ok(mb_t)
+          } else {
+            match mode {
+              MbMode::Same => {
+                *pidx = idx + 5;
+                Ok(mb_o)
+              }
+              MbMode::FrameFromField => {
+                *pidx = (idx >> 2 & 2) + par * 8 + 5;
+                Ok(mb_o)
+              }
+              MbMode::FieldFromFrame => {
+                *pidx = (idx << 2 & 8) + 5;
+                Ok(mb_p.offset(&self.macroblocks, idx as isize >> 3)?)
+              }
+            }
+          }
+        }
+        BlockSize::Chroma => {
+          if (idx & 1) != 0 {
+            *pidx = idx - 1;
+            Ok(mb_t)
+          } else {
+            match mode {
+              MbMode::Same => {
+                *pidx = idx + 1;
+                Ok(mb_o)
+              }
+              MbMode::FrameFromField => {
+                *pidx = (idx >> 1 & 2) + par * 4 + 1;
+                Ok(mb_o)
+              }
+              MbMode::FieldFromFrame => {
+                *pidx = (idx << 1 & 4) + 1;
+                Ok(mb_p.offset(&self.macroblocks, idx as isize >> 2)?)
+              }
+            }
+          }
+        }
+        BlockSize::B8x8 => {
+          if (idx & 1) != 0 {
+            *pidx = idx - 1;
+            Ok(mb_t)
+          } else {
+            match mode {
+              MbMode::Same => {
+                *pidx = idx + 1;
+                Ok(mb_o)
+              }
+              MbMode::FrameFromField => {
+                *pidx = par * 2 + 1;
+                Ok(mb_o)
+              }
+              MbMode::FieldFromFrame => {
+                *pidx = 1;
+                Ok(mb_p.offset(&self.macroblocks, idx as isize >> 1)?)
+              }
+            }
+          }
+        }
+      },
+      MbPosition::B => match block_size {
+        BlockSize::B4x4 => {
+          if (idx & 2) != 0 {
+            *pidx = idx - 2;
+            Ok(mb_t)
+          } else if (idx & 8) != 0 {
+            *pidx = idx - 6;
+            Ok(mb_t)
+          } else {
+            *pidx = idx + 10;
+            Ok(mb_o)
+          }
+        }
+        BlockSize::Chroma => {
+          if (idx & 6) != 0 {
+            *pidx = idx - 2;
+            Ok(mb_t)
+          } else {
+            *pidx = idx + 6;
+            Ok(mb_o)
+          }
+        }
+        BlockSize::B8x8 => {
+          if (idx & 2) != 0 {
+            *pidx = idx - 2;
+            Ok(mb_t)
+          } else {
+            *pidx = idx + 2;
+            Ok(mb_o)
+          }
+        }
+      },
+      position => panic!("Invalid position passed to mb_nb_b {position:?}"),
+    }
   }
 
   pub fn mb_nb_p(&self, position: MbPosition, inter: u8) -> &Macroblock {
@@ -422,5 +557,29 @@ impl<'a> Deref for Slice<'a> {
   type Target = SliceHeader;
   fn deref(&self) -> &Self::Target {
     &self.header
+  }
+}
+
+impl<'a> std::fmt::Debug for Slice<'a> {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.debug_struct("Slice")
+      .field("header", &self.header)
+      .field("sps", &self.sps)
+      .field("pps", &self.pps)
+      .field("nal_unit_type", &self.nal_unit_type)
+      .field("stream", &self.stream)
+      .field("cabac_init_mode", &self.cabac_init_mode)
+      .field("chroma_array_type", &self.chroma_array_type)
+      .field("pic_width_in_mbs", &self.pic_width_in_mbs)
+      .field("pic_height_in_mbs", &self.pic_height_in_mbs)
+      .field("pic_size_in_mbs", &self.pic_size_in_mbs)
+      .field("sliceqpy", &self.sliceqpy)
+      .field("mbaff_frame_flag", &self.mbaff_frame_flag)
+      .field("last_mb_in_slice", &self.last_mb_in_slice)
+      .field("prev_mb_addr", &self.prev_mb_addr)
+      .field("curr_mb_addr", &self.curr_mb_addr)
+      .field("sgmap", &self.sgmap)
+      .field("macroblocks length", &self.macroblocks.len())
+      .finish()
   }
 }
