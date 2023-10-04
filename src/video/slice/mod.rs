@@ -153,7 +153,7 @@ impl<'a> Slice<'a> {
           } else {
             self.macroblocks[self.curr_mb_addr].mb_field_decoding_flag = self.field_pic_flag;
           }
-          todo!("h264_macroblock_layer(&self.macroblocks[self.curr_mb_addr])?;");
+          cabac.macroblock_layer(self)?;
         }
         if !self.mbaff_frame_flag || (self.curr_mb_addr & 1) != 0 {
           let end_of_slice_flag = cabac.terminate(self)?;
@@ -217,7 +217,7 @@ impl<'a> Slice<'a> {
         } else {
           self.macroblocks[self.curr_mb_addr].mb_field_decoding_flag = self.field_pic_flag;
         }
-        todo!("h264_macroblock_layer(&self.macroblocks[self.curr_mb_addr])?;");
+        todo!("implement macroblock layer for cavlc");
         self.last_mb_in_slice = self.curr_mb_addr;
         if !self.stream.has_bits() {
           break;

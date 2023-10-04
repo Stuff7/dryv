@@ -1,4 +1,4 @@
-use crate::video::slice::consts::*;
+use crate::video::slice::{consts::*, Slice};
 
 // Table 9-11 mb_type
 pub const CTXIDX_MB_TYPE_SI_PRE: i16 = 0;
@@ -489,3 +489,23 @@ pub const COEFF_ABS_LEVEL_MINUS1_BASE_CTX: [i16; 14] = [
   CTXIDX_COEFF_ABS_LEVEL_MINUS1_PRE_CAT12,
   CTXIDX_COEFF_ABS_LEVEL_MINUS1_PRE_CAT13,
 ];
+
+pub enum ResidualBlock {
+  Custom(*mut [i16; 16]),
+  ChromaDc(usize),
+  ChromaAc(usize, usize),
+  LumaDc(usize),
+  Luma8x8(usize, usize),
+}
+
+impl ResidualBlock {
+  pub fn content<'a>(&'a mut self, slice: &'a mut Slice) -> &'a mut [i16] {
+    match self {
+      Self::Custom(slice) => unsafe { &mut **slice },
+      Self::ChromaDc(i) => &mut slice.mb_mut().block_chroma_dc[*i],
+      Self::ChromaAc(i, j) => &mut slice.mb_mut().block_chroma_ac[*i][*j],
+      Self::LumaDc(i) => &mut slice.mb_mut().block_luma_dc[*i],
+      Self::Luma8x8(i, j) => &mut slice.mb_mut().block_luma_8x8[*i][*j],
+    }
+  }
+}
