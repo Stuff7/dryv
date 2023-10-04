@@ -2,10 +2,6 @@ pub mod consts;
 pub mod header;
 pub mod macroblock;
 
-use self::macroblock::{BlockSize, MacroblockError, MbMode};
-use consts::*;
-use macroblock::MbPosition;
-
 use super::{
   cabac::{CabacContext, CabacError, CabacResult},
   sample::NALUnitType,
@@ -15,8 +11,10 @@ use crate::{
   video::atom::{PictureParameterSet, SequenceParameterSet},
   video::sample::NALUnit,
 };
+use consts::*;
 use header::*;
 use macroblock::Macroblock;
+use macroblock::{BlockSize, MacroblockError, MbMode, MbPosition};
 use std::ops::Deref;
 
 pub struct Slice<'a> {
@@ -208,7 +206,7 @@ impl<'a> Slice<'a> {
           if self.curr_mb_addr == first_addr {
             self.macroblocks[first_addr].mb_field_decoding_flag = self.stream.bit_flag();
           } else {
-            if (self.macroblocks[first_addr].mb_type == skip_type) {
+            if self.macroblocks[first_addr].mb_type == skip_type {
               self.macroblocks[first_addr].mb_field_decoding_flag = self.stream.bit_flag();
             }
             self.macroblocks[first_addr + 1].mb_field_decoding_flag =
@@ -242,11 +240,11 @@ impl<'a> Slice<'a> {
     while mbaddr < self.pic_size_in_mbs as usize && self.mb_slice_group(mbaddr) != sg {
       mbaddr += 1;
     }
-    return mbaddr;
+    mbaddr
   }
 
   pub fn inferred_mb_field_decoding_flag(&mut self) -> bool {
-    if (self.mbaff_frame_flag) {
+    if self.mbaff_frame_flag {
       let mb_a = self.mb_nb_p(MbPosition::A, 0);
       let mb_b = self.mb_nb_p(MbPosition::B, 0);
       if mb_a.mb_type != MB_TYPE_UNAVAILABLE {

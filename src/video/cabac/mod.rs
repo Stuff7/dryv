@@ -156,7 +156,7 @@ impl CabacContext {
         slice.mb_mut().transform_size_8x8_flag = 0;
       }
       if slice.mb().coded_block_pattern != 0 || is_intra_16x16_mb_type(slice.mb().mb_type) {
-        slice.mb_mut().mb_qp_delta = self.mb_qp_delta(slice, slice.mb().mb_qp_delta)?;
+        slice.mb_mut().mb_qp_delta = self.mb_qp_delta(slice)?;
       } else {
         slice.mb_mut().mb_qp_delta = 0;
       }
@@ -256,10 +256,8 @@ impl CabacContext {
       for i in 0..4 {
         if ifrom[i] == -1isize as usize {
           if (pmode[i] & 1) != 0 {
-            slice.mb_mut().mvd[0][i * 4][0] =
-              self.mvd(slice, i * 4, 0, 0, slice.mb().mvd[0][i * 4][0])?;
-            slice.mb_mut().mvd[0][i * 4][1] =
-              self.mvd(slice, i * 4, 1, 0, slice.mb().mvd[0][i * 4][1])?;
+            slice.mb_mut().mvd[0][i * 4][0] = self.mvd(slice, i * 4, 0, 0)?;
+            slice.mb_mut().mvd[0][i * 4][1] = self.mvd(slice, i * 4, 1, 0)?;
           } else {
             slice.mb_mut().mvd[0][i * 4][0] = 0;
             slice.mb_mut().mvd[0][i * 4][1] = 0;
@@ -276,10 +274,8 @@ impl CabacContext {
       for i in 0..4 {
         if ifrom[i] == -1isize as usize {
           if (pmode[i] & 2) != 0 {
-            slice.mb_mut().mvd[1][i * 4][0] =
-              self.mvd(slice, i * 4, 0, 1, slice.mb().mvd[1][i * 4][0])?;
-            slice.mb_mut().mvd[1][i * 4][1] =
-              self.mvd(slice, i * 4, 1, 1, slice.mb().mvd[1][i * 4][1])?;
+            slice.mb_mut().mvd[1][i * 4][0] = self.mvd(slice, i * 4, 0, 1)?;
+            slice.mb_mut().mvd[1][i * 4][1] = self.mvd(slice, i * 4, 1, 1)?;
           } else {
             slice.mb_mut().mvd[1][i * 4][0] = 0;
             slice.mb_mut().mvd[1][i * 4][1] = 0;
@@ -361,8 +357,8 @@ impl CabacContext {
     for i in 0..16 {
       if ifrom[i] == -1isize as usize {
         if (pmode[i / 4] & 1) != 0 {
-          slice.mb_mut().mvd[0][i][0] = self.mvd(slice, i, 0, 0, slice.mb().mvd[0][i][0])?;
-          slice.mb_mut().mvd[0][i][1] = self.mvd(slice, i, 1, 0, slice.mb().mvd[0][i][1])?;
+          slice.mb_mut().mvd[0][i][0] = self.mvd(slice, i, 0, 0)?;
+          slice.mb_mut().mvd[0][i][1] = self.mvd(slice, i, 1, 0)?;
         } else {
           slice.mb_mut().mvd[0][i][0] = 0;
           slice.mb_mut().mvd[0][i][1] = 0;
@@ -375,8 +371,8 @@ impl CabacContext {
     for i in 0..16 {
       if ifrom[i] == -1isize as usize {
         if (pmode[i / 4] & 2) != 0 {
-          slice.mb_mut().mvd[1][i][0] = self.mvd(slice, i, 0, 1, slice.mb().mvd[1][i][0])?;
-          slice.mb_mut().mvd[1][i][1] = self.mvd(slice, i, 1, 1, slice.mb().mvd[1][i][1])?;
+          slice.mb_mut().mvd[1][i][0] = self.mvd(slice, i, 0, 1)?;
+          slice.mb_mut().mvd[1][i][1] = self.mvd(slice, i, 1, 1)?;
         } else {
           slice.mb_mut().mvd[1][i][0] = 0;
           slice.mb_mut().mvd[1][i][1] = 0;
@@ -392,7 +388,7 @@ impl CabacContext {
 
   pub fn residual(&mut self, slice: &mut Slice, start: usize, end: usize) -> CabacResult {
     self.residual_luma(slice, start, end, 0)?;
-    if (slice.chroma_array_type == 1 || slice.chroma_array_type == 2) {
+    if slice.chroma_array_type == 1 || slice.chroma_array_type == 2 {
       for i in 0..2 {
         self.residual_cabac(
           slice,
@@ -519,6 +515,7 @@ impl CabacContext {
     Ok(())
   }
 
+  #[allow(clippy::too_many_arguments)]
   pub fn residual_cabac(
     &mut self,
     slice: &mut Slice,
@@ -610,11 +607,8 @@ impl CabacContext {
       let mut i = numcoeff - 1;
       while i >= start {
         if significant_coeff_flag[i] != 0 {
-          let (cam1, mut s) = {
-            let blocks = blocks.content(slice);
-            (blocks[i].abs() - 1, (blocks[i] < 0) as u8)
-          };
-          let cam1 = self.coeff_abs_level_minus1(slice, cat, num1, numgt1, cam1)?;
+          let mut s = (blocks.content(slice)[i] < 0) as u8;
+          let cam1 = self.coeff_abs_level_minus1(slice, cat, num1, numgt1)?;
           self.cabac_bypass(slice, &mut s)?;
           if cam1 != 0 {
             numgt1 += 1;
@@ -656,7 +650,6 @@ impl CabacContext {
     cat: u8,
     num1: i16,
     numgt1: i16,
-    val: i16,
   ) -> CabacResult<i16> {
     let mut ctx_idx = [0; 2];
     ctx_idx[0] = COEFF_ABS_LEVEL_MINUS1_BASE_CTX[cat as usize]
@@ -671,7 +664,7 @@ impl CabacContext {
     ctx_idx[1] = COEFF_ABS_LEVEL_MINUS1_BASE_CTX[cat as usize]
       + 5
       + if numgt1 > clamp { clamp } else { numgt1 };
-    self.ueg(slice, &ctx_idx, 2, 0, 0, 14, val)
+    self.ueg(slice, &ctx_idx, 2, 0, 0, 14)
   }
 
   pub fn significant_coeff_flag(
@@ -778,8 +771,8 @@ impl CabacContext {
         }
       }
       CTXBLOCKCAT_CHROMA_AC => {
-        mb_a = slice.mb_nb_b(MbPosition::A, BlockSize::Chroma, inter, idx, &mut idx_a)?;
-        mb_b = slice.mb_nb_b(MbPosition::B, BlockSize::Chroma, inter, idx, &mut idx_b)?;
+        slice.mb_nb_b(MbPosition::A, BlockSize::Chroma, inter, idx, &mut idx_a)?;
+        slice.mb_nb_b(MbPosition::B, BlockSize::Chroma, inter, idx, &mut idx_b)?;
       }
       cat => panic!("Invalid ctx_block_cat passed to coded_block_flag {cat}"),
     }
@@ -791,7 +784,7 @@ impl CabacContext {
     self.decision(slice, ctx_idx)
   }
 
-  pub fn mb_qp_delta(&mut self, slice: &mut Slice, mut val: i16) -> CabacResult<i16> {
+  pub fn mb_qp_delta(&mut self, slice: &mut Slice) -> CabacResult<i16> {
     let mut ctx_idx = [0; 3];
     if slice.prev_mb_addr != -1isize as usize && slice.mb().mb_qp_delta != 0 {
       ctx_idx[0] = CTXIDX_MB_QP_DELTA + 1;
@@ -801,12 +794,11 @@ impl CabacContext {
     ctx_idx[1] = CTXIDX_MB_QP_DELTA + 2;
     ctx_idx[2] = CTXIDX_MB_QP_DELTA + 3;
     let tmp = self.tu(slice, &ctx_idx, 3, -1i8 as u8)? as i16;
-    if (tmp & 1) != 0 {
-      val = (tmp + 1) >> 1;
+    Ok(if (tmp & 1) != 0 {
+      (tmp + 1) >> 1
     } else {
-      val = -(tmp >> 1);
-    }
-    Ok(val)
+      -(tmp >> 1)
+    })
   }
 
   #[allow(clippy::cast_ref_to_mut)]
@@ -888,7 +880,6 @@ impl CabacContext {
     idx: usize,
     comp: usize,
     which: usize,
-    val: i16,
   ) -> CabacResult<i16> {
     let base_idx = if comp != 0 {
       CTXIDX_MVD_Y
@@ -932,7 +923,7 @@ impl CabacContext {
       base_idx + 5,
       base_idx + 6,
     ];
-    self.ueg(slice, &ctx_idx, 5, 3, 1, 9, val)
+    self.ueg(slice, &ctx_idx, 5, 3, 1, 9)
   }
 
   pub fn ref_idx(
@@ -1126,6 +1117,7 @@ impl CabacContext {
     Err(CabacError::Binarization)
   }
 
+  #[allow(clippy::too_many_arguments)]
   pub fn ueg(
     &mut self,
     slice: &mut Slice,
@@ -1134,12 +1126,7 @@ impl CabacContext {
     mut k: i16,
     sign: i16,
     u_coff: u8,
-    mut val: i16,
   ) -> CabacResult<i16> {
-    let mut tuval = val.unsigned_abs() as u8;
-    if tuval > u_coff {
-      tuval = u_coff;
-    }
     let tuval = self.tu(slice, ctx_indices, num_idx, u_coff)?;
     let mut rval = tuval;
     if tuval >= u_coff {
@@ -1156,16 +1143,15 @@ impl CabacContext {
       }
     }
     let rval = rval as i16;
-    if rval != 0 && sign != 0 {
+    Ok(if rval != 0 && sign != 0 {
       if self.bypass(slice)? != 0 {
-        val = -rval;
+        -rval
       } else {
-        val = rval;
+        rval
       }
     } else {
-      val = rval;
-    }
-    Ok(val)
+      rval
+    })
   }
 
   pub fn tu(
@@ -1190,7 +1176,7 @@ impl CabacContext {
   }
 
   pub fn decision(&mut self, slice: &mut Slice, ctx_idx: i16) -> CabacResult<u8> {
-    let mut bin_val = 0;
+    let bin_val;
     if ctx_idx == -1 {
       return self.bypass(slice);
     }
@@ -1225,7 +1211,7 @@ impl CabacContext {
   }
 
   pub fn bypass(&mut self, slice: &mut Slice) -> CabacResult<u8> {
-    let mut bin_val = 0;
+    let bin_val;
     self.cod_i_offset <<= 1;
     let bit = slice.stream.bit();
     if bit == 1 {
