@@ -4,6 +4,8 @@ use super::sample::*;
 use super::slice::*;
 use crate::byte::{BitStream, Str};
 use crate::log;
+use crate::video::slice::macroblock::Macroblock;
+use std::collections::HashSet;
 use std::fs::File;
 use std::io::{Read, Seek};
 use std::path::Path;
@@ -123,6 +125,13 @@ impl Decoder {
             let name = format!("temp/idr-{i}.h264");
             let mut img = std::fs::File::create(name).expect("IDR CREATION");
             img.write_all(nal.data).expect("IDR SAVING");
+
+            let name = format!("temp/slice-{i}");
+            let mut img = std::fs::File::create(name).expect("SLICE CREATION");
+            let mb_set: HashSet<_> = slice.macroblocks.iter().collect();
+            img
+              .write_all(format!("{:#?}", &mb_set).as_bytes())
+              .expect("SLICE SAVING");
           }
           _ => log!(File@"{msg} [UNUSED]"),
         }
