@@ -20,8 +20,6 @@ use thiserror::Error;
 pub enum CabacError {
   #[error("Error cod_i_offset must not be 510 nor 511")]
   Engine,
-  #[error("Renorm failed")]
-  Renorm,
   #[error("Bypass failed")]
   Bypass,
   #[error("Cabac Bypass failed")]
@@ -36,8 +34,6 @@ pub enum CabacError {
   MbSkipFlagSlice,
   #[error(transparent)]
   Macroblock(#[from] MacroblockError),
-  #[error("Ran out of bits")]
-  Data,
   #[error("Invalid slice type for sub_mb_type")]
   SubMbType,
 }
@@ -1264,9 +1260,6 @@ impl CabacContext {
       self.cod_i_range <<= 1;
       self.cod_i_offset <<= 1;
       let bit = slice.stream.bit();
-      if bit == 1 {
-        return Err(CabacError::Renorm);
-      }
       self.cod_i_offset |= bit as u16;
     }
     Ok(())

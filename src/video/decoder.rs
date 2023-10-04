@@ -1,4 +1,5 @@
 use super::atom::*;
+use super::cabac::CabacError;
 use super::sample::*;
 use super::slice::*;
 use crate::byte::{BitStream, Str};
@@ -20,6 +21,8 @@ pub enum DecoderError {
   Sample(#[from] SampleError),
   #[error("Missing decoder config")]
   MissingConfig,
+  #[error(transparent)]
+  Cabac(#[from] CabacError),
 }
 
 pub type DecoderResult<T = ()> = Result<T, DecoderError>;
@@ -113,7 +116,9 @@ impl Decoder {
             }
           }
           NALUnitType::IDRPicture => {
-            log!(File@"{msg}{:#?}", Slice::new(nal.data, &nal, &avc1.avcc.sps, &avc1.avcc.pps));
+            let mut slice = Slice::new(nal.data, &nal, &avc1.avcc.sps, &avc1.avcc.pps);
+            slice.data()?;
+            log!(File@"{msg}{:#?}", slice);
             use std::io::Write;
             let name = format!("temp/idr-{i}.h264");
             let mut img = std::fs::File::create(name).expect("IDR CREATION");

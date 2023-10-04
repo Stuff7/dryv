@@ -107,7 +107,7 @@ impl<'a> Slice<'a> {
     &mut self.macroblocks[self.curr_mb_addr]
   }
 
-  pub fn data(&'a mut self) -> CabacResult {
+  pub fn data(&mut self) -> CabacResult {
     self.prev_mb_addr = -1isize as usize;
     self.curr_mb_addr = (self.first_mb_in_slice * (1 + self.mbaff_frame_flag as u16)) as usize;
     self.last_mb_in_slice = self.curr_mb_addr;
@@ -500,22 +500,22 @@ impl<'a> Slice<'a> {
         if mbaddr % pic_width_in_mbs == 0 {
           return Macroblock::unavailable(inter);
         }
-        mbaddr -= 1;
+        mbaddr = mbaddr.wrapping_sub(1);
       }
       MbPosition::B => {
-        mbaddr -= pic_width_in_mbs;
+        mbaddr = mbaddr.wrapping_sub(pic_width_in_mbs);
       }
       MbPosition::C => {
         if ((mbaddr + 1) % pic_width_in_mbs) == 0 {
           return Macroblock::unavailable(inter);
         }
-        mbaddr -= pic_width_in_mbs - 1;
+        mbaddr = mbaddr.wrapping_sub(pic_width_in_mbs - 1);
       }
       MbPosition::D => {
         if (mbaddr % pic_width_in_mbs) == 0 {
           return Macroblock::unavailable(inter);
         }
-        mbaddr -= pic_width_in_mbs + 1;
+        mbaddr = mbaddr.wrapping_sub(pic_width_in_mbs + 1);
       }
     }
     if self.mbaff_frame_flag {
@@ -524,7 +524,7 @@ impl<'a> Slice<'a> {
     if !self.mb_available(mbaddr) {
       return Macroblock::unavailable(inter);
     }
-    return &self.macroblocks[mbaddr];
+    &self.macroblocks[mbaddr]
   }
 
   pub fn mb_available(&self, mbaddr: usize) -> bool {
