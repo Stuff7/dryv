@@ -17,26 +17,76 @@ use macroblock::Macroblock;
 use macroblock::{BlockSize, MacroblockError, MbMode, MbPosition};
 use std::ops::Deref;
 
+/// Represents a slice in an H.264 video frame.
 pub struct Slice<'a> {
+  /// The header information for the slice, including slice type and other metadata.
   pub header: SliceHeader,
+
+  /// Reference to the Sequence Parameter Set (SPS) associated with the video stream.
+  /// SPS contains essential information about the video sequence, such as frame dimensions and color space.
   pub sps: &'a SequenceParameterSet,
+
+  /// Reference to the Picture Parameter Set (PPS) associated with the video stream.
+  /// PPS contains parameters related to individual pictures or frames, such as reference frame settings.
   pub pps: &'a PictureParameterSet,
+
+  /// The type of Network Abstraction Layer (NAL) unit to which the slice belongs.
+  /// NAL units provide a structured representation of video data within the H.264 bitstream.
   pub nal_unit_type: NALUnitType,
+
+  /// Bitstream representing the encoded data of the slice.
+  /// The slice's encoded data is stored in a `BitStream` for efficient parsing and processing.
   pub stream: BitStream<'a>,
+
+  /// The Context-Adaptive Binary Arithmetic Coding (CABAC) initialization mode.
+  /// CABAC is a video coding method that adapts probability models for binary decisions.
   pub cabac_init_mode: usize,
+
+  /// The chroma array type, which specifies the chroma format used in the video stream.
+  /// It determines how chroma (color) information is sampled and represented.
   pub chroma_array_type: u16,
+
+  /// Width of the picture in macroblocks (MBs).
+  /// The picture width is measured in the number of macroblocks it contains.
   pub pic_width_in_mbs: u16,
+
+  /// Height of the picture in macroblocks (MBs).
+  /// The picture height is measured in the number of macroblocks it contains.
   pub pic_height_in_mbs: u16,
+
+  /// Total size of the picture in macroblocks (MBs).
+  /// The picture size represents the number of macroblocks within the picture.
   pub pic_size_in_mbs: u16,
+
+  /// Quantization parameter for the slice.
+  /// The quantization parameter affects the trade-off between compression and image quality.
   pub sliceqpy: i16,
+
+  /// Flag indicating the presence of macroblock adaptive frame/field (MBaff) mode.
+  /// In video, "interlaced" refers to a display method where each frame is divided into two fields,
+  /// with odd and even lines displayed alternately. MBaff mode is used in interlaced video.
+  /// When `mbaff_frame_flag` is true, it indicates that the frame is interlaced, and macroblocks
+  /// are processed differently to handle this interlaced structure.
   pub mbaff_frame_flag: bool,
+
+  /// Index of the last macroblock in the slice.
+  /// It helps identify the endpoint of macroblock processing within the slice.
   pub last_mb_in_slice: usize,
-  /// Previous macroblock address
+
+  /// Address of the previous macroblock within the picture.
+  /// This helps establish the spatial relationship between macroblocks in the picture.
   pub prev_mb_addr: usize,
-  /// Current macroblock address
+
+  /// Address of the current macroblock within the picture.
+  /// This helps establish the spatial relationship between macroblocks in the picture.
   pub curr_mb_addr: usize,
-  /// Macroblocks
+
+  /// Slice Group Map (SGMap) for macroblock grouping.
+  /// SGMap defines the grouping of macroblocks for various purposes, such as parallel processing.
   pub sgmap: &'a [u8],
+
+  /// Collection of macroblocks contained within the slice.
+  /// Macroblocks represent the fundamental coding units within a video frame.
   pub macroblocks: Box<[Macroblock]>,
 }
 

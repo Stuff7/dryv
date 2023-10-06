@@ -40,14 +40,30 @@ pub enum CabacError {
 
 pub type CabacResult<T = ()> = Result<T, CabacError>;
 
+/// Represents the context for Context-Adaptive Binary Arithmetic Coding (CABAC) in H.264 video encoding.
 pub struct CabacContext {
-  /// Probability state index.
+  /// Probability state indices for CABAC encoding.
+  /// CABAC adapts its encoding probability based on the context of previous symbols.
+  /// These indices help track the state of probability models.
   pub p_state_idx: [i16; CTX_IDX_COUNT],
-  /// Value of the most probable symbol.
+
+  /// Values representing Most Probable Symbols (MPS) for CABAC encoding.
+  /// CABAC encodes binary symbols as either the MPS or the Least Probable Symbol (LPS).
+  /// These values determine the default symbol to be encoded (MPS).
   pub val_mps: [u8; CTX_IDX_COUNT],
-  /// The status of the arithmetic decoding engine.
+
+  /// Range for interval coding in CABAC.
+  /// CABAC encodes symbols by mapping them to an interval within a specified range.
+  /// This `cod_i_range` parameter defines the size of the interval.
   pub cod_i_range: u16,
+
+  /// Offset for interval coding in CABAC.
+  /// CABAC intervals are defined by a starting point within the range.
+  /// The `cod_i_offset` parameter specifies this offset.
   pub cod_i_offset: u16,
+
+  /// Count of binary symbols processed by CABAC.
+  /// This counter keeps track of the number of binary symbols encoded or decoded using CABAC.
   pub bin_count: i32,
 }
 
