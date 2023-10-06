@@ -20,10 +20,6 @@ use thiserror::Error;
 pub enum CabacError {
   #[error("Error cod_i_offset must not be 510 nor 511")]
   Engine,
-  #[error("Bypass failed")]
-  Bypass,
-  #[error("Cabac Bypass failed")]
-  CabacBypass,
   #[error("Inconsistent SE table")]
   SETable,
   #[error("No value from binarization")]
@@ -41,6 +37,7 @@ pub enum CabacError {
 pub type CabacResult<T = ()> = Result<T, CabacError>;
 
 /// Represents the context for Context-Adaptive Binary Arithmetic Coding (CABAC) in H.264 video encoding.
+#[derive(Debug)]
 pub struct CabacContext {
   /// Probability state indices for CABAC encoding.
   /// CABAC adapts its encoding probability based on the context of previous symbols.
@@ -69,7 +66,7 @@ pub struct CabacContext {
 
 impl CabacContext {
   pub fn new(slice: &mut Slice) -> CabacResult<Self> {
-    if !slice.stream.skip_trailing_bits().bit_flag() {
+    if slice.stream.skip_trailing_bits().peek_bits(1) == 0 {
       return Err(CabacError::AlignmentOneBit);
     }
 
@@ -620,10 +617,11 @@ impl CabacContext {
       }
       let mut num1 = 0;
       let mut numgt1 = 0;
-      let mut i = numcoeff - 1;
-      while i >= start {
-        if significant_coeff_flag[i] != 0 {
-          let mut s = (blocks.content(slice)[i] < 0) as u8;
+      let mut i = numcoeff as isize - 1;
+      while i >= start as isize {
+        let idx = i as usize;
+        if significant_coeff_flag[idx] != 0 {
+          let mut s = (blocks.content(slice)[idx] < 0) as u8;
           let cam1 = self.coeff_abs_level_minus1(slice, cat, num1, numgt1)?;
           self.cabac_bypass(slice, &mut s)?;
           if cam1 != 0 {
@@ -631,7 +629,7 @@ impl CabacContext {
           } else {
             num1 += 1;
           }
-          blocks.content(slice)[i] = if s != 0 { -(cam1 + 1) } else { cam1 + 1 };
+          blocks.content(slice)[idx] = if s != 0 { -(cam1 + 1) } else { cam1 + 1 };
         }
         i -= 1;
       }
@@ -646,9 +644,6 @@ impl CabacContext {
   pub fn cabac_bypass(&mut self, slice: &mut Slice, bin_val: &mut u8) -> CabacResult {
     self.cod_i_offset <<= 1;
     let tmp = slice.stream.bit();
-    if tmp != 0 {
-      return Err(CabacError::CabacBypass);
-    }
     self.cod_i_offset |= tmp as u16;
     if self.cod_i_offset >= self.cod_i_range {
       *bin_val = 1;
@@ -1144,7 +1139,7 @@ impl CabacContext {
     u_coff: u8,
   ) -> CabacResult<i16> {
     let tuval = self.tu(slice, ctx_indices, num_idx, u_coff)?;
-    let mut rval = tuval;
+    let mut rval = tuval as i16;
     if tuval >= u_coff {
       loop {
         if self.bypass(slice)? == 0 {
@@ -1155,10 +1150,9 @@ impl CabacContext {
       }
       while k > 0 {
         k -= 1;
-        rval += self.bypass(slice)? << k;
+        rval += (self.bypass(slice)? as i16) << k;
       }
     }
-    let rval = rval as i16;
     Ok(if rval != 0 && sign != 0 {
       if self.bypass(slice)? != 0 {
         -rval
@@ -1217,7 +1211,7 @@ impl CabacContext {
       self.p_state_idx[ctx_idx] = TRANS_IDX_MPS[p_state_idx] as i16;
     } else {
       if p_state_idx == 0 {
-        self.val_mps[ctx_idx] = !self.val_mps[ctx_idx];
+        self.val_mps[ctx_idx] = (self.val_mps[ctx_idx] == 0) as u8;
       }
       self.p_state_idx[ctx_idx] = TRANS_IDX_LPS[p_state_idx] as i16;
     }
@@ -1230,9 +1224,6 @@ impl CabacContext {
     let bin_val;
     self.cod_i_offset <<= 1;
     let bit = slice.stream.bit();
-    if bit == 1 {
-      return Err(CabacError::Bypass);
-    }
     self.cod_i_offset |= bit as u16;
     if self.cod_i_offset >= self.cod_i_range {
       bin_val = 1;

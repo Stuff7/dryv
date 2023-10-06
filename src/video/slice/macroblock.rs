@@ -11,7 +11,6 @@ pub enum MacroblockError {
 
 pub type MacroblockResult<T = ()> = Result<T, MacroblockError>;
 
-#[derive(Debug)]
 pub struct Macroblock {
   /// Flag indicating if macroblock field decoding is used.
   /// Field decoding divides a frame into fields for interlaced video.
@@ -33,7 +32,7 @@ pub struct Macroblock {
 
   /// PCM (Pulse Code Modulation) samples for luma (Y) component.
   /// PCM samples provide raw pixel values for luma.
-  pub pcm_sample_luma: [u16; 256],
+  pub pcm_sample_luma: [u8; 256],
 
   /// PCM samples for chroma (Cb and Cr) components.
   /// PCM samples provide raw pixel values for chroma.
@@ -172,6 +171,51 @@ impl PartialEq for Macroblock {
 impl Hash for Macroblock {
   fn hash<H: Hasher>(&self, state: &mut H) {
     self.mb_type.hash(state);
+  }
+}
+
+impl<'a> std::fmt::Debug for Macroblock {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.debug_struct("Slice")
+      .field("mb_field_decoding_flag", &self.mb_field_decoding_flag)
+      .field("mb_type", &self.mb_type)
+      .field("coded_block_pattern", &self.coded_block_pattern)
+      .field("transform_size_8x8_flag", &self.transform_size_8x8_flag)
+      .field("mb_qp_delta", &self.mb_qp_delta)
+      .field("pcm_sample_luma", &format!("{:?}", self.pcm_sample_luma))
+      .field(
+        "pcm_sample_chroma",
+        &format!("{:?}", self.pcm_sample_chroma),
+      )
+      .field(
+        "prev_intra4x4_pred_mode_flag",
+        &format!("{:?}", self.prev_intra4x4_pred_mode_flag),
+      )
+      .field(
+        "rem_intra4x4_pred_mode",
+        &format!("{:?}", self.rem_intra4x4_pred_mode),
+      )
+      .field(
+        "prev_intra8x8_pred_mode_flag",
+        &format!("{:?}", self.prev_intra8x8_pred_mode_flag),
+      )
+      .field(
+        "rem_intra8x8_pred_mode",
+        &format!("{:?}", self.rem_intra8x8_pred_mode),
+      )
+      .field("intra_chroma_pred_mode", &self.intra_chroma_pred_mode)
+      .field("sub_mb_type", &format!("{:?}", self.sub_mb_type))
+      .field("ref_idx", &format!("{:?}", self.ref_idx))
+      .field("mvd", &format!("{:?}", self.mvd))
+      .field("block_luma_dc", &format!("{:?}", self.block_luma_dc))
+      .field("block_luma_ac", &format!("{:?}", self.block_luma_ac))
+      .field("block_luma_4x4", &format!("{:?}", self.block_luma_4x4))
+      .field("block_luma_8x8", &format!("{:?}", self.block_luma_8x8))
+      .field("block_chroma_dc", &format!("{:?}", self.block_chroma_dc))
+      .field("block_chroma_ac", &format!("{:?}", self.block_chroma_ac))
+      .field("total_coeff", &format!("{:?}", self.total_coeff))
+      .field("coded_block_flag", &format!("{:?}", self.coded_block_flag))
+      .finish()
   }
 }
 
