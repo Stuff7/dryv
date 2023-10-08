@@ -24,8 +24,12 @@ pub enum CabacError {
   SETable,
   #[error("No value from binarization")]
   Binarization,
-  #[error("cabac_alignment_one_bit is not 1")]
-  AlignmentOneBit,
+  #[error("pcm_alignment_zero_bit must be 0")]
+  PcmAlignmentZeroBit,
+  #[error("cabac_alignment_one_bit must be 1")]
+  CabacAlignmentOneBit,
+  #[error("cabac_zero_word must be 0")]
+  CabacZeroWord,
   #[error("mb_skip_flag used in I/SI slice")]
   MbSkipFlagSlice,
   #[error(transparent)]
@@ -66,8 +70,8 @@ pub struct CabacContext {
 
 impl CabacContext {
   pub fn new(slice: &mut Slice) -> CabacResult<Self> {
-    if slice.stream.skip_trailing_bits().peek_bits(1) == 0 {
-      return Err(CabacError::AlignmentOneBit);
+    if !slice.stream.is_byte_aligned(1) {
+      return Err(CabacError::CabacAlignmentOneBit);
     }
 
     let (p_state_idx, val_mps) = Self::init_context_variables(slice);
@@ -93,16 +97,18 @@ impl CabacContext {
     let bit_depth_chroma_minus8 = slice.sps.bit_depth_chroma_minus8 as usize;
     self.mb_type(slice)?;
     if slice.mb().mb_type == MB_TYPE_I_PCM {
-      slice.stream.skip_trailing_bits();
+      if !slice.stream.is_byte_aligned(0) {
+        return Err(CabacError::PcmAlignmentZeroBit);
+      }
       for i in 0..256 {
         slice.mb_mut().pcm_sample_luma[i] = slice.stream.bits_into(bit_depth_luma_minus8 + 8);
       }
       if slice.chroma_array_type != 0 {
         for i in 0..(64 << slice.chroma_array_type) {
-          slice.mb_mut().pcm_sample_luma[i] = slice.stream.bits_into(bit_depth_chroma_minus8 + 8);
+          slice.mb_mut().pcm_sample_chroma[i] = slice.stream.bits_into(bit_depth_chroma_minus8 + 8);
         }
       }
-      // Self::init_decoding_engine(slice) // ?
+      (self.cod_i_range, self.cod_i_offset) = Self::init_decoding_engine(slice)?; // ?
       slice.mb_mut().mb_qp_delta = 0;
       slice.mb_mut().transform_size_8x8_flag = 0;
       slice.mb_mut().coded_block_pattern = 0x2f;

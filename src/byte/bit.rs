@@ -37,6 +37,21 @@ impl<'a> Deref for BitStream<'a> {
 }
 
 impl<'a> BitStream<'a> {
+  pub fn is_byte_aligned(&mut self, mode: u8) -> bool {
+    if self.bit_offset == 0 {
+      return true;
+    }
+    let pad = match mode {
+      0 => 0,
+      _ => 0xFF >> self.bit_offset,
+    };
+    println!(
+      "MODE: {mode} PAD: {pad} BYTE: {} {self:?}",
+      self.data[self.offset]
+    );
+    self.bits(8 - self.bit_offset as u8) == pad
+  }
+
   pub fn has_bits(&self) -> bool {
     self.bit_offset < 8 || self.offset < self.data.len()
   }

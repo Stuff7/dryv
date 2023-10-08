@@ -203,12 +203,16 @@ impl<'a> Slice<'a> {
           }
           cabac.macroblock_layer(self)?;
         }
+        dbg!(self.mb().mb_type);
         if !self.mbaff_frame_flag || (self.curr_mb_addr & 1) != 0 {
           let end_of_slice_flag = cabac.terminate(self)?;
           if end_of_slice_flag != 0 {
             self.last_mb_in_slice = self.curr_mb_addr;
-            self.stream.skip_trailing_bits();
-            return Ok(());
+            return self
+              .stream
+              .is_byte_aligned(0)
+              .then_some(())
+              .ok_or(CabacError::CabacZeroWord);
           }
         }
         self.prev_mb_addr = self.curr_mb_addr;
@@ -545,7 +549,7 @@ impl<'a> Slice<'a> {
     match position {
       MbPosition::This => return &self.macroblocks[self.curr_mb_addr],
       MbPosition::A => {
-        if mbaddr % pic_width_in_mbs == 0 {
+        if (mbaddr % pic_width_in_mbs) == 0 {
           return Macroblock::unavailable(inter);
         }
         mbaddr = mbaddr.wrapping_sub(1);

@@ -127,7 +127,12 @@ impl Decoder {
 
             let name = format!("temp/slice-{i}");
             let mut img = std::fs::File::create(name).expect("SLICE CREATION");
-            let mb_set: HashSet<_> = slice.macroblocks.iter().collect();
+            let mb_set: Vec<_> = slice
+              .macroblocks
+              .iter()
+              .filter(|mb| mb.mb_type != 57)
+              .collect();
+            println!("LEN: {}", mb_set.len());
             img
               .write_all(format!("{:#?}", &mb_set).as_bytes())
               .expect("SLICE SAVING");

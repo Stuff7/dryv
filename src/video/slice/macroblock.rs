@@ -36,7 +36,7 @@ pub struct Macroblock {
 
   /// PCM samples for chroma (Cb and Cr) components.
   /// PCM samples provide raw pixel values for chroma.
-  pub pcm_sample_chroma: [u16; 512],
+  pub pcm_sample_chroma: [u8; 512],
 
   /// Flags indicating previous intra 4x4 prediction mode for each 4x4 block within the macroblock.
   pub prev_intra4x4_pred_mode_flag: [u8; 16],
