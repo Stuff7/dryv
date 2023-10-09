@@ -368,7 +368,7 @@ impl<'a> Slice<'a> {
     }
   }
 
-  pub fn inter_filter(&self, inter: u8) -> &Macroblock {
+  pub fn inter_filter<'b>(&self, mb: &'b Macroblock, inter: u8) -> &'b Macroblock {
     if inter == 0
       && self.pps.constrained_intra_pred_flag
       && matches!(self.nal_unit_type, NALUnitType::DataPartitionA)
@@ -376,7 +376,7 @@ impl<'a> Slice<'a> {
     {
       Macroblock::unavailable(1)
     } else {
-      self.mb()
+      mb
     }
   }
 

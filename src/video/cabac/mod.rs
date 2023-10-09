@@ -760,15 +760,15 @@ impl CabacContext {
     let mut idx_b = 0;
     match cat {
       CTXBLOCKCAT_LUMA_DC | CTXBLOCKCAT_CB_DC | CTXBLOCKCAT_CR_DC | CTXBLOCKCAT_CHROMA_DC => {
-        slice.mb_nb(MbPosition::A, inter)?;
-        slice.mb_nb(MbPosition::B, inter)?;
+        mb_a = slice.mb_nb(MbPosition::A, inter)?;
+        mb_b = slice.mb_nb(MbPosition::B, inter)?;
         idx_a = 16;
         idx_b = 16;
       }
       CTXBLOCKCAT_LUMA_AC | CTXBLOCKCAT_LUMA_4X4 | CTXBLOCKCAT_CB_AC | CTXBLOCKCAT_CB_4X4
       | CTXBLOCKCAT_CR_AC | CTXBLOCKCAT_CR_4X4 => {
-        slice.mb_nb_b(MbPosition::A, BlockSize::B4x4, inter, idx, &mut idx_a)?;
-        slice.mb_nb_b(MbPosition::B, BlockSize::B4x4, inter, idx, &mut idx_b)?;
+        mb_a = slice.mb_nb_b(MbPosition::A, BlockSize::B4x4, inter, idx, &mut idx_a)?;
+        mb_b = slice.mb_nb_b(MbPosition::B, BlockSize::B4x4, inter, idx, &mut idx_b)?;
       }
       CTXBLOCKCAT_LUMA_8X8 | CTXBLOCKCAT_CB_8X8 | CTXBLOCKCAT_CR_8X8 => {
         mb_a = slice.mb_nb_b(MbPosition::A, BlockSize::B8x8, inter, idx, &mut idx_a)?;
@@ -789,13 +789,13 @@ impl CabacContext {
         }
       }
       CTXBLOCKCAT_CHROMA_AC => {
-        slice.mb_nb_b(MbPosition::A, BlockSize::Chroma, inter, idx, &mut idx_a)?;
-        slice.mb_nb_b(MbPosition::B, BlockSize::Chroma, inter, idx, &mut idx_b)?;
+        mb_a = slice.mb_nb_b(MbPosition::A, BlockSize::Chroma, inter, idx, &mut idx_a)?;
+        mb_b = slice.mb_nb_b(MbPosition::B, BlockSize::Chroma, inter, idx, &mut idx_b)?;
       }
       cat => panic!("Invalid ctx_block_cat passed to coded_block_flag {cat}"),
     }
-    mb_a = slice.inter_filter(inter);
-    mb_b = slice.inter_filter(inter);
+    mb_a = slice.inter_filter(mb_a, inter);
+    mb_b = slice.inter_filter(mb_b, inter);
     let cond_term_flag_a = mb_a.coded_block_flag[which as usize][idx_a as usize] as i16;
     let cond_term_flag_b = mb_b.coded_block_flag[which as usize][idx_b as usize] as i16;
     let ctx_idx = CODED_BLOCK_FLAG_BASE_CTX[cat as usize] + cond_term_flag_a + cond_term_flag_b * 2;
