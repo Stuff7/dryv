@@ -95,11 +95,11 @@ pub struct Macroblock {
 }
 
 impl Macroblock {
-  pub const fn empty(coded_block_flag: u8) -> Self {
+  pub const fn empty() -> Self {
     Self {
       mb_field_decoding_flag: false,
-      mb_type: MB_TYPE_UNAVAILABLE,
-      coded_block_pattern: 0x0F,
+      mb_type: 0,
+      coded_block_pattern: 0,
       transform_size_8x8_flag: 0,
       mb_qp_delta: 0,
       pcm_sample_luma: [0; 256],
@@ -119,11 +119,20 @@ impl Macroblock {
       block_chroma_dc: [[0; 8]; 2],
       block_chroma_ac: [[[0; 15]; 8]; 2],
       total_coeff: [[0; 16]; 3],
+      coded_block_flag: [[0; 17]; 3],
+    }
+  }
+
+  pub const fn empty_unavailable(coded_block_flag: u8) -> Self {
+    Self {
+      mb_type: MB_TYPE_UNAVAILABLE,
+      coded_block_pattern: 0x0F,
       coded_block_flag: [
         [coded_block_flag; 17],
         [coded_block_flag; 17],
         [coded_block_flag; 17],
       ],
+      ..Self::empty()
     }
   }
 

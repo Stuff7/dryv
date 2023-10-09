@@ -134,7 +134,7 @@ impl Decoder {
               .collect();
             println!("LEN: {}", mb_set.len());
             img
-              .write_all(format!("{:#?}", &mb_set).as_bytes())
+              .write_all(format!("{:#?}", &slice.macroblocks[..10]).as_bytes())
               .expect("SLICE SAVING");
           }
           _ => log!(File@"{msg} [UNUSED]"),

@@ -1,7 +1,7 @@
 use super::macroblock::Macroblock;
 
-pub const MB_UNAVAILABLE_INTRA: Macroblock = Macroblock::empty(1);
-pub const MB_UNAVAILABLE_INTER: Macroblock = Macroblock::empty(0);
+pub const MB_UNAVAILABLE_INTRA: Macroblock = Macroblock::empty_unavailable(1);
+pub const MB_UNAVAILABLE_INTER: Macroblock = Macroblock::empty_unavailable(0);
 
 /* I */
 /// Macroblock type for an I-frame with no sub-macroblock partitioning (NxN).

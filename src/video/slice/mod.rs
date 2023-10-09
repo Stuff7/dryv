@@ -8,6 +8,7 @@ use super::{
 };
 use crate::{
   byte::BitStream,
+  log,
   video::atom::{PictureParameterSet, SequenceParameterSet},
   video::sample::NALUnit,
 };
@@ -71,15 +72,15 @@ pub struct Slice<'a> {
 
   /// Index of the last macroblock in the slice.
   /// It helps identify the endpoint of macroblock processing within the slice.
-  pub last_mb_in_slice: usize,
+  pub last_mb_in_slice: isize,
 
   /// Address of the previous macroblock within the picture.
   /// This helps establish the spatial relationship between macroblocks in the picture.
-  pub prev_mb_addr: usize,
+  pub prev_mb_addr: isize,
 
   /// Address of the current macroblock within the picture.
   /// This helps establish the spatial relationship between macroblocks in the picture.
-  pub curr_mb_addr: usize,
+  pub curr_mb_addr: isize,
 
   /// Slice Group Map (SGMap) for macroblock grouping.
   /// SGMap defines the grouping of macroblocks for various purposes, such as parallel processing.
@@ -143,21 +144,21 @@ impl<'a> Slice<'a> {
       prev_mb_addr: 0,
       curr_mb_addr: 0,
       sgmap: &[],
-      macroblocks: (0..pic_size_in_mbs).map(|_| Macroblock::empty(0)).collect(),
+      macroblocks: (0..pic_size_in_mbs).map(|_| Macroblock::empty()).collect(),
     }
   }
 
   pub fn mb(&self) -> &Macroblock {
-    &self.macroblocks[self.curr_mb_addr]
+    &self.macroblocks[self.curr_mb_addr as usize]
   }
 
   pub fn mb_mut(&mut self) -> &mut Macroblock {
-    &mut self.macroblocks[self.curr_mb_addr]
+    &mut self.macroblocks[self.curr_mb_addr as usize]
   }
 
   pub fn data(&mut self) -> CabacResult {
-    self.prev_mb_addr = -1isize as usize;
-    self.curr_mb_addr = (self.first_mb_in_slice * (1 + self.mbaff_frame_flag as u16)) as usize;
+    self.prev_mb_addr = -1isize;
+    self.curr_mb_addr = (self.first_mb_in_slice * (1 + self.mbaff_frame_flag as u16)) as isize;
     self.last_mb_in_slice = self.curr_mb_addr;
 
     let skip_type = match self.slice_type {
@@ -169,18 +170,18 @@ impl<'a> Slice<'a> {
       loop {
         let mut mb_skip_flag = 0u8;
         if !self.slice_type.is_intra() {
-          let save = self.macroblocks[self.curr_mb_addr].mb_field_decoding_flag;
+          let save = self.macroblocks[self.curr_mb_addr as usize].mb_field_decoding_flag;
           let ival = if self.mbaff_frame_flag
             && (self.curr_mb_addr & 1) != 0
-            && self.macroblocks[self.curr_mb_addr - 1].mb_type != skip_type
+            && self.macroblocks[self.curr_mb_addr as usize - 1].mb_type != skip_type
           {
-            self.macroblocks[self.curr_mb_addr - 1].mb_field_decoding_flag
+            self.macroblocks[self.curr_mb_addr as usize - 1].mb_field_decoding_flag
           } else {
             self.inferred_mb_field_decoding_flag()
           };
-          self.macroblocks[self.curr_mb_addr].mb_field_decoding_flag = ival;
+          self.macroblocks[self.curr_mb_addr as usize].mb_field_decoding_flag = ival;
           mb_skip_flag = cabac.mb_skip_flag(self)?;
-          self.macroblocks[self.curr_mb_addr].mb_field_decoding_flag = save;
+          self.macroblocks[self.curr_mb_addr as usize].mb_field_decoding_flag = save;
         }
         if mb_skip_flag != 0 {
           self.infer_skip()?;
@@ -188,22 +189,23 @@ impl<'a> Slice<'a> {
           if self.mbaff_frame_flag {
             let first_addr = self.curr_mb_addr & !1;
             if self.curr_mb_addr == first_addr {
-              self.macroblocks[first_addr].mb_field_decoding_flag =
+              self.macroblocks[first_addr as usize].mb_field_decoding_flag =
                 cabac.mb_field_decoding_flag(self)? != 0;
             } else {
-              if self.macroblocks[first_addr].mb_type == skip_type {
-                self.macroblocks[first_addr].mb_field_decoding_flag =
+              if self.macroblocks[first_addr as usize].mb_type == skip_type {
+                self.macroblocks[first_addr as usize].mb_field_decoding_flag =
                   cabac.mb_field_decoding_flag(self)? != 0
               }
-              self.macroblocks[first_addr + 1].mb_field_decoding_flag =
-                self.macroblocks[first_addr].mb_field_decoding_flag;
+              self.macroblocks[first_addr as usize + 1].mb_field_decoding_flag =
+                self.macroblocks[first_addr as usize].mb_field_decoding_flag;
             }
           } else {
-            self.macroblocks[self.curr_mb_addr].mb_field_decoding_flag = self.field_pic_flag;
+            self.macroblocks[self.curr_mb_addr as usize].mb_field_decoding_flag =
+              self.field_pic_flag;
           }
           cabac.macroblock_layer(self)?;
         }
-        dbg!(self.mb().mb_type);
+        // dbg!(self.mb().mb_type);
         if !self.mbaff_frame_flag || (self.curr_mb_addr & 1) != 0 {
           let end_of_slice_flag = cabac.terminate(self)?;
           if end_of_slice_flag != 0 {
@@ -218,9 +220,9 @@ impl<'a> Slice<'a> {
         self.prev_mb_addr = self.curr_mb_addr;
         self.last_mb_in_slice = self.curr_mb_addr;
         self.curr_mb_addr = self.next_mb_addr(self.curr_mb_addr);
-        if self.curr_mb_addr >= self.pic_size_in_mbs as usize {
+        if self.curr_mb_addr >= self.pic_size_in_mbs as isize {
           return Err(CabacError::from(MacroblockError::MacroblockBounds(
-            self.curr_mb_addr as isize,
+            self.curr_mb_addr,
             self.pic_size_in_mbs as usize,
           )));
         }
@@ -232,14 +234,14 @@ impl<'a> Slice<'a> {
           mb_skip_run = self.stream.exponential_golomb();
           while mb_skip_run != 0 {
             mb_skip_run -= 1;
-            if self.curr_mb_addr >= self.pic_size_in_mbs as usize {
+            if self.curr_mb_addr >= self.pic_size_in_mbs as isize {
               return Err(CabacError::from(MacroblockError::MacroblockBounds(
-                self.curr_mb_addr as isize,
+                self.curr_mb_addr,
                 self.pic_size_in_mbs as usize,
               )));
             }
             self.last_mb_in_slice = self.curr_mb_addr;
-            self.macroblocks[self.curr_mb_addr].mb_type = skip_type;
+            self.macroblocks[self.curr_mb_addr as usize].mb_type = skip_type;
             self.infer_skip()?;
             self.prev_mb_addr = self.curr_mb_addr;
             self.last_mb_in_slice = self.curr_mb_addr;
@@ -249,25 +251,25 @@ impl<'a> Slice<'a> {
             break;
           }
         }
-        if self.curr_mb_addr >= self.pic_size_in_mbs as usize {
+        if self.curr_mb_addr >= self.pic_size_in_mbs as isize {
           return Err(CabacError::from(MacroblockError::MacroblockBounds(
-            self.curr_mb_addr as isize,
+            self.curr_mb_addr,
             self.pic_size_in_mbs as usize,
           )));
         }
         if self.mbaff_frame_flag {
           let first_addr = self.curr_mb_addr & !1;
           if self.curr_mb_addr == first_addr {
-            self.macroblocks[first_addr].mb_field_decoding_flag = self.stream.bit_flag();
+            self.macroblocks[first_addr as usize].mb_field_decoding_flag = self.stream.bit_flag();
           } else {
-            if self.macroblocks[first_addr].mb_type == skip_type {
-              self.macroblocks[first_addr].mb_field_decoding_flag = self.stream.bit_flag();
+            if self.macroblocks[first_addr as usize].mb_type == skip_type {
+              self.macroblocks[first_addr as usize].mb_field_decoding_flag = self.stream.bit_flag();
             }
-            self.macroblocks[first_addr + 1].mb_field_decoding_flag =
-              self.macroblocks[first_addr].mb_field_decoding_flag;
+            self.macroblocks[first_addr as usize + 1].mb_field_decoding_flag =
+              self.macroblocks[first_addr as usize].mb_field_decoding_flag;
           }
         } else {
-          self.macroblocks[self.curr_mb_addr].mb_field_decoding_flag = self.field_pic_flag;
+          self.macroblocks[self.curr_mb_addr as usize].mb_field_decoding_flag = self.field_pic_flag;
         }
         todo!("implement macroblock layer for cavlc");
         self.last_mb_in_slice = self.curr_mb_addr;
@@ -277,9 +279,9 @@ impl<'a> Slice<'a> {
         self.prev_mb_addr = self.curr_mb_addr;
         self.last_mb_in_slice = self.curr_mb_addr;
         self.curr_mb_addr = self.next_mb_addr(self.curr_mb_addr);
-        if self.curr_mb_addr >= self.pic_size_in_mbs as usize {
+        if self.curr_mb_addr >= self.pic_size_in_mbs as isize {
           return Err(CabacError::from(MacroblockError::MacroblockBounds(
-            self.curr_mb_addr as isize,
+            self.curr_mb_addr,
             self.pic_size_in_mbs as usize,
           )));
         }
@@ -288,10 +290,10 @@ impl<'a> Slice<'a> {
     Ok(())
   }
 
-  pub fn next_mb_addr(&self, mut mbaddr: usize) -> usize {
+  pub fn next_mb_addr(&self, mut mbaddr: isize) -> isize {
     let sg = self.mb_slice_group(mbaddr);
     mbaddr += 1;
-    while mbaddr < self.pic_size_in_mbs as usize && self.mb_slice_group(mbaddr) != sg {
+    while mbaddr < self.pic_size_in_mbs as isize && self.mb_slice_group(mbaddr) != sg {
       mbaddr += 1;
     }
     mbaddr
@@ -321,18 +323,18 @@ impl<'a> Slice<'a> {
     };
     if self.mbaff_frame_flag {
       if (self.curr_mb_addr & 1) != 0 {
-        if is_skip_mb_type(self.macroblocks[self.curr_mb_addr & !1].mb_type) {
+        if is_skip_mb_type(self.macroblocks[self.curr_mb_addr as usize & !1].mb_type) {
           let val = self.inferred_mb_field_decoding_flag();
-          self.macroblocks[self.curr_mb_addr - 1].mb_field_decoding_flag = val;
+          self.macroblocks[self.curr_mb_addr as usize - 1].mb_field_decoding_flag = val;
         }
-        self.macroblocks[self.curr_mb_addr].mb_field_decoding_flag =
-          self.macroblocks[self.curr_mb_addr - 1].mb_field_decoding_flag;
+        self.macroblocks[self.curr_mb_addr as usize].mb_field_decoding_flag =
+          self.macroblocks[self.curr_mb_addr as usize - 1].mb_field_decoding_flag;
       }
     } else {
-      self.macroblocks[self.curr_mb_addr].mb_field_decoding_flag = self.field_pic_flag;
+      self.macroblocks[self.curr_mb_addr as usize].mb_field_decoding_flag = self.field_pic_flag;
     }
     {
-      let mb = &mut self.macroblocks[self.curr_mb_addr];
+      let mb = &mut self.macroblocks[self.curr_mb_addr as usize];
       mb.mb_type = skip_type;
       mb.mb_qp_delta = 0;
       mb.transform_size_8x8_flag = 0;
@@ -341,7 +343,7 @@ impl<'a> Slice<'a> {
     }
     self.infer_intra(0);
     self.infer_intra(1);
-    let mb = &mut self.macroblocks[self.curr_mb_addr];
+    let mb = &mut self.macroblocks[self.curr_mb_addr as usize];
     for i in 0..17 {
       mb.coded_block_flag[0][i] = 0;
       mb.coded_block_flag[1][i] = 0;
@@ -356,7 +358,7 @@ impl<'a> Slice<'a> {
   }
 
   pub fn infer_intra(&mut self, which: usize) {
-    let mb = &mut self.macroblocks[self.curr_mb_addr];
+    let mb = &mut self.macroblocks[self.curr_mb_addr as usize];
     for i in 0..4 {
       mb.ref_idx[which][i] = 0;
     }
@@ -380,7 +382,7 @@ impl<'a> Slice<'a> {
 
   pub fn mb_nb(&self, position: MbPosition, inter: u8) -> CabacResult<&Macroblock> {
     let mbp = self.mb_nb_p(position, inter);
-    let mbt = &self.macroblocks[self.curr_mb_addr];
+    let mbt = &self.macroblocks[self.curr_mb_addr as usize];
     Ok(match position {
       MbPosition::This => mbp,
       MbPosition::A => {
@@ -424,8 +426,8 @@ impl<'a> Slice<'a> {
     position: MbPosition,
     mut block_size: BlockSize,
     inter: u8,
-    idx: usize,
-    pidx: &mut usize,
+    idx: isize,
+    pidx: &mut isize,
   ) -> CabacResult<&Macroblock> {
     let mb_p = self.mb_nb_p(position, inter);
     let mb_o = self.mb_nb(position, inter)?;
@@ -545,29 +547,29 @@ impl<'a> Slice<'a> {
     if self.mbaff_frame_flag {
       mbaddr /= 2;
     }
-    let pic_width_in_mbs = self.pic_width_in_mbs as usize;
+    let pic_width_in_mbs = self.pic_width_in_mbs as isize;
     match position {
-      MbPosition::This => return &self.macroblocks[self.curr_mb_addr],
+      MbPosition::This => return &self.macroblocks[self.curr_mb_addr as usize],
       MbPosition::A => {
         if (mbaddr % pic_width_in_mbs) == 0 {
           return Macroblock::unavailable(inter);
         }
-        mbaddr = mbaddr.wrapping_sub(1);
+        mbaddr -= 1;
       }
       MbPosition::B => {
-        mbaddr = mbaddr.wrapping_sub(pic_width_in_mbs);
+        mbaddr -= pic_width_in_mbs;
       }
       MbPosition::C => {
         if ((mbaddr + 1) % pic_width_in_mbs) == 0 {
           return Macroblock::unavailable(inter);
         }
-        mbaddr = mbaddr.wrapping_sub(pic_width_in_mbs - 1);
+        mbaddr -= pic_width_in_mbs - 1;
       }
       MbPosition::D => {
         if (mbaddr % pic_width_in_mbs) == 0 {
           return Macroblock::unavailable(inter);
         }
-        mbaddr = mbaddr.wrapping_sub(pic_width_in_mbs + 1);
+        mbaddr -= pic_width_in_mbs + 1;
       }
     }
     if self.mbaff_frame_flag {
@@ -576,11 +578,11 @@ impl<'a> Slice<'a> {
     if !self.mb_available(mbaddr) {
       return Macroblock::unavailable(inter);
     }
-    &self.macroblocks[mbaddr]
+    &self.macroblocks[mbaddr as usize]
   }
 
-  pub fn mb_available(&self, mbaddr: usize) -> bool {
-    if mbaddr < (self.first_mb_in_slice * (self.mbaff_frame_flag as u16 + 1)) as usize
+  pub fn mb_available(&self, mbaddr: isize) -> bool {
+    if mbaddr < (self.first_mb_in_slice * (self.mbaff_frame_flag as u16 + 1)) as isize
       || mbaddr > self.curr_mb_addr
     {
       return false;
@@ -588,10 +590,11 @@ impl<'a> Slice<'a> {
     self.mb_slice_group(mbaddr) == self.mb_slice_group(self.curr_mb_addr)
   }
 
-  pub fn mb_slice_group(&self, mbaddr: usize) -> u8 {
-    if mbaddr >= self.pic_size_in_mbs as usize || self.pps.slice_group.is_none() {
+  pub fn mb_slice_group(&self, mbaddr: isize) -> u8 {
+    if mbaddr >= self.pic_size_in_mbs as isize || self.pps.slice_group.is_none() {
       return 0;
     }
+    let mbaddr = mbaddr as usize;
     if self.sps.frame_mbs_only_flag || self.field_pic_flag {
       self.sgmap[mbaddr]
     } else if !self.mbaff_frame_flag {
