@@ -1002,7 +1002,6 @@ impl CabacContext {
     let mbt_b = slice.mb_nb(MbPosition::B, 0)?.mb_type;
     let mut cond_term_flag_a = mbt_a != MB_TYPE_UNAVAILABLE;
     let mut cond_term_flag_b = mbt_b != MB_TYPE_UNAVAILABLE;
-    // log!(Debug@"DEBUG: {} {} {} {}", mbt_a, mbt_b, cond_term_flag_a, cond_term_flag_b);
     let slice_type = slice.slice_type;
     let mut val = slice.mb().mb_type;
     match slice_type {
@@ -1034,7 +1033,6 @@ impl CabacContext {
         bidx[4] = CTXIDX_MB_TYPE_I + 5;
         bidx[5] = CTXIDX_MB_TYPE_I + 6;
         bidx[6] = CTXIDX_MB_TYPE_I + 7;
-        // log!(Debug@"DEBUG: {:?}", bidx);
         self.se(slice, MB_TYPE_I_TABLE, &bidx, &mut val)?;
       }
       SliceType::P | SliceType::SP => {
@@ -1071,7 +1069,6 @@ impl CabacContext {
         self.se(slice, MB_TYPE_B_TABLE, &bidx, &mut val)?;
       }
     }
-    // log!(Debug@"DEBUG: {:?}", val);
     slice.macroblocks[slice.curr_mb_addr as usize].mb_type = val;
     Ok(())
   }
@@ -1116,21 +1113,17 @@ impl CabacContext {
         if bin_idx[j] == -1 {
           bin_idx[j] = bit.bin_idx as i16;
           byte[j] = self.decision(slice, ctx_indices[bin_idx[j] as usize])?;
-          // log!(Debug@"DEBUG: {:?}", bin_idx);
-          // log!(Debug@"DEBUG: {:?}", byte);
         }
         if bin_idx[j] != bit.bin_idx as i16 {
           return Err(CabacError::SETable);
         }
         if byte[j] != bit.value {
-          // log!(Debug@"DEBUG: BREAK J: {:?}\t{:?}\t{:?}", j, byte[j], bit.value);
           break;
         }
         j += 1;
       }
 
       if j == se_value.bits.len() {
-        // log!(Debug@"DEBUG: LEN {:?}\t{:?}", j, se_value.bits.len());
         if let Some(sub_table) = se_value.sub_table {
           return self.se(slice, sub_table, ctx_indices, val);
         } else {
@@ -1214,7 +1207,6 @@ impl CabacContext {
 
     let cod_i_range_lps = RANGE_TAB_LPS[p_state_idx][q_cod_i_range_idx] as u16;
     self.cod_i_range -= cod_i_range_lps;
-    // log!(Debug@"DEBUG: ctx_idx: {ctx_idx}\t{}\t{}\t{cod_i_range_lps}\t({p_state_idx}, {q_cod_i_range_idx})", self.cod_i_offset, self.cod_i_range);
     if self.cod_i_offset >= self.cod_i_range {
       bin_val = (self.val_mps[ctx_idx] == 0) as u8;
       self.cod_i_offset -= self.cod_i_range;
@@ -1280,7 +1272,6 @@ impl CabacContext {
     for (ctx_idx, init) in CTX_INIT_TABLE.iter().enumerate() {
       let (m, n) = init[slice.cabac_init_mode];
       let pre_ctx_state = clamp(((m * clamp(slice.sliceqpy, 0, 51)) >> 4) + n, 1, 126);
-      // log!(Debug@"DEBUG: sliceqpy: {}\tm: {m}\tn: {n}\tpre_ctx_state: {pre_ctx_state}", slice.sliceqpy);
       if pre_ctx_state < 64 {
         p_state_idx[ctx_idx] = 63 - pre_ctx_state;
         val_mps[ctx_idx] = 0;
@@ -1289,7 +1280,6 @@ impl CabacContext {
         val_mps[ctx_idx] = 1;
       }
     }
-    // log!(Debug@"DEBUG:\np_state_idx: {p_state_idx:?}\nval_mps: {val_mps:?}");
     (p_state_idx, val_mps)
   }
 
