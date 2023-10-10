@@ -209,11 +209,8 @@ impl<'a> Slice<'a> {
           let end_of_slice_flag = cabac.terminate(self)?;
           if end_of_slice_flag != 0 {
             self.last_mb_in_slice = self.curr_mb_addr;
-            return self
-              .stream
-              .is_byte_aligned(0)
-              .then_some(())
-              .ok_or(CabacError::CabacZeroWord);
+            self.stream.is_byte_aligned(0);
+            return Ok(());
           }
         }
         self.prev_mb_addr = self.curr_mb_addr;
