@@ -630,9 +630,8 @@ impl CabacContext {
       while i >= start as isize {
         let idx = i as usize;
         if significant_coeff_flag[idx] != 0 {
-          let mut s = (blocks.content(slice)[idx] < 0) as u8;
           let cam1 = self.coeff_abs_level_minus1(slice, cat, num1, numgt1)?;
-          self.cabac_bypass(slice, &mut s)?;
+          let s = self.bypass(slice)?;
           if cam1 != 0 {
             numgt1 += 1;
           } else {
@@ -647,20 +646,6 @@ impl CabacContext {
         *block = 0;
       }
     }
-    Ok(())
-  }
-
-  pub fn cabac_bypass(&mut self, slice: &mut Slice, bin_val: &mut u8) -> CabacResult {
-    self.cod_i_offset <<= 1;
-    let tmp = slice.stream.bit();
-    self.cod_i_offset |= tmp as u16;
-    if self.cod_i_offset >= self.cod_i_range {
-      *bin_val = 1;
-      self.cod_i_offset -= self.cod_i_range;
-    } else {
-      *bin_val = 0;
-    }
-    self.bin_count += 1;
     Ok(())
   }
 
@@ -806,7 +791,7 @@ impl CabacContext {
 
   pub fn mb_qp_delta(&mut self, slice: &mut Slice) -> CabacResult<i16> {
     let mut ctx_idx = [0; 3];
-    if slice.prev_mb_addr != -1isize && slice.mb().mb_qp_delta != 0 {
+    if slice.prev_mb_addr != -1 && slice.macroblocks[slice.prev_mb_addr as usize].mb_qp_delta != 0 {
       ctx_idx[0] = CTXIDX_MB_QP_DELTA + 1;
     } else {
       ctx_idx[0] = CTXIDX_MB_QP_DELTA;
