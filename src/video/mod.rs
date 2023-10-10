@@ -7,9 +7,9 @@ pub mod slice;
 
 use crate::{
   ascii::{Color, RESET},
+  display::Duration,
   log,
   math::Matrix3x3,
-  time::Duration,
 };
 use atom::AtomError;
 use codec::VideoCodec;

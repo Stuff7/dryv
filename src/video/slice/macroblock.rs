@@ -1,7 +1,9 @@
 use std::{
-  fmt::{Debug, Display},
+  fmt::Debug,
   hash::{Hash, Hasher},
 };
+
+use crate::display::DisplayArray;
 
 use super::consts::*;
 use thiserror::Error;
@@ -360,16 +362,5 @@ impl BlockSize {
       BlockSize::Chroma => 8, // Chroma blocks typically have the same height as luma blocks.
       BlockSize::B8x8 => 8,
     }
-  }
-}
-
-pub struct DisplayArray<'a, T: Display, const N: usize>(&'a [T; N]);
-
-impl<'a, T: Display, const N: usize> Debug for DisplayArray<'a, T, N> {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    for n in self.0 {
-      write!(f, "{} ", n)?;
-    }
-    Ok(())
   }
 }
