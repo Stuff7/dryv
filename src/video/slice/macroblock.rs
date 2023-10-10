@@ -193,8 +193,18 @@ impl std::fmt::Debug for Macroblock {
     let mut f = f.debug_struct("Slice");
     f.field("mb_field_decoding_flag", &self.mb_field_decoding_flag)
       .field("mb_type", &self.mb_type)
+      .field("transform_size_8x8_flag", &self.transform_size_8x8_flag)
       .field("coded_block_pattern", &self.coded_block_pattern)
-      .field("transform_size_8x8_flag", &self.transform_size_8x8_flag);
+      .field(
+        "prev_intra8x8_pred_mode_flag",
+        &DisplayArray(&self.prev_intra8x8_pred_mode_flag),
+      )
+      .field(
+        "rem_intra8x8_pred_mode",
+        &DisplayArray(&self.rem_intra8x8_pred_mode),
+      )
+      .field("intra_chroma_pred_mode", &self.intra_chroma_pred_mode)
+      .field("mb_qp_delta", &self.mb_qp_delta);
 
     const BLOCK_NAME: [&str; 3] = ["Luma", "Cb", "Cr"];
     if is_intra_16x16_mb_type(self.mb_type) {
@@ -241,8 +251,7 @@ impl std::fmt::Debug for Macroblock {
         );
       }
     }
-    f.field("mb_qp_delta", &self.mb_qp_delta)
-      .field("pcm_sample_luma", &DisplayArray(&self.pcm_sample_luma))
+    f.field("pcm_sample_luma", &DisplayArray(&self.pcm_sample_luma))
       .field("pcm_sample_chroma", &DisplayArray(&self.pcm_sample_chroma))
       .field(
         "prev_intra4x4_pred_mode_flag",
@@ -252,15 +261,6 @@ impl std::fmt::Debug for Macroblock {
         "rem_intra4x4_pred_mode",
         &DisplayArray(&self.rem_intra4x4_pred_mode),
       )
-      .field(
-        "prev_intra8x8_pred_mode_flag",
-        &DisplayArray(&self.prev_intra8x8_pred_mode_flag),
-      )
-      .field(
-        "rem_intra8x8_pred_mode",
-        &DisplayArray(&self.rem_intra8x8_pred_mode),
-      )
-      .field("intra_chroma_pred_mode", &self.intra_chroma_pred_mode)
       .field("sub_mb_type", &DisplayArray(&self.sub_mb_type))
       .field("ref_idx_l0", &DisplayArray(&self.ref_idx[0]))
       .field("ref_idx_l1", &DisplayArray(&self.ref_idx[1]));
