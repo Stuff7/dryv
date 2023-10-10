@@ -8,31 +8,108 @@ use crate::{
 
 #[derive(Debug)]
 pub struct SliceHeader {
+  /// The index of the first macroblock in the slice.
   pub first_mb_in_slice: u16,
+
+  /// The type of slice (I, P, B, etc.).
   pub slice_type: SliceType,
+
+  /// The index of the Picture Parameter Set (PPS) used for this slice.
   pub pps_id: u16,
+
+  /// An optional identifier for the color plane (only applicable in certain formats).
   pub color_plane_id: Option<u8>,
+
+  /// The frame number associated with the slice.
+  /// This is used for identifying frames in video sequences.
   pub frame_num: u16,
+
+  /// Indicates if the picture is a field picture.
+  /// In field pictures, a single frame is divided into two fields.
   pub field_pic_flag: bool,
+
+  /// Indicates if the picture is a bottom field.
+  /// This flag specifies whether the field is the top or bottom field in a frame.
   pub bottom_field_flag: bool,
+
+  /// An optional identifier for an Instantaneous Decoding Refresh (IDR) picture.
+  /// IDR pictures are self-contained and do not rely on other reference pictures.
   pub idr_pic_id: Option<u16>,
+
+  /// An optional value for the picture order count least significant bits (POC LSB).
+  /// The POC is used for ordering pictures in the decoding process.
   pub pic_order_cnt_lsb: Option<u16>,
+
+  /// An optional value for the delta picture order count bottom.
+  /// It represents the difference between POC values of adjacent frames.
   pub delta_pic_order_cnt_bottom: Option<i16>,
+
+  /// An optional tuple representing the delta picture order count (POC) values.
+  /// The first element is the POC value for reference picture 0, and the second element is for reference picture 1.
   pub delta_pic_order_cnt: Option<(i16, Option<i16>)>,
+
+  /// An optional value for redundant picture count.
+  /// Redundant slices are used for error recovery in video coding.
   pub redundant_pic_cnt: Option<u16>,
+
+  /// Indicates if direct spatial motion vector preference is used.
+  /// This flag affects how motion vectors are utilized in prediction.
   pub direct_spatial_mv_pref_flag: bool,
+
+  /// Indicates if the number of reference indices is overridden.
+  /// When overridden, the decoder uses a different number of reference pictures for prediction.
   pub num_ref_idx_active_override_flag: bool,
-  pub num_ref_idx_l0_active_minus1: Option<u16>,
-  pub num_ref_idx_l1_active_minus1: Option<u16>,
+
+  /// The number of reference indices for List 0 minus 1.
+  /// This value determines the number of reference pictures available for List 0 prediction.
+  pub num_ref_idx_l0_active_minus1: u16,
+
+  /// The number of reference indices for List 1 minus 1.
+  /// This value determines the number of reference pictures available for List 1 prediction.
+  pub num_ref_idx_l1_active_minus1: u16,
+
+  /// An optional modification for reference picture list in MVC (Multi-View Coding).
+  /// This field is used for reference picture list modifications in multi-view video coding.
   pub ref_pic_list_mvc_modification: Option<RefPicListMvcModification>,
+
+  /// An optional modification for reference picture list.
+  /// It specifies the modification of reference pictures used for prediction.
   pub ref_pic_list_modification: Option<RefPicListModification>,
+
+  /// An identifier for the chroma array type.
+  /// This value describes the chroma sampling format used in the video stream.
+  pub chroma_array_type: u16,
+
+  /// An optional prediction weight table.
+  /// This table contains information about prediction weights used in weighted prediction.
   pub pred_weight_table: Option<PredWeightTable>,
+
+  /// An optional decoding reference picture marking.
+  /// It contains information about reference picture management in the video stream.
   pub dec_ref_pic_marking: Option<DecRefPicMarking>,
+
+  /// An optional identifier for the Context-based Adaptive Binary Arithmetic Coding (CABAC) initialization.
+  /// CABAC is a technique for entropy coding used in video compression.
   pub cabac_init_idc: Option<u16>,
+
+  /// The slice quantization parameter (QP) delta.
+  /// QP affects the quantization of coefficients in video compression.
   pub slice_qp_delta: i16,
+
+  /// Indicates if the slice is switching SP/SI frames.
+  /// SP/SI frames are used in video coding for different prediction methods.
   pub sp_for_switch_flag: bool,
+
+  /// An optional value for the slice quantization parameter (QP) delta.
+  /// This field allows for finer control over quantization in certain cases.
   pub slice_qs_delta: Option<i16>,
+
+  /// An optional control for the deblocking filter.
+  /// The deblocking filter is used to reduce artifacts in compressed video.
   pub deblocking_filter_control: Option<DeblockingFilterControl>,
+
+  /// An optional value for the slice group change cycle.
+  /// This field is used in slice group-based video coding.
   pub slice_group_change_cycle: Option<u16>,
 }
 
@@ -46,6 +123,18 @@ impl SliceHeader {
     let mut field_pic_flag = false;
     let slice_type;
     let num_ref_idx_active_override_flag;
+    let num_ref_idx_l0_active_minus1;
+    let num_ref_idx_l1_active_minus1;
+    let chroma_array_type = match nal.unit_type {
+      NALUnitType::AuxiliaryCodedPicture => 0,
+      _ => {
+        if sps.separate_color_plane_flag {
+          0
+        } else {
+          sps.chroma_format_idc
+        }
+      }
+    };
     Self {
       first_mb_in_slice: data.exponential_golomb(),
       slice_type: {
@@ -91,15 +180,27 @@ impl SliceHeader {
         };
         num_ref_idx_active_override_flag
       },
-      num_ref_idx_l0_active_minus1: num_ref_idx_active_override_flag
-        .then(|| data.exponential_golomb()),
-      num_ref_idx_l1_active_minus1: (num_ref_idx_active_override_flag
-        && matches!(slice_type, SliceType::B))
-      .then(|| data.exponential_golomb()),
+      num_ref_idx_l0_active_minus1: {
+        num_ref_idx_l0_active_minus1 = num_ref_idx_active_override_flag
+          .then(|| data.exponential_golomb())
+          .unwrap_or_default();
+        num_ref_idx_l0_active_minus1
+      },
+      num_ref_idx_l1_active_minus1: {
+        num_ref_idx_l1_active_minus1 = (num_ref_idx_active_override_flag
+          && matches!(slice_type, SliceType::B))
+        .then(|| data.exponential_golomb())
+        .unwrap_or_default();
+        num_ref_idx_l1_active_minus1
+      },
       ref_pic_list_mvc_modification: RefPicListMvcModification::new(data, &nal.unit_type),
       ref_pic_list_modification: RefPicListModification::new(data, &nal.unit_type, &slice_type),
+      chroma_array_type,
       pred_weight_table: PredWeightTable::new(
         data,
+        chroma_array_type,
+        num_ref_idx_l0_active_minus1,
+        num_ref_idx_l1_active_minus1,
         pps.weighted_pred_flag,
         &slice_type,
         pps.weighted_bipred_idc,
@@ -261,18 +362,86 @@ impl RefPicListMvcModification {
 }
 
 #[derive(Debug)]
-pub struct PredWeightTable;
+pub struct PredWeightTableEntry {
+  luma_weight: i16,
+  luma_offset: i16,
+  chroma_weight: [i16; 2],
+  chroma_offset: [i16; 2],
+}
+
+impl PredWeightTableEntry {
+  fn new(
+    stream: &mut BitStream,
+    luma_log2_weight_denom: u16,
+    chroma_log2_weight_denom: u16,
+  ) -> Self {
+    let (luma_weight, luma_offset) = match stream.bit_flag() {
+      true => (
+        stream.signed_exponential_golomb(),
+        stream.signed_exponential_golomb(),
+      ),
+      false => (1 << luma_log2_weight_denom, 0),
+    };
+    let (chroma_weight, chroma_offset) = match stream.bit_flag() {
+      true => {
+        let a = [stream.signed_exponential_golomb(); 4];
+        ([a[0], a[2]], [a[1], a[3]])
+      }
+      false => ([1 << chroma_log2_weight_denom; 2], [0; 2]),
+    };
+    Self {
+      luma_weight,
+      luma_offset,
+      chroma_weight,
+      chroma_offset,
+    }
+  }
+}
+
+#[derive(Debug)]
+pub struct PredWeightTable {
+  luma_log2_weight_denom: u16,
+  chroma_log2_weight_denom: u16,
+  l0: Box<[PredWeightTableEntry]>,
+  l1: Box<[PredWeightTableEntry]>,
+}
 
 impl PredWeightTable {
   pub fn new(
-    _: &mut BitStream,
+    stream: &mut BitStream,
+    chroma_array_type: u16,
+    num_ref_idx_l0_active_minus1: u16,
+    num_ref_idx_l1_active_minus1: u16,
     weighted_pred_flag: bool,
     slice_type: &SliceType,
     weighted_bipred_idc: u8,
   ) -> Option<Self> {
     ((weighted_pred_flag && matches!(slice_type, SliceType::P | SliceType::SP))
       || (weighted_bipred_idc == 1 && matches!(slice_type, SliceType::B)))
-    .then(|| todo!("PredWeightTable"))
+    .then(|| {
+      let luma_log2_weight_denom = stream.exponential_golomb();
+      let chroma_log2_weight_denom = (chroma_array_type != 0)
+        .then(|| stream.exponential_golomb())
+        .unwrap_or_default();
+      Self {
+        luma_log2_weight_denom,
+        chroma_log2_weight_denom,
+        l0: (0..=num_ref_idx_l0_active_minus1)
+          .map(|_| {
+            PredWeightTableEntry::new(stream, luma_log2_weight_denom, chroma_log2_weight_denom)
+          })
+          .collect(),
+        l1: if !slice_type.is_predictive() {
+          (0..=num_ref_idx_l1_active_minus1)
+            .map(|_| {
+              PredWeightTableEntry::new(stream, luma_log2_weight_denom, chroma_log2_weight_denom)
+            })
+            .collect()
+        } else {
+          [].into()
+        },
+      }
+    })
   }
 }
 

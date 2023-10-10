@@ -238,7 +238,7 @@ impl CabacContext {
         }
         _ => unreachable!(),
       }
-      let mut max = slice.num_ref_idx_l0_active_minus1.unwrap_or_default();
+      let mut max = slice.num_ref_idx_l0_active_minus1;
       if slice.mbaff_frame_flag && slice.mb().mb_field_decoding_flag {
         max *= 2;
         max += 1;
@@ -254,7 +254,7 @@ impl CabacContext {
           slice.mb_mut().ref_idx[0][i] = slice.mb().ref_idx[0][ifrom[i]];
         }
       }
-      max = slice.num_ref_idx_l1_active_minus1.unwrap_or_default();
+      max = slice.num_ref_idx_l1_active_minus1;
       if slice.mbaff_frame_flag && slice.mb().mb_field_decoding_flag {
         max *= 2;
         max += 1;
@@ -347,7 +347,7 @@ impl CabacContext {
         _ => unreachable!(),
       }
     }
-    let mut max = slice.num_ref_idx_l0_active_minus1.unwrap_or_default();
+    let mut max = slice.num_ref_idx_l0_active_minus1;
     if slice.mbaff_frame_flag && slice.mb().mb_field_decoding_flag {
       max *= 2;
       max += 1;
@@ -359,7 +359,7 @@ impl CabacContext {
         slice.mb_mut().ref_idx[0][i] = 0;
       }
     }
-    max = slice.num_ref_idx_l1_active_minus1.unwrap_or_default();
+    max = slice.num_ref_idx_l1_active_minus1;
     if slice.mbaff_frame_flag && slice.mb().mb_field_decoding_flag {
       max *= 2;
       max += 1;

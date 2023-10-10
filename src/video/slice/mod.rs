@@ -43,10 +43,6 @@ pub struct Slice<'a> {
   /// CABAC is a video coding method that adapts probability models for binary decisions.
   pub cabac_init_mode: usize,
 
-  /// The chroma array type, which specifies the chroma format used in the video stream.
-  /// It determines how chroma (color) information is sampled and represented.
-  pub chroma_array_type: u16,
-
   /// Width of the picture in macroblocks (MBs).
   /// The picture width is measured in the number of macroblocks it contains.
   pub pic_width_in_mbs: u16,
@@ -105,16 +101,6 @@ impl<'a> Slice<'a> {
     let header = SliceHeader::new(&mut stream, nal, sps, pps);
     Self {
       cabac_init_mode: header.cabac_init_idc.map(|idc| idc + 1).unwrap_or(0) as usize,
-      chroma_array_type: match nal.unit_type {
-        NALUnitType::AuxiliaryCodedPicture => 0,
-        _ => {
-          if sps.separate_color_plane_flag {
-            0
-          } else {
-            sps.chroma_format_idc
-          }
-        }
-      },
       pic_width_in_mbs: {
         pic_width_in_mbs = sps.pic_width_in_mbs_minus1 + 1;
         pic_width_in_mbs
