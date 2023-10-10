@@ -190,7 +190,7 @@ impl Hash for Macroblock {
 
 impl std::fmt::Debug for Macroblock {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    let mut f = f.debug_struct("Slice");
+    let mut f = f.debug_struct("Macroblock");
     f.field("mb_field_decoding_flag", &self.mb_field_decoding_flag)
       .field("mb_type", &self.mb_type)
       .field("transform_size_8x8_flag", &self.transform_size_8x8_flag)
