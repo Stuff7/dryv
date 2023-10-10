@@ -45,10 +45,6 @@ impl<'a> BitStream<'a> {
       0 => 0,
       _ => 0xFF >> self.bit_offset,
     };
-    println!(
-      "MODE: {mode} PAD: {pad} BYTE: {} {self:?}",
-      self.data[self.offset]
-    );
     self.bits(8 - self.bit_offset as u8) == pad
   }
 
