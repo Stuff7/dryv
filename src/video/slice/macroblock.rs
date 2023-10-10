@@ -1,4 +1,7 @@
-use std::hash::{Hash, Hasher};
+use std::{
+  fmt::{Debug, Display},
+  hash::{Hash, Hasher},
+};
 
 use super::consts::*;
 use thiserror::Error;
@@ -183,48 +186,95 @@ impl Hash for Macroblock {
   }
 }
 
-impl<'a> std::fmt::Debug for Macroblock {
+impl std::fmt::Debug for Macroblock {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    f.debug_struct("Slice")
-      .field("mb_field_decoding_flag", &self.mb_field_decoding_flag)
+    let mut f = f.debug_struct("Slice");
+    f.field("mb_field_decoding_flag", &self.mb_field_decoding_flag)
       .field("mb_type", &self.mb_type)
       .field("coded_block_pattern", &self.coded_block_pattern)
-      .field("transform_size_8x8_flag", &self.transform_size_8x8_flag)
-      .field("mb_qp_delta", &self.mb_qp_delta)
-      .field("pcm_sample_luma", &format!("{:?}", self.pcm_sample_luma))
-      .field(
-        "pcm_sample_chroma",
-        &format!("{:?}", self.pcm_sample_chroma),
-      )
+      .field("transform_size_8x8_flag", &self.transform_size_8x8_flag);
+
+    const BLOCK_NAME: [&str; 3] = ["Luma", "Cb", "Cr"];
+    if is_intra_16x16_mb_type(self.mb_type) {
+      for (i, name) in BLOCK_NAME.iter().enumerate() {
+        f.field(
+          &format!("{} DC", name),
+          &DisplayArray(&self.block_luma_dc[i]),
+        );
+        for j in 0..16 {
+          f.field(
+            &format!("{} AC {j}", name),
+            &DisplayArray(&self.block_luma_ac[i][j]),
+          );
+        }
+      }
+    } else if self.transform_size_8x8_flag != 0 {
+      for (i, name) in BLOCK_NAME.iter().enumerate() {
+        for j in 0..4 {
+          f.field(
+            &format!("{} 8x8 {j}", name),
+            &DisplayArray(&self.block_luma_8x8[i][j]),
+          );
+        }
+      }
+    } else {
+      for (i, name) in BLOCK_NAME.iter().enumerate() {
+        for j in 0..16 {
+          f.field(
+            &format!("{} 4x4 {j}", name),
+            &DisplayArray(&self.block_luma_4x4[i][j]),
+          );
+        }
+      }
+    }
+    for i in 0..2 {
+      f.field(
+        &format!("{} DC", BLOCK_NAME[i + 1]),
+        &DisplayArray(&self.block_chroma_dc[i]),
+      );
+      for j in 0..8 {
+        f.field(
+          &format!("{} AC {j}", BLOCK_NAME[i + 1]),
+          &DisplayArray(&self.block_chroma_ac[i][j]),
+        );
+      }
+    }
+    f.field("mb_qp_delta", &self.mb_qp_delta)
+      .field("pcm_sample_luma", &DisplayArray(&self.pcm_sample_luma))
+      .field("pcm_sample_chroma", &DisplayArray(&self.pcm_sample_chroma))
       .field(
         "prev_intra4x4_pred_mode_flag",
-        &format!("{:?}", self.prev_intra4x4_pred_mode_flag),
+        &DisplayArray(&self.prev_intra4x4_pred_mode_flag),
       )
       .field(
         "rem_intra4x4_pred_mode",
-        &format!("{:?}", self.rem_intra4x4_pred_mode),
+        &DisplayArray(&self.rem_intra4x4_pred_mode),
       )
       .field(
         "prev_intra8x8_pred_mode_flag",
-        &format!("{:?}", self.prev_intra8x8_pred_mode_flag),
+        &DisplayArray(&self.prev_intra8x8_pred_mode_flag),
       )
       .field(
         "rem_intra8x8_pred_mode",
-        &format!("{:?}", self.rem_intra8x8_pred_mode),
+        &DisplayArray(&self.rem_intra8x8_pred_mode),
       )
       .field("intra_chroma_pred_mode", &self.intra_chroma_pred_mode)
-      .field("sub_mb_type", &format!("{:?}", self.sub_mb_type))
-      .field("ref_idx", &format!("{:?}", self.ref_idx))
-      .field("mvd", &format!("{:?}", self.mvd))
-      .field("block_luma_dc", &format!("{:?}", self.block_luma_dc))
-      .field("block_luma_ac", &format!("{:?}", self.block_luma_ac))
-      .field("block_luma_4x4", &format!("{:?}", self.block_luma_4x4))
-      .field("block_luma_8x8", &format!("{:?}", self.block_luma_8x8))
-      .field("block_chroma_dc", &format!("{:?}", self.block_chroma_dc))
-      .field("block_chroma_ac", &format!("{:?}", self.block_chroma_ac))
-      .field("total_coeff", &format!("{:?}", self.total_coeff))
-      .field("coded_block_flag", &format!("{:?}", self.coded_block_flag))
-      .finish()
+      .field("sub_mb_type", &DisplayArray(&self.sub_mb_type))
+      .field("ref_idx_l0", &DisplayArray(&self.ref_idx[0]))
+      .field("ref_idx_l1", &DisplayArray(&self.ref_idx[1]));
+
+    for i in 0..2 {
+      f.field(&format!("ref_idx_l{i}"), &DisplayArray(&self.ref_idx[i]));
+      for j in 0..16 {
+        f.field(&format!("mvd_l{i}[{j}]"), &DisplayArray(&self.mvd[i][j]));
+      }
+    }
+
+    for i in 0..3 {
+      f.field("total_coeff", &DisplayArray(&self.total_coeff[i]))
+        .field("coded_block_flag", &DisplayArray(&self.coded_block_flag[i]));
+    }
+    f.finish()
   }
 }
 
@@ -310,5 +360,16 @@ impl BlockSize {
       BlockSize::Chroma => 8, // Chroma blocks typically have the same height as luma blocks.
       BlockSize::B8x8 => 8,
     }
+  }
+}
+
+pub struct DisplayArray<'a, T: Display, const N: usize>(&'a [T; N]);
+
+impl<'a, T: Display, const N: usize> Debug for DisplayArray<'a, T, N> {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    for n in self.0 {
+      write!(f, "{} ", n)?;
+    }
+    Ok(())
   }
 }
