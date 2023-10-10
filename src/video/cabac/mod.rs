@@ -607,7 +607,8 @@ impl CabacContext {
       let mut significant_coeff_flag = [0; 64];
       let mut last_significant_coeff_flag = [0; 64];
       let mut numcoeff = end + 1;
-      for i in start..numcoeff - 1 {
+      let mut i = start;
+      while i < numcoeff - 1 {
         significant_coeff_flag[i] =
           self.significant_coeff_flag(slice, field as usize, cat, i, 0)?;
         if significant_coeff_flag[i] != 0 {
@@ -617,6 +618,7 @@ impl CabacContext {
             numcoeff = i + 1;
           }
         }
+        i += 1;
       }
       significant_coeff_flag[numcoeff - 1] = 1;
       for block in blocks.content(slice).iter_mut().take(maxnumcoeff) {
