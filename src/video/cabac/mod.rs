@@ -28,8 +28,6 @@ pub enum CabacError {
   PcmAlignmentZeroBit,
   #[error("cabac_alignment_one_bit must be 1")]
   CabacAlignmentOneBit,
-  #[error("cabac_zero_word must be 0")]
-  CabacZeroWord,
   #[error("mb_skip_flag used in I/SI slice")]
   MbSkipFlagSlice,
   #[error(transparent)]
