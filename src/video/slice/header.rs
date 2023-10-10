@@ -470,12 +470,13 @@ impl DecRefPicMarking {
           long_term_reference_flag: data.bit_flag(),
         }
       } else if data.bit_flag() {
-        let memory_management_control_operation = data.exponential_golomb();
+        let mut memory_management_control_operation;
         let mut difference_of_pic_nums_minus1 = None;
         let mut long_term_pic_num = None;
         let mut long_term_frame_idx = None;
         let mut max_long_term_frame_idx_plus1 = None;
         loop {
+          memory_management_control_operation = data.exponential_golomb();
           if matches!(memory_management_control_operation, 1 | 3) {
             difference_of_pic_nums_minus1 = Some(data.exponential_golomb());
           }
