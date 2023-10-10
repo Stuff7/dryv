@@ -40,11 +40,6 @@ pub struct SequenceParameterSet {
 
 impl SequenceParameterSet {
   pub fn decode(data: &mut BitStream) -> Self {
-    // use std::io::Write;
-    // let mut img = std::fs::File::create("temp/img.264").expect("IMG CREATION");
-    // let mut d = vec![0, 0, 1];
-    // d.extend_from_slice(&data[2..]);
-    // img.write_all(&d).expect("SAVING");
     let pic_order_cnt_type;
     let frame_mbs_only_flag;
     let profile_idc;
