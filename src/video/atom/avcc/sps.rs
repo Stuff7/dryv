@@ -86,7 +86,14 @@ impl SequenceParameterSet {
       bit_depth_luma_minus8,
       bit_depth_chroma_minus8,
       qpprime_y_zero_transform_bypass_flag,
-      seq_scaling_matrix: ScalingLists::new(data, if chroma_format_idc != 3 { 8 } else { 12 }),
+      seq_scaling_matrix: ScalingLists::new(
+        match profile_idc {
+          66 | 77 | 88 => false,
+          _ => data.bit_flag(),
+        },
+        data,
+        if chroma_format_idc != 3 { 8 } else { 12 },
+      ),
       log2_max_frame_num_minus4: data.exponential_golomb(),
       pic_order_cnt_type: {
         pic_order_cnt_type = data.exponential_golomb();
@@ -185,8 +192,8 @@ pub struct ScalingLists {
 }
 
 impl ScalingLists {
-  pub fn new(data: &mut BitStream, size: u8) -> Option<Self> {
-    data.bit_flag().then(|| Self {
+  pub fn new(scaling_matrix_present_flag: bool, data: &mut BitStream, size: u8) -> Option<Self> {
+    scaling_matrix_present_flag.then(|| Self {
       scaling_list_4x4: (0..6)
         .filter_map(|_| data.bit_flag().then(|| ScalingList::new(data)))
         .collect(),

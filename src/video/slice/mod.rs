@@ -205,7 +205,6 @@ impl<'a> Slice<'a> {
           }
           cabac.macroblock_layer(self)?;
         }
-        // dbg!(self.mb().mb_type);
         if !self.mbaff_frame_flag || (self.curr_mb_addr & 1) != 0 {
           let end_of_slice_flag = cabac.terminate(self)?;
           if end_of_slice_flag != 0 {
