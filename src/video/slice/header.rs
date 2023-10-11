@@ -74,7 +74,8 @@ pub struct SliceHeader {
 
   /// An optional modification for reference picture list.
   /// It specifies the modification of reference pictures used for prediction.
-  pub ref_pic_list_modification: Option<RefPicListModification>,
+  pub ref_pic_list_modification_flag_l0: Box<[RefPicListModification]>,
+  pub ref_pic_list_modification_flag_l1: Box<[RefPicListModification]>,
 
   /// An identifier for the chroma array type.
   /// This value describes the chroma sampling format used in the video stream.
@@ -194,7 +195,16 @@ impl SliceHeader {
         num_ref_idx_l1_active_minus1
       },
       ref_pic_list_mvc_modification: RefPicListMvcModification::new(data, &nal.unit_type),
-      ref_pic_list_modification: RefPicListModification::new(data, &nal.unit_type, &slice_type),
+      ref_pic_list_modification_flag_l0: RefPicListModification::new_list(
+        data,
+        &nal.unit_type,
+        !slice_type.is_intra(),
+      ),
+      ref_pic_list_modification_flag_l1: RefPicListModification::new_list(
+        data,
+        &nal.unit_type,
+        slice_type.is_bidirectional(),
+      ),
       chroma_array_type,
       pred_weight_table: PredWeightTable::new(
         data,
@@ -297,54 +307,40 @@ impl SliceType {
 
 #[derive(Debug)]
 pub struct RefPicListModification {
-  pub ref_pic_list_modification_flag_l0: bool,
-  pub ref_pic_list_modification_flag_l1: bool,
-  pub modification_of_pic_nums_idc: Option<u16>,
-  pub abs_diff_pic_num_minus1: Option<u16>,
-  pub long_term_pic_num: Option<u16>,
+  pub modification_of_pic_nums_idc: u16,
+  pub abs_diff_pic_num_minus1: u16,
+  pub long_term_pic_num: u16,
 }
 
 impl RefPicListModification {
-  pub fn new(data: &mut BitStream, nal_type: &NALUnitType, slice_type: &SliceType) -> Option<Self> {
-    (!matches!(
+  pub fn new_list(data: &mut BitStream, nal_type: &NALUnitType, condition: bool) -> Box<[Self]> {
+    match !matches!(
       nal_type,
       NALUnitType::CodedSliceExtension | NALUnitType::DepthOrTextureViewComponent
-    ))
-    .then(|| {
-      let mut list = Self {
-        ref_pic_list_modification_flag_l0: false,
-        ref_pic_list_modification_flag_l1: false,
-        modification_of_pic_nums_idc: None,
-        abs_diff_pic_num_minus1: None,
-        long_term_pic_num: None,
-      };
-      if !matches!(slice_type, SliceType::I | SliceType::SI) {
-        list.ref_pic_list_modification_flag_l0 = list.create(data)
-      }
-      if matches!(slice_type, SliceType::B) {
-        list.ref_pic_list_modification_flag_l1 = list.create(data)
-      }
-      list
-    })
-  }
-
-  fn create(&mut self, data: &mut BitStream) -> bool {
-    let ref_pic_list_modification_flag = data.bit_flag();
-    if ref_pic_list_modification_flag {
-      loop {
-        let pic_nums_idc = data.exponential_golomb();
-        match pic_nums_idc {
-          0 | 1 => self.abs_diff_pic_num_minus1 = Some(data.exponential_golomb()),
-          2 => self.long_term_pic_num = Some(data.exponential_golomb()),
-          _ => (),
+    ) && condition
+      && data.bit_flag()
+    {
+      true => std::iter::from_fn(|| {
+        let modification_of_pic_nums_idc = data.exponential_golomb();
+        match modification_of_pic_nums_idc {
+          3 => None,
+          0 | 1 | 2 => Some(Self {
+            modification_of_pic_nums_idc,
+            abs_diff_pic_num_minus1: match modification_of_pic_nums_idc {
+              1 | 0 => data.exponential_golomb(),
+              _ => 0,
+            },
+            long_term_pic_num: match modification_of_pic_nums_idc {
+              2 => data.exponential_golomb(),
+              _ => 0,
+            },
+          }),
+          n => panic!("Unknown ref_pic_list_modification {n}"),
         }
-        self.modification_of_pic_nums_idc = Some(pic_nums_idc);
-        if pic_nums_idc == 3 {
-          break;
-        }
-      }
+      })
+      .collect(),
+      false => [].into(),
     }
-    ref_pic_list_modification_flag
   }
 }
 
@@ -446,61 +442,66 @@ impl PredWeightTable {
 }
 
 #[derive(Debug)]
-pub enum DecRefPicMarking {
-  Idr {
-    no_output_of_prior_pics_flag: bool,
-    long_term_reference_flag: bool,
+pub struct DecRefPicMarking {
+  no_output_of_prior_pics_flag: bool,
+  long_term_reference_flag: bool,
+  mmcos: Box<[Mmco]>,
+}
+
+#[derive(Debug)]
+pub enum Mmco {
+  ForgetShort {
+    difference_of_pic_nums_minus1: u16,
   },
-  AdaptiveRefPic {
-    memory_management_control_operation: u16,
-    difference_of_pic_nums_minus1: Option<u16>,
-    long_term_pic_num: Option<u16>,
-    long_term_frame_idx: Option<u16>,
-    max_long_term_frame_idx_plus1: Option<u16>,
+  ForgetLong {
+    long_term_pic_num: u16,
   },
-  None,
+  ShortToLong {
+    difference_of_pic_nums_minus1: u16,
+    long_term_frame_idx: u16,
+  },
+  ForgetLongMany {
+    max_long_term_frame_idx_plus1: u16,
+  },
+  ThisToLong {
+    long_term_frame_idx: u16,
+  },
 }
 
 impl DecRefPicMarking {
   pub fn new(data: &mut BitStream, nal: &NALUnit) -> Option<Self> {
     (nal.idc != 0).then(|| {
-      if nal.unit_type.is_idr() {
-        Self::Idr {
-          no_output_of_prior_pics_flag: data.bit_flag(),
-          long_term_reference_flag: data.bit_flag(),
-        }
-      } else if data.bit_flag() {
-        let mut memory_management_control_operation;
-        let mut difference_of_pic_nums_minus1 = None;
-        let mut long_term_pic_num = None;
-        let mut long_term_frame_idx = None;
-        let mut max_long_term_frame_idx_plus1 = None;
-        loop {
-          memory_management_control_operation = data.exponential_golomb();
-          if matches!(memory_management_control_operation, 1 | 3) {
-            difference_of_pic_nums_minus1 = Some(data.exponential_golomb());
-          }
-          match memory_management_control_operation {
-            0 => break,
-            1 | 3 => difference_of_pic_nums_minus1 = Some(data.exponential_golomb()),
-            2 => long_term_pic_num = Some(data.exponential_golomb()),
-            _ => (),
-          }
-          match memory_management_control_operation {
-            3 | 6 => long_term_frame_idx = Some(data.exponential_golomb()),
-            4 => max_long_term_frame_idx_plus1 = Some(data.exponential_golomb()),
-            _ => (),
-          }
-        }
-        Self::AdaptiveRefPic {
-          memory_management_control_operation,
-          difference_of_pic_nums_minus1,
-          long_term_pic_num,
-          long_term_frame_idx,
-          max_long_term_frame_idx_plus1,
-        }
-      } else {
-        Self::None
+      let (no_output_of_prior_pics_flag, long_term_reference_flag) = match nal.unit_type.is_idr() {
+        true => (data.bit_flag(), data.bit_flag()),
+        false => (false, false),
+      };
+      Self {
+        no_output_of_prior_pics_flag,
+        long_term_reference_flag,
+        mmcos: match data.bit_flag() {
+          true => std::iter::from_fn(|| match data.exponential_golomb() {
+            0 => None,
+            1 => Some(Mmco::ForgetShort {
+              difference_of_pic_nums_minus1: data.exponential_golomb(),
+            }),
+            2 => Some(Mmco::ForgetLong {
+              long_term_pic_num: data.exponential_golomb(),
+            }),
+            3 => Some(Mmco::ShortToLong {
+              difference_of_pic_nums_minus1: data.exponential_golomb(),
+              long_term_frame_idx: data.exponential_golomb(),
+            }),
+            4 => Some(Mmco::ForgetLongMany {
+              max_long_term_frame_idx_plus1: data.exponential_golomb(),
+            }),
+            6 => Some(Mmco::ThisToLong {
+              long_term_frame_idx: data.exponential_golomb(),
+            }),
+            n => panic!("Unknown MMCO {n}"),
+          })
+          .collect(),
+          false => [].into(),
+        },
       }
     })
   }

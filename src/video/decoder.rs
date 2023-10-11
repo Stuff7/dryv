@@ -116,17 +116,20 @@ impl Decoder {
               log!(File@"{msg}{sei_msg:?}");
             }
           }
-          NALUnitType::IDRPicture => {
+          NALUnitType::NonIDRPicture | NALUnitType::IDRPicture => {
             let mut slice = Slice::new(nal.data, &nal, &avc1.avcc.sps, &avc1.avcc.pps);
+            log!(Debug@"SLICE: {slice:#?}");
             slice.data()?;
             log!(File@"{msg}{:#?}", slice);
             use std::io::Write;
-            let name = format!("temp/idr-{i}.h264");
-            let mut img = std::fs::File::create(name).expect("IDR CREATION");
-            img.write_all(nal.data).expect("IDR SAVING");
-
             let name = format!("temp/slice-{i}");
             let mut img = std::fs::File::create(name).expect("SLICE CREATION");
+            img
+              .write_all(format!("{:#?}", slice).as_bytes())
+              .expect("SLICE SAVING");
+
+            let name = format!("temp/mb-{i}");
+            let mut img = std::fs::File::create(name).expect("MACROBLOCK CREATION");
             let mb_set: Vec<_> = slice
               .macroblocks
               .iter()
@@ -135,7 +138,7 @@ impl Decoder {
             println!("LEN: {}", mb_set.len());
             img
               .write_all(format!("{:#?}", &slice.macroblocks[..10]).as_bytes())
-              .expect("SLICE SAVING");
+              .expect("MACROBLOCK SAVING");
           }
           _ => log!(File@"{msg} [UNUSED]"),
         }
