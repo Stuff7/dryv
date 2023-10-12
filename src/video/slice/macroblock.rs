@@ -161,6 +161,7 @@ impl Macroblock {
     Ok(&macroblocks[index as usize])
   }
 
+  #[allow(unused)]
   pub fn offset_mut<'a>(
     &'a self,
     macroblocks: &'a mut [Macroblock],
@@ -280,6 +281,7 @@ impl std::fmt::Debug for Macroblock {
   }
 }
 
+#[allow(unused)]
 /// Represents the position of a macroblock (MB) within a block grid.
 #[derive(Debug, Clone, Copy)]
 pub enum MbPosition {
@@ -336,31 +338,8 @@ pub enum BlockSize {
 }
 
 impl BlockSize {
-  /// Checks if the block size represents a luma (brightness) block.
-  pub fn is_luma(&self) -> bool {
-    matches!(self, BlockSize::B4x4 | BlockSize::B8x8)
-  }
-
   /// Checks if the block size represents a chroma (color) block.
   pub fn is_chroma(&self) -> bool {
     matches!(self, BlockSize::Chroma)
-  }
-
-  /// Gets the width of the block size in pixels.
-  pub fn width(&self) -> u32 {
-    match self {
-      BlockSize::B4x4 => 4,
-      BlockSize::Chroma => 8, // Chroma blocks typically have the same width as luma blocks.
-      BlockSize::B8x8 => 8,
-    }
-  }
-
-  /// Gets the height of the block size in pixels.
-  pub fn height(&self) -> u32 {
-    match self {
-      BlockSize::B4x4 => 4,
-      BlockSize::Chroma => 8, // Chroma blocks typically have the same height as luma blocks.
-      BlockSize::B8x8 => 8,
-    }
   }
 }

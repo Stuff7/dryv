@@ -295,11 +295,6 @@ impl SliceType {
     matches!(self, SliceType::P | SliceType::SP)
   }
 
-  /// Checks if the slice type is a switching slice (SP-slice or SI-slice).
-  pub fn is_switching(&self) -> bool {
-    matches!(self, SliceType::SP | SliceType::SI)
-  }
-
   /// Checks if the slice type is a bidirectional slice (B-slice).
   pub fn is_bidirectional(&self) -> bool {
     matches!(self, SliceType::B)
@@ -360,10 +355,10 @@ impl RefPicListMvcModification {
 
 #[derive(Debug)]
 pub struct PredWeightTableEntry {
-  luma_weight: i16,
-  luma_offset: i16,
-  chroma_weight: [i16; 2],
-  chroma_offset: [i16; 2],
+  pub luma_weight: i16,
+  pub luma_offset: i16,
+  pub chroma_weight: [i16; 2],
+  pub chroma_offset: [i16; 2],
 }
 
 impl PredWeightTableEntry {
@@ -397,10 +392,10 @@ impl PredWeightTableEntry {
 
 #[derive(Debug)]
 pub struct PredWeightTable {
-  luma_log2_weight_denom: u16,
-  chroma_log2_weight_denom: u16,
-  l0: Box<[PredWeightTableEntry]>,
-  l1: Box<[PredWeightTableEntry]>,
+  pub luma_log2_weight_denom: u16,
+  pub chroma_log2_weight_denom: u16,
+  pub l0: Box<[PredWeightTableEntry]>,
+  pub l1: Box<[PredWeightTableEntry]>,
 }
 
 impl PredWeightTable {
@@ -444,9 +439,9 @@ impl PredWeightTable {
 
 #[derive(Debug)]
 pub struct DecRefPicMarking {
-  no_output_of_prior_pics_flag: bool,
-  long_term_reference_flag: bool,
-  mmcos: Box<[Mmco]>,
+  pub no_output_of_prior_pics_flag: bool,
+  pub long_term_reference_flag: bool,
+  pub mmcos: Box<[Mmco]>,
 }
 
 #[derive(Debug)]

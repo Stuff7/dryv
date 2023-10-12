@@ -8,7 +8,6 @@ use super::{
 };
 use crate::{
   byte::BitStream,
-  log,
   video::atom::{PictureParameterSet, SequenceParameterSet},
   video::sample::NALUnit,
 };
@@ -440,7 +439,7 @@ impl<'a> Slice<'a> {
               }
               MbMode::FieldFromFrame => {
                 *pidx = (idx << 2 & 8) + 5;
-                Ok(mb_p.offset(&self.macroblocks, idx as isize >> 3)?)
+                Ok(mb_p.offset(&self.macroblocks, idx >> 3)?)
               }
             }
           }
@@ -461,7 +460,7 @@ impl<'a> Slice<'a> {
               }
               MbMode::FieldFromFrame => {
                 *pidx = (idx << 1 & 4) + 1;
-                Ok(mb_p.offset(&self.macroblocks, idx as isize >> 2)?)
+                Ok(mb_p.offset(&self.macroblocks, idx >> 2)?)
               }
             }
           }
@@ -482,7 +481,7 @@ impl<'a> Slice<'a> {
               }
               MbMode::FieldFromFrame => {
                 *pidx = 1;
-                Ok(mb_p.offset(&self.macroblocks, idx as isize >> 1)?)
+                Ok(mb_p.offset(&self.macroblocks, idx >> 1)?)
               }
             }
           }
