@@ -4,7 +4,6 @@ use super::sample::*;
 use super::slice::*;
 use crate::byte::{BitStream, Str};
 use crate::log;
-use std::collections::HashSet;
 use std::fs::File;
 use std::io::{Read, Seek};
 use std::path::Path;
@@ -98,6 +97,7 @@ impl Decoder {
     for (i, sample) in samples {
       log!(File@"{:-^100}", format!("SAMPLE #{} ({} bytes)", i + 1, sample.len()));
       for nal in sample.units(nal_length_size) {
+        let nal = nal?;
         let msg = format!(
           "[{:?} idc={}] ({} bytes) => ",
           nal.unit_type, nal.idc, nal.size
@@ -122,23 +122,12 @@ impl Decoder {
             slice.data()?;
             log!(File@"{msg}{:#?}", slice);
             use std::io::Write;
-            let name = format!("temp/slice-{i}");
-            let mut img = std::fs::File::create(name).expect("SLICE CREATION");
-            img
-              .write_all(format!("{:#?}", slice).as_bytes())
-              .expect("SLICE SAVING");
-
-            let name = format!("temp/mb-{i}");
-            let mut img = std::fs::File::create(name).expect("MACROBLOCK CREATION");
-            let mb_set: Vec<_> = slice
-              .macroblocks
-              .iter()
-              .filter(|mb| mb.mb_type != 57)
-              .collect();
-            println!("LEN: {}", mb_set.len());
-            img
-              .write_all(format!("{:#?}", &slice.macroblocks[..10]).as_bytes())
-              .expect("MACROBLOCK SAVING");
+            let name = format!("temp/slice/{i}");
+            let mut f = std::fs::File::create(name).expect("SLICE CREATION");
+            f.write_all(
+              format!("{:#?}\n{:#?}\n{:#?}", nal, slice, &slice.macroblocks[..10]).as_bytes(),
+            )
+            .expect("SLICE SAVING");
           }
           _ => log!(File@"{msg} [UNUSED]"),
         }

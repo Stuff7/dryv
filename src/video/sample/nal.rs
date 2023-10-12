@@ -1,4 +1,9 @@
-use crate::byte::{padded_array_from_slice, BitStream};
+use super::SampleResult;
+use crate::{
+  byte::{padded_array_from_slice, BitStream},
+  video::sample::SampleError,
+};
+use std::fmt::Debug;
 
 #[derive(Debug)]
 pub struct SeiMessage {
@@ -188,12 +193,21 @@ impl NALUnitType {
   }
 }
 
-#[derive(Debug)]
 pub struct NALUnit<'a> {
   pub idc: u8,
   pub unit_type: NALUnitType,
   pub size: usize,
   pub data: &'a [u8],
+}
+
+impl<'a> Debug for NALUnit<'a> {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.debug_struct("NALUnit")
+      .field("idc", &self.idc)
+      .field("unit_type", &self.unit_type)
+      .field("size", &self.size)
+      .finish()
+  }
 }
 
 #[derive(Debug)]
@@ -214,14 +228,18 @@ impl<'a> NALUnitIter<'a> {
 }
 
 impl<'a> Iterator for NALUnitIter<'a> {
-  type Item = NALUnit<'a>;
+  type Item = SampleResult<NALUnit<'a>>;
   fn next(&mut self) -> Option<Self::Item> {
     (self.offset + self.nal_length_size < self.data.len()).then(|| {
       let s = self.offset;
       self.offset += self.nal_length_size;
       let mut nal_size = usize::from_be_bytes(padded_array_from_slice(&self.data[s..self.offset]));
       nal_size >>= (std::mem::size_of::<usize>() - self.nal_length_size) * 8;
-      let idc = self.data[self.offset] & 0x60 >> 5;
+      let byte = self.data[self.offset];
+      if byte & 0x80 != 0 {
+        return Err(SampleError::NALForbiddenZeroBit);
+      }
+      let idc = self.data[self.offset] >> 5;
       let nal_type = self.data[self.offset] & 0x1F;
       let nal_unit = NALUnit {
         idc,
@@ -230,7 +248,7 @@ impl<'a> Iterator for NALUnitIter<'a> {
         data: &self.data[self.offset + 1..],
       };
       self.offset += nal_size;
-      nal_unit
+      Ok(nal_unit)
     })
   }
 }

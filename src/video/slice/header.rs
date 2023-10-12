@@ -52,9 +52,10 @@ pub struct SliceHeader {
   /// Redundant slices are used for error recovery in video coding.
   pub redundant_pic_cnt: Option<u16>,
 
-  /// Indicates if direct spatial motion vector preference is used.
-  /// This flag affects how motion vectors are utilized in prediction.
-  pub direct_spatial_mv_pref_flag: bool,
+  /// Indicates whether direct spatial motion vector prediction is used.
+  /// Direct spatial motion vector prediction is a technique in video coding where motion vectors are predicted directly
+  /// from spatial neighbors, typically in inter-coded frames (P-frames and B-frames).
+  pub direct_spatial_mv_pred_flag: bool,
 
   /// Indicates if the number of reference indices is overridden.
   /// When overridden, the decoder uses a different number of reference pictures for prediction.
@@ -173,7 +174,7 @@ impl SliceHeader {
       redundant_pic_cnt: pps
         .redundant_pic_cnt_present_flag
         .then(|| data.exponential_golomb()),
-      direct_spatial_mv_pref_flag: matches!(slice_type, SliceType::B) && data.bit_flag(),
+      direct_spatial_mv_pred_flag: matches!(slice_type, SliceType::B) && data.bit_flag(),
       num_ref_idx_active_override_flag: {
         num_ref_idx_active_override_flag = match slice_type {
           SliceType::P | SliceType::SP | SliceType::B => data.bit_flag(),
