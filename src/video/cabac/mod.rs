@@ -9,7 +9,7 @@ use super::slice::{
   macroblock::{BlockSize, Macroblock, MacroblockError, MbPosition},
   Slice,
 };
-use crate::{log, math::clamp};
+use crate::math::clamp;
 use consts::*;
 use syntax_element::SEValue;
 use syntax_element::*;
