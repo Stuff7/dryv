@@ -185,14 +185,14 @@ impl SliceHeader {
       num_ref_idx_l0_active_minus1: {
         num_ref_idx_l0_active_minus1 = num_ref_idx_active_override_flag
           .then(|| data.exponential_golomb())
-          .unwrap_or_default();
+          .unwrap_or(pps.num_ref_idx_l0_default_active_minus1);
         num_ref_idx_l0_active_minus1
       },
       num_ref_idx_l1_active_minus1: {
         num_ref_idx_l1_active_minus1 = (num_ref_idx_active_override_flag
           && matches!(slice_type, SliceType::B))
         .then(|| data.exponential_golomb())
-        .unwrap_or_default();
+        .unwrap_or(pps.num_ref_idx_l1_default_active_minus1);
         num_ref_idx_l1_active_minus1
       },
       ref_pic_list_mvc_modification: RefPicListMvcModification::new(data, &nal.unit_type),
