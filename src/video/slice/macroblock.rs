@@ -193,7 +193,10 @@ impl std::fmt::Debug for Macroblock {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     let mut f = f.debug_struct("Macroblock");
     f.field("mb_field_decoding_flag", &self.mb_field_decoding_flag)
-      .field("mb_type", &self.mb_type)
+      .field(
+        &format!("mb_type [{}]", name_mb_type(self.mb_type)),
+        &self.mb_type,
+      )
       .field("transform_size_8x8_flag", &self.transform_size_8x8_flag)
       .field("coded_block_pattern", &self.coded_block_pattern)
       .field(
@@ -262,7 +265,10 @@ impl std::fmt::Debug for Macroblock {
         "rem_intra4x4_pred_mode",
         &DisplayArray(&self.rem_intra4x4_pred_mode),
       )
-      .field("sub_mb_type", &DisplayArray(&self.sub_mb_type))
+      .field(
+        &format!("sub_mb_type {:?}", self.sub_mb_type.map(name_sub_mb_type)),
+        &DisplayArray(&self.sub_mb_type),
+      )
       .field("ref_idx_l0", &DisplayArray(&self.ref_idx[0]))
       .field("ref_idx_l1", &DisplayArray(&self.ref_idx[1]));
 
@@ -274,8 +280,14 @@ impl std::fmt::Debug for Macroblock {
     }
 
     for i in 0..3 {
-      f.field("total_coeff", &DisplayArray(&self.total_coeff[i]))
-        .field("coded_block_flag", &DisplayArray(&self.coded_block_flag[i]));
+      f.field(
+        &format!("total_coeff[{i}]"),
+        &DisplayArray(&self.total_coeff[i]),
+      )
+      .field(
+        &format!("coded_block_flag[{i}]"),
+        &DisplayArray(&self.coded_block_flag[i]),
+      );
     }
     f.finish()
   }
