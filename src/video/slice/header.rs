@@ -75,8 +75,8 @@ pub struct SliceHeader {
 
   /// An optional modification for reference picture list.
   /// It specifies the modification of reference pictures used for prediction.
-  pub ref_pic_list_modification_flag_l0: Box<[RefPicListModification]>,
-  pub ref_pic_list_modification_flag_l1: Box<[RefPicListModification]>,
+  pub ref_pic_list_modification_l0: Box<[RefPicListModification]>,
+  pub ref_pic_list_modification_l1: Box<[RefPicListModification]>,
 
   /// An identifier for the chroma array type.
   /// This value describes the chroma sampling format used in the video stream.
@@ -174,12 +174,9 @@ impl SliceHeader {
       redundant_pic_cnt: pps
         .redundant_pic_cnt_present_flag
         .then(|| data.exponential_golomb()),
-      direct_spatial_mv_pred_flag: matches!(slice_type, SliceType::B) && data.bit_flag(),
+      direct_spatial_mv_pred_flag: slice_type.is_bidirectional() && data.bit_flag(),
       num_ref_idx_active_override_flag: {
-        num_ref_idx_active_override_flag = match slice_type {
-          SliceType::P | SliceType::SP | SliceType::B => data.bit_flag(),
-          _ => false,
-        };
+        num_ref_idx_active_override_flag = !slice_type.is_intra() && data.bit_flag();
         num_ref_idx_active_override_flag
       },
       num_ref_idx_l0_active_minus1: {
@@ -190,18 +187,18 @@ impl SliceHeader {
       },
       num_ref_idx_l1_active_minus1: {
         num_ref_idx_l1_active_minus1 = (num_ref_idx_active_override_flag
-          && matches!(slice_type, SliceType::B))
+          && slice_type.is_bidirectional())
         .then(|| data.exponential_golomb())
         .unwrap_or(pps.num_ref_idx_l1_default_active_minus1);
         num_ref_idx_l1_active_minus1
       },
       ref_pic_list_mvc_modification: RefPicListMvcModification::new(data, &nal.unit_type),
-      ref_pic_list_modification_flag_l0: RefPicListModification::new_list(
+      ref_pic_list_modification_l0: RefPicListModification::new_list(
         data,
         &nal.unit_type,
         !slice_type.is_intra(),
       ),
-      ref_pic_list_modification_flag_l1: RefPicListModification::new_list(
+      ref_pic_list_modification_l1: RefPicListModification::new_list(
         data,
         &nal.unit_type,
         slice_type.is_bidirectional(),
@@ -217,12 +214,12 @@ impl SliceHeader {
         pps.weighted_bipred_idc,
       ),
       dec_ref_pic_marking: DecRefPicMarking::new(data, nal),
-      cabac_init_idc: (pps.entropy_coding_mode_flag
-        && !matches!(slice_type, SliceType::I | SliceType::SI))
-      .then(|| data.exponential_golomb()),
+      cabac_init_idc: (pps.entropy_coding_mode_flag && !slice_type.is_intra())
+        .then(|| data.exponential_golomb()),
       slice_qp_delta: data.signed_exponential_golomb(),
       sp_for_switch_flag: matches!(slice_type, SliceType::SP) && data.bit_flag(),
-      slice_qs_delta: matches!(slice_type, SliceType::SP | SliceType::I)
+      slice_qs_delta: slice_type
+        .is_switching()
         .then(|| data.signed_exponential_golomb()),
       deblocking_filter_control: DeblockingFilterControl::new(
         data,
@@ -293,6 +290,11 @@ impl SliceType {
   /// Checks if the slice type is a predictive slice (P-slice or SP-slice).
   pub fn is_predictive(&self) -> bool {
     matches!(self, SliceType::P | SliceType::SP)
+  }
+
+  /// Checks if the slice type is a switching slice (SP-slice or SI-slice).
+  pub fn is_switching(&self) -> bool {
+    matches!(self, SliceType::SP | SliceType::SI)
   }
 
   /// Checks if the slice type is a bidirectional slice (B-slice).
@@ -408,8 +410,8 @@ impl PredWeightTable {
     slice_type: &SliceType,
     weighted_bipred_idc: u8,
   ) -> Option<Self> {
-    ((weighted_pred_flag && matches!(slice_type, SliceType::P | SliceType::SP))
-      || (weighted_bipred_idc == 1 && matches!(slice_type, SliceType::B)))
+    ((weighted_pred_flag && slice_type.is_predictive())
+      || (weighted_bipred_idc == 1 && slice_type.is_bidirectional()))
     .then(|| {
       let luma_log2_weight_denom = stream.exponential_golomb();
       let chroma_log2_weight_denom = (chroma_array_type != 0)
@@ -474,7 +476,7 @@ impl DecRefPicMarking {
       Self {
         no_output_of_prior_pics_flag,
         long_term_reference_flag,
-        mmcos: match data.bit_flag() {
+        mmcos: match !nal.unit_type.is_idr() && data.bit_flag() {
           true => std::iter::from_fn(|| match data.exponential_golomb() {
             0 => None,
             1 => Some(Mmco::ForgetShort {
