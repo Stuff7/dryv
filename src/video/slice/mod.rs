@@ -253,19 +253,19 @@ impl<'a> Slice<'a> {
           self.macroblocks[self.curr_mb_addr as usize].mb_field_decoding_flag = self.field_pic_flag;
         }
         todo!("implement macroblock layer for cavlc");
-        self.last_mb_in_slice = self.curr_mb_addr;
-        if !self.stream.has_bits() {
-          break;
-        }
-        self.prev_mb_addr = self.curr_mb_addr;
-        self.last_mb_in_slice = self.curr_mb_addr;
-        self.curr_mb_addr = self.next_mb_addr(self.curr_mb_addr);
-        if self.curr_mb_addr >= self.pic_size_in_mbs as isize {
-          return Err(CabacError::from(MacroblockError::MacroblockBounds(
-            self.curr_mb_addr,
-            self.pic_size_in_mbs as usize,
-          )));
-        }
+        // self.last_mb_in_slice = self.curr_mb_addr;
+        // if !self.stream.has_bits() {
+        //   break;
+        // }
+        // self.prev_mb_addr = self.curr_mb_addr;
+        // self.last_mb_in_slice = self.curr_mb_addr;
+        // self.curr_mb_addr = self.next_mb_addr(self.curr_mb_addr);
+        // if self.curr_mb_addr >= self.pic_size_in_mbs as isize {
+        //   return Err(CabacError::from(MacroblockError::MacroblockBounds(
+        //     self.curr_mb_addr,
+        //     self.pic_size_in_mbs as usize,
+        //   )));
+        // }
       }
     }
     Ok(())
