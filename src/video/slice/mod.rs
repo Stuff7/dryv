@@ -3,6 +3,7 @@ pub mod header;
 pub mod macroblock;
 
 use super::{
+  atom::SliceGroup,
   cabac::{CabacContext, CabacError, CabacResult},
   sample::NALUnitType,
 };
@@ -65,6 +66,10 @@ pub struct Slice<'a> {
   /// are processed differently to handle this interlaced structure.
   pub mbaff_frame_flag: bool,
 
+  pub qp_bd_offset_y: i16,
+
+  pub qpy_prev: i16,
+
   /// Index of the last macroblock in the slice.
   /// It helps identify the endpoint of macroblock processing within the slice.
   pub last_mb_in_slice: isize,
@@ -79,7 +84,7 @@ pub struct Slice<'a> {
 
   /// Slice Group Map (SGMap) for macroblock grouping.
   /// SGMap defines the grouping of macroblocks for various purposes, such as parallel processing.
-  pub sgmap: &'a [u8],
+  pub sgmap: Box<[u8]>,
 
   /// Collection of macroblocks contained within the slice.
   /// Macroblocks represent the fundamental coding units within a video frame.
@@ -120,7 +125,15 @@ impl<'a> Slice<'a> {
       },
       sliceqpy: 26 + pps.pic_init_qp_minus26 + header.slice_qp_delta,
       mbaff_frame_flag: sps.mb_adaptive_frame_field_flag && !header.field_pic_flag,
+      qp_bd_offset_y: 6 * sps.bit_depth_luma_minus8 as i16,
+      qpy_prev: 0,
       last_mb_in_slice: 0,
+      sgmap: SliceGroup::init_sgmap(
+        header.slice_group_change_cycle.unwrap_or_default(),
+        pic_width_in_mbs,
+        sps,
+        pps,
+      ),
       header,
       sps,
       pps,
@@ -128,7 +141,6 @@ impl<'a> Slice<'a> {
       stream,
       prev_mb_addr: 0,
       curr_mb_addr: 0,
-      sgmap: &[],
       macroblocks: (0..pic_size_in_mbs).map(|_| Macroblock::empty()).collect(),
     }
   }
@@ -571,6 +583,7 @@ impl<'a> Slice<'a> {
     self.mb_slice_group(mbaddr) == self.mb_slice_group(self.curr_mb_addr)
   }
 
+  /// 8.2.2.8 Specification for conversion of map unit to slice group map to macroblock to slice group map
   pub fn mb_slice_group(&self, mbaddr: isize) -> u8 {
     if mbaddr >= self.pic_size_in_mbs as isize || self.pps.slice_group.is_none() {
       return 0;
