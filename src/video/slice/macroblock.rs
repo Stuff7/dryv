@@ -35,6 +35,11 @@ pub struct Macroblock {
   /// It represents the adjustment to the quantization step size.
   pub mb_qp_delta: i16,
 
+  pub qpy: i16,
+
+  pub qpprime_y: i16,
+
+  pub transform_bypass_flag: bool,
   /// PCM (Pulse Code Modulation) samples for luma (Y) component.
   /// PCM samples provide raw pixel values for luma.
   pub pcm_sample_luma: [u8; 256],
@@ -107,6 +112,9 @@ impl Macroblock {
       coded_block_pattern: 0,
       transform_size_8x8_flag: 0,
       mb_qp_delta: 0,
+      qpy: 0,
+      qpprime_y: 0,
+      transform_bypass_flag: false,
       pcm_sample_luma: [0; 256],
       pcm_sample_chroma: [0; 512],
       prev_intra4x4_pred_mode_flag: [0; 16],
@@ -208,7 +216,9 @@ impl std::fmt::Debug for Macroblock {
         &DisplayArray(&self.rem_intra8x8_pred_mode),
       )
       .field("intra_chroma_pred_mode", &self.intra_chroma_pred_mode)
-      .field("mb_qp_delta", &self.mb_qp_delta);
+      .field("mb_qp_delta", &self.mb_qp_delta)
+      .field("qpy", &self.qpy)
+      .field("qpy_prev", &self.qpprime_y);
 
     const BLOCK_NAME: [&str; 3] = ["Luma", "Cb", "Cr"];
     if is_intra_16x16_mb_type(self.mb_type) {

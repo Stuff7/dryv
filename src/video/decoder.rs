@@ -1,6 +1,7 @@
 use super::atom::*;
 use super::cabac::CabacError;
 use super::sample::*;
+use super::slice::dpb::DecodedPictureBuffer;
 use super::slice::*;
 use crate::byte::{BitStream, Str};
 use crate::log;
@@ -93,6 +94,7 @@ impl Decoder {
         return Err(DecoderError::MissingConfig)
       };
     let nal_length_size = avc1.avcc.nal_length_size_minus_one as usize + 1;
+    let mut dpb = DecodedPictureBuffer::new();
 
     for (i, sample) in samples {
       log!(File@"{:-^100}", format!("SAMPLE #{} ({} bytes)", i + 1, sample.len()));
@@ -118,13 +120,20 @@ impl Decoder {
           }
           NALUnitType::NonIDRPicture | NALUnitType::IDRPicture => {
             let mut slice = Slice::new(nal.data, &nal, &avc1.avcc.sps, &avc1.avcc.pps);
-            slice.data()?;
+            slice.data(&mut dpb)?;
             log!(File@"{msg}{:#?}", slice);
             use std::io::Write;
             let name = format!("temp/slice/{i}");
             let mut f = std::fs::File::create(name).expect("SLICE CREATION");
             f.write_all(
-              format!("{:#?}\n{:#?}\n{:#?}", nal, slice, &slice.macroblocks[..10]).as_bytes(),
+              format!(
+                "{:#?}\n{:#?}\n{:#?}\n{:#?}",
+                dpb,
+                nal,
+                slice,
+                &slice.macroblocks[..10]
+              )
+              .as_bytes(),
             )
             .expect("SLICE SAVING");
           }

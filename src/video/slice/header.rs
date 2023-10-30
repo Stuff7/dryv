@@ -113,6 +113,12 @@ pub struct SliceHeader {
   /// An optional value for the slice group change cycle.
   /// This field is used in slice group-based video coding.
   pub slice_group_change_cycle: Option<u16>,
+
+  pub max_pic_order_cnt_lsb: i16,
+
+  pub max_frame_num: u16,
+
+  pub curr_pic_num: i16,
 }
 
 impl SliceHeader {
@@ -127,6 +133,7 @@ impl SliceHeader {
     let num_ref_idx_active_override_flag;
     let num_ref_idx_l0_active_minus1;
     let num_ref_idx_l1_active_minus1;
+    let frame_num;
     let chroma_array_type = match nal.unit_type {
       NALUnitType::AuxiliaryCodedPicture => 0,
       _ => {
@@ -145,7 +152,10 @@ impl SliceHeader {
       },
       pps_id: data.exponential_golomb(),
       color_plane_id: sps.separate_color_plane_flag.then(|| data.bits_into(2)),
-      frame_num: data.bits_into(sps.log2_max_frame_num_minus4 as usize + 4),
+      frame_num: {
+        frame_num = data.bits_into(sps.log2_max_frame_num_minus4 as usize + 4);
+        frame_num
+      },
       field_pic_flag: !sps.frame_mbs_only_flag && {
         field_pic_flag = data.bit_flag();
         field_pic_flag
@@ -236,6 +246,16 @@ impl SliceHeader {
           .ceil();
         Some(data.bits_into(size as usize))
       }),
+      max_pic_order_cnt_lsb: sps
+        .log2_max_pic_order_cnt_lsb_minus4
+        .map(|x| 1 << (x + 4))
+        .unwrap_or_default() as i16,
+      max_frame_num: 1 << (sps.log2_max_frame_num_minus4 as i16 + 4),
+      curr_pic_num: if field_pic_flag {
+        frame_num as i16
+      } else {
+        2 * frame_num as i16 + 1
+      },
     }
   }
 }
@@ -443,6 +463,7 @@ impl PredWeightTable {
 pub struct DecRefPicMarking {
   pub no_output_of_prior_pics_flag: bool,
   pub long_term_reference_flag: bool,
+  pub adaptive_ref_pic_marking_mode_flag: bool,
   pub mmcos: Box<[Mmco]>,
 }
 
@@ -461,6 +482,7 @@ pub enum Mmco {
   ForgetLongMany {
     max_long_term_frame_idx_plus1: u16,
   },
+  ForgetAll,
   ThisToLong {
     long_term_frame_idx: u16,
   },
@@ -473,10 +495,12 @@ impl DecRefPicMarking {
         true => (data.bit_flag(), data.bit_flag()),
         false => (false, false),
       };
+      let adaptive_ref_pic_marking_mode_flag = !nal.unit_type.is_idr() && data.bit_flag();
       Self {
         no_output_of_prior_pics_flag,
         long_term_reference_flag,
-        mmcos: match !nal.unit_type.is_idr() && data.bit_flag() {
+        adaptive_ref_pic_marking_mode_flag,
+        mmcos: match adaptive_ref_pic_marking_mode_flag {
           true => std::iter::from_fn(|| match data.exponential_golomb() {
             0 => None,
             1 => Some(Mmco::ForgetShort {
@@ -492,6 +516,7 @@ impl DecRefPicMarking {
             4 => Some(Mmco::ForgetLongMany {
               max_long_term_frame_idx_plus1: data.exponential_golomb(),
             }),
+            5 => Some(Mmco::ForgetAll),
             6 => Some(Mmco::ThisToLong {
               long_term_frame_idx: data.exponential_golomb(),
             }),

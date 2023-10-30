@@ -1,6 +1,9 @@
 pub mod consts;
+pub mod dpb;
 pub mod header;
 pub mod macroblock;
+
+use self::dpb::{DecodedPictureBuffer, Picture};
 
 use super::{
   atom::SliceGroup,
@@ -34,6 +37,8 @@ pub struct Slice<'a> {
   /// The type of Network Abstraction Layer (NAL) unit to which the slice belongs.
   /// NAL units provide a structured representation of video data within the H.264 bitstream.
   pub nal_unit_type: NALUnitType,
+
+  pub nal_idc: u8,
 
   /// Bitstream representing the encoded data of the slice.
   /// The slice's encoded data is stored in a `BitStream` for efficient parsing and processing.
@@ -138,6 +143,7 @@ impl<'a> Slice<'a> {
       sps,
       pps,
       nal_unit_type: nal.unit_type,
+      nal_idc: nal.idc,
       stream,
       prev_mb_addr: 0,
       curr_mb_addr: 0,
@@ -153,7 +159,7 @@ impl<'a> Slice<'a> {
     &mut self.macroblocks[self.curr_mb_addr as usize]
   }
 
-  pub fn data(&mut self) -> CabacResult {
+  pub fn data(&mut self, dpb: &mut DecodedPictureBuffer) -> CabacResult {
     self.prev_mb_addr = -1isize;
     self.curr_mb_addr = (self.first_mb_in_slice * (1 + self.mbaff_frame_flag as u16)) as isize;
     self.last_mb_in_slice = self.curr_mb_addr;
@@ -164,6 +170,7 @@ impl<'a> Slice<'a> {
     };
     if self.pps.entropy_coding_mode_flag {
       let mut cabac = CabacContext::new(self)?;
+      dpb.decode_pic_order_cnt_type(self);
       loop {
         let mut mb_skip_flag = 0u8;
         if !self.slice_type.is_intra() {

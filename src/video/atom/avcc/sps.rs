@@ -131,12 +131,15 @@ pub struct PicOrderCntTypeOne {
   pub offset_for_top_to_bottom_field: i16,
   pub num_ref_frames_in_pic_order_cnt_cycle: u16,
   pub offset_for_ref_frame: Box<[i16]>,
+  pub expected_delta_per_pic_order_cnt_cycle: i16,
 }
 
 impl PicOrderCntTypeOne {
   pub fn new(data: &mut BitStream, pic_order_cnt_type: u16) -> Option<Self> {
     (pic_order_cnt_type == 1).then(|| {
       let num_ref_frames_in_pic_order_cnt_cycle;
+      let offset_for_ref_frame: Box<[i16]>;
+      let expected_delta_per_pic_order_cnt_cycle;
       Self {
         delta_pic_order_always_zero_flag: data.bit_flag(),
         offset_for_non_ref_pic: data.signed_exponential_golomb(),
@@ -145,9 +148,14 @@ impl PicOrderCntTypeOne {
           num_ref_frames_in_pic_order_cnt_cycle = data.exponential_golomb();
           num_ref_frames_in_pic_order_cnt_cycle
         },
-        offset_for_ref_frame: (0..num_ref_frames_in_pic_order_cnt_cycle)
-          .map(|_| data.signed_exponential_golomb())
-          .collect(),
+        offset_for_ref_frame: {
+          offset_for_ref_frame = (0..num_ref_frames_in_pic_order_cnt_cycle)
+            .map(|_| data.signed_exponential_golomb())
+            .collect();
+          expected_delta_per_pic_order_cnt_cycle = offset_for_ref_frame.iter().sum();
+          offset_for_ref_frame
+        },
+        expected_delta_per_pic_order_cnt_cycle,
       }
     })
   }
