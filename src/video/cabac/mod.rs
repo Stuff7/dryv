@@ -178,40 +178,8 @@ impl CabacContext {
         slice.mb_mut().mb_qp_delta = 0;
       }
       self.residual(slice, 0, 15)?;
-      // self.prediction_process(slice)?;
     }
     Ok(())
-  }
-
-  pub fn prediction_process(&mut self, slice: &mut Slice) -> CabacResult {
-    slice.mb_mut().qpy = if slice.mb().mb_qp_delta > 0 {
-      ((slice.qpy_prev + slice.mb().mb_qp_delta + 52 + slice.qp_bd_offset_y * 2)
-        % (52 + slice.qp_bd_offset_y))
-        - slice.qp_bd_offset_y
-    } else {
-      slice.qpy_prev
-    };
-    slice.mb_mut().qpprime_y = slice.mb().qpy + slice.qp_bd_offset_y;
-    slice.qpy_prev = slice.mb().qpy;
-
-    // Set Transform Bypass Mode
-    if slice.sps.qpprime_y_zero_transform_bypass_flag && slice.mb_mut().qpprime_y == 0 {
-      slice.mb_mut().transform_bypass_flag = true;
-    }
-    // Quantization and Transformation stages
-    if slice.nal_unit_type.is_idr() {
-      self.intra_prediction_process(slice)
-    } else {
-      self.inter_prediction_process(slice)
-    }
-  }
-
-  pub fn intra_prediction_process(&mut self, slice: &mut Slice) -> CabacResult {
-    todo!("Intra prediction process")
-  }
-
-  pub fn inter_prediction_process(&mut self, slice: &mut Slice) -> CabacResult {
-    todo!("Inter prediction process")
   }
 
   pub fn mb_pred(&mut self, slice: &mut Slice) -> CabacResult {
