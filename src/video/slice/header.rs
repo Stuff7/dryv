@@ -119,6 +119,8 @@ pub struct SliceHeader {
   pub max_frame_num: u16,
 
   pub curr_pic_num: i16,
+
+  pub max_pic_num: i16,
 }
 
 impl SliceHeader {
@@ -134,6 +136,7 @@ impl SliceHeader {
     let num_ref_idx_l0_active_minus1;
     let num_ref_idx_l1_active_minus1;
     let frame_num;
+    let max_frame_num;
     let chroma_array_type = match nal.unit_type {
       NALUnitType::AuxiliaryCodedPicture => 0,
       _ => {
@@ -250,11 +253,19 @@ impl SliceHeader {
         .log2_max_pic_order_cnt_lsb_minus4
         .map(|x| 1 << (x + 4))
         .unwrap_or_default() as i16,
-      max_frame_num: 1 << (sps.log2_max_frame_num_minus4 as i16 + 4),
+      max_frame_num: {
+        max_frame_num = 1 << (sps.log2_max_frame_num_minus4 as i16 + 4);
+        max_frame_num
+      },
       curr_pic_num: if field_pic_flag {
         frame_num as i16
       } else {
         2 * frame_num as i16 + 1
+      },
+      max_pic_num: if !field_pic_flag {
+        max_frame_num as i16
+      } else {
+        2 * max_frame_num as i16
       },
     }
   }

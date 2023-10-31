@@ -171,6 +171,9 @@ impl<'a> Slice<'a> {
     if self.pps.entropy_coding_mode_flag {
       let mut cabac = CabacContext::new(self)?;
       dpb.decode_pic_order_cnt_type(self);
+      if self.slice_type.is_predictive() || self.slice_type.is_bidirectional() {
+        dpb.reference_picture_lists_construction(self);
+      }
       loop {
         let mut mb_skip_flag = 0u8;
         if !self.slice_type.is_intra() {
@@ -287,6 +290,7 @@ impl<'a> Slice<'a> {
         // }
       }
     }
+    dpb.push(self);
     Ok(())
   }
 
