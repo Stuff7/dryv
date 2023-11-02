@@ -86,14 +86,11 @@ impl SequenceParameterSet {
       bit_depth_luma_minus8,
       bit_depth_chroma_minus8,
       qpprime_y_zero_transform_bypass_flag,
-      seq_scaling_matrix: ScalingLists::new(
-        match profile_idc {
-          66 | 77 | 88 => false,
-          _ => data.bit_flag(),
-        },
-        data,
-        if chroma_format_idc != 3 { 8 } else { 12 },
-      ),
+      seq_scaling_matrix: match profile_idc {
+        66 | 77 | 88 => false,
+        _ => data.bit_flag(),
+      }
+      .then(|| ScalingLists::new(data, if chroma_format_idc != 3 { 8 } else { 12 })),
       log2_max_frame_num_minus4: data.exponential_golomb(),
       pic_order_cnt_type: {
         pic_order_cnt_type = data.exponential_golomb();
@@ -193,22 +190,93 @@ impl<const S: usize> ScalingList<S> {
   }
 }
 
+const DEFAULT_4X4_INTRA: [i16; 16] = [
+  6, 13, 13, 20, 20, 20, 28, 28, 28, 28, 32, 32, 32, 37, 37, 42,
+];
+const DEFAULT_4X4_INTER: [i16; 16] = [
+  10, 14, 14, 20, 20, 20, 24, 24, 24, 24, 27, 27, 27, 30, 30, 34,
+];
+
+const DEFAULT_8X8_INTRA: [i16; 64] = [
+  6, 10, 10, 13, 11, 13, 16, 16, 16, 16, 18, 18, 18, 18, 18, 23, 23, 23, 23, 23, 23, 25, 25, 25,
+  25, 25, 25, 25, 27, 27, 27, 27, 27, 27, 27, 27, 29, 29, 29, 29, 29, 29, 29, 31, 31, 31, 31, 31,
+  31, 33, 33, 33, 33, 33, 36, 36, 36, 36, 38, 38, 38, 40, 40, 42,
+];
+const DEFAULT_8X8_INTER: [i16; 64] = [
+  9, 13, 13, 15, 13, 15, 17, 17, 17, 17, 19, 19, 19, 19, 19, 21, 21, 21, 21, 21, 21, 22, 22, 22,
+  22, 22, 22, 22, 24, 24, 24, 24, 24, 24, 24, 24, 25, 25, 25, 25, 25, 25, 25, 27, 27, 27, 27, 27,
+  27, 28, 28, 28, 28, 28, 30, 30, 30, 30, 32, 32, 32, 33, 33, 35,
+];
+
+pub fn scaling_list<const S: usize>(bits: &mut BitStream, data: &mut [i16; S]) -> bool {
+  let mut use_default_scaling_matrix_flag = false;
+  let mut last_scale = 8;
+  let mut next_scale = 8;
+  for (i, scale) in data.iter_mut().enumerate() {
+    if next_scale != 0 {
+      let delta_scale: i16 = bits.signed_exponential_golomb();
+      next_scale = (last_scale + delta_scale + 256) % 256;
+      use_default_scaling_matrix_flag = i == 0 && next_scale == 0;
+    }
+    *scale = if next_scale == 0 {
+      last_scale
+    } else {
+      next_scale
+    };
+    last_scale = *scale;
+  }
+
+  use_default_scaling_matrix_flag
+}
+
 #[derive(Debug)]
 pub struct ScalingLists {
-  pub scaling_list_4x4: Box<[ScalingList<16>]>,
-  pub scaling_list_8x8: Box<[ScalingList<64>]>,
+  pub l4x4: [[i16; 16]; 6],
+  pub l8x8: Box<[[i16; 64]]>,
 }
 
 impl ScalingLists {
-  pub fn new(scaling_matrix_present_flag: bool, data: &mut BitStream, size: u8) -> Option<Self> {
-    scaling_matrix_present_flag.then(|| Self {
-      scaling_list_4x4: (0..6)
-        .filter_map(|_| data.bit_flag().then(|| ScalingList::new(data)))
-        .collect(),
-      scaling_list_8x8: (6..size)
-        .filter_map(|_| data.bit_flag().then(|| ScalingList::new(data)))
-        .collect(),
-    })
+  pub fn new(bits: &mut BitStream, length: usize) -> Self {
+    let mut scaling_list4x4 = [[0; 16]; 6];
+    let mut scaling_list8x8 = vec![[0; 64]; length - 6];
+    for i in 0..length {
+      let scaling_list_present_flag = bits.bit_flag();
+      if scaling_list_present_flag {
+        if i < 6 {
+          let use_default_scaling_matrix_4x4_flag = scaling_list(bits, &mut scaling_list4x4[i]);
+          if use_default_scaling_matrix_4x4_flag {
+            match i {
+              0 | 1 | 2 => scaling_list4x4[i] = DEFAULT_4X4_INTRA,
+              _ => scaling_list4x4[i] = DEFAULT_4X4_INTER,
+            }
+          }
+        } else {
+          let use_default_scaling_matrix_8x8_flag = scaling_list(bits, &mut scaling_list8x8[i - 6]);
+          if use_default_scaling_matrix_8x8_flag {
+            match i {
+              6 | 8 | 10 => scaling_list8x8[i - 6] = DEFAULT_8X8_INTRA,
+              _ => scaling_list8x8[i - 6] = DEFAULT_8X8_INTER,
+            }
+          }
+        }
+      } else if i < 6 {
+        match i {
+          0 | 1 | 2 => scaling_list4x4[i] = DEFAULT_4X4_INTRA,
+          _ => scaling_list4x4[i] = DEFAULT_4X4_INTER,
+        }
+      } else {
+        match i {
+          6 | 8 | 10 => scaling_list8x8[i - 6] = DEFAULT_8X8_INTRA,
+          7 | 9 | 11 => scaling_list8x8[i - 6] = DEFAULT_8X8_INTER,
+          n => panic!("Scaling list 8x8 out of bounds {n}"),
+        }
+      }
+    }
+
+    Self {
+      l4x4: scaling_list4x4,
+      l8x8: scaling_list8x8.into(),
+    }
   }
 }
 

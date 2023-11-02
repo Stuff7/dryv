@@ -74,11 +74,12 @@ impl ExtraRbspData {
           transform_8x8_mode = data.bit();
           transform_8x8_mode != 0
         },
-        pic_scaling_matrix: ScalingLists::new(
-          data.bit_flag(),
-          data,
-          6 + if chroma_format_idc != 3 { 2 } else { 6 } * transform_8x8_mode,
-        ),
+        pic_scaling_matrix: data.bit_flag().then(|| {
+          ScalingLists::new(
+            data,
+            (6 + if chroma_format_idc != 3 { 2 } else { 6 } * transform_8x8_mode) as usize,
+          )
+        }),
         second_chroma_qp_index_offset: data.signed_exponential_golomb(),
       }
     })
