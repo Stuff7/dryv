@@ -89,8 +89,8 @@ impl Decoder {
       .stsd
       .decode(self)?
       .sample_description_table
-      .get(0)
-      .map(|d| &d.data) else {
+      .get_mut(0)
+      .map(|d| &mut d.data) else {
         return Err(DecoderError::MissingConfig)
       };
     let nal_length_size = avc1.avcc.nal_length_size_minus_one as usize + 1;
@@ -119,7 +119,7 @@ impl Decoder {
             }
           }
           NALUnitType::NonIDRPicture | NALUnitType::IDRPicture => {
-            let mut slice = Slice::new(nal.data, &nal, &avc1.avcc.sps, &avc1.avcc.pps);
+            let mut slice = Slice::new(nal.data, &nal, &mut avc1.avcc.sps, &mut avc1.avcc.pps);
             slice.data(&mut dpb)?;
             log!(File@"{msg}{:#?}", slice);
             use std::io::Write;

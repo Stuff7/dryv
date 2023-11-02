@@ -102,8 +102,8 @@ impl<'a> Slice<'a> {
   pub fn new(
     data: &'a [u8],
     nal: &NALUnit,
-    sps: &'a SequenceParameterSet,
-    pps: &'a PictureParameterSet,
+    sps: &'a mut SequenceParameterSet,
+    pps: &'a mut PictureParameterSet,
   ) -> Self {
     let pic_width_in_mbs;
     let mut pic_height_in_mbs;

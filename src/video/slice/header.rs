@@ -129,14 +129,18 @@ pub struct SliceHeader {
   pub mb_width_c: u8,
 
   pub mb_height_c: u8,
+
+  pub scaling_list4x4: [[i16; 16]; 6],
+
+  pub scaling_list8x8: Box<[[i16; 64]]>,
 }
 
 impl SliceHeader {
   pub fn new(
     data: &mut BitStream,
     nal: &NALUnit,
-    sps: &SequenceParameterSet,
-    pps: &PictureParameterSet,
+    sps: &mut SequenceParameterSet,
+    pps: &mut PictureParameterSet,
   ) -> Self {
     let mut field_pic_flag = false;
     let slice_type;
@@ -170,6 +174,8 @@ impl SliceHeader {
     } else {
       (16 / sub_width_c as u8, 16 / sub_height_c as u8)
     };
+    let (scaling_list4x4, scaling_list8x8) = Self::scaling_lists(sps, pps);
+
     Self {
       first_mb_in_slice: data.exponential_golomb(),
       slice_type: {
@@ -294,6 +300,25 @@ impl SliceHeader {
       sub_height_c,
       mb_width_c,
       mb_height_c,
+      scaling_list4x4,
+      scaling_list8x8,
+    }
+  }
+
+  fn scaling_lists(
+    sps: &mut SequenceParameterSet,
+    pps: &mut PictureParameterSet,
+  ) -> ([[i16; 16]; 6], Box<[[i16; 64]]>) {
+    if let Some(scaling_list) = sps.seq_scaling_matrix.take() {
+      (scaling_list.l4x4, scaling_list.l8x8)
+    } else if let Some(scaling_list) = pps
+      .extra_rbsp_data
+      .as_mut()
+      .and_then(|pps| pps.pic_scaling_matrix.take())
+    {
+      (scaling_list.l4x4, scaling_list.l8x8)
+    } else {
+      ([[16; 16]; 6], [[16; 64]; 6].into())
     }
   }
 }
