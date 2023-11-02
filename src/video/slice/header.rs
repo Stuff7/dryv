@@ -121,6 +121,14 @@ pub struct SliceHeader {
   pub curr_pic_num: i16,
 
   pub max_pic_num: i16,
+
+  pub sub_width_c: i8,
+
+  pub sub_height_c: i8,
+
+  pub mb_width_c: u8,
+
+  pub mb_height_c: u8,
 }
 
 impl SliceHeader {
@@ -137,6 +145,16 @@ impl SliceHeader {
     let num_ref_idx_l1_active_minus1;
     let frame_num;
     let max_frame_num;
+    let (sub_width_c, sub_height_c) = if sps.separate_color_plane_flag {
+      (-1, -1)
+    } else {
+      match sps.chroma_format_idc {
+        1 => (2, 2),
+        2 => (2, 1),
+        3 => (1, 1),
+        _ => (-1, -1),
+      }
+    };
     let chroma_array_type = match nal.unit_type {
       NALUnitType::AuxiliaryCodedPicture => 0,
       _ => {
@@ -146,6 +164,11 @@ impl SliceHeader {
           sps.chroma_format_idc
         }
       }
+    };
+    let (mb_width_c, mb_height_c) = if sps.chroma_format_idc == 0 || sps.separate_color_plane_flag {
+      (0, 0)
+    } else {
+      (16 / sub_width_c as u8, 16 / sub_height_c as u8)
     };
     Self {
       first_mb_in_slice: data.exponential_golomb(),
@@ -267,6 +290,10 @@ impl SliceHeader {
       } else {
         2 * max_frame_num as i16
       },
+      sub_width_c,
+      sub_height_c,
+      mb_width_c,
+      mb_height_c,
     }
   }
 }

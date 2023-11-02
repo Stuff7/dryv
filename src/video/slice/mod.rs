@@ -3,7 +3,7 @@ pub mod dpb;
 pub mod header;
 pub mod macroblock;
 
-use self::dpb::{DecodedPictureBuffer, Picture};
+use self::dpb::DecodedPictureBuffer;
 
 use super::{
   atom::SliceGroup,
@@ -59,6 +59,8 @@ pub struct Slice<'a> {
   /// Total size of the picture in macroblocks (MBs).
   /// The picture size represents the number of macroblocks within the picture.
   pub pic_size_in_mbs: u16,
+
+  pub pic_width_in_samples_l: u16,
 
   /// Quantization parameter for the slice.
   /// The quantization parameter affects the trade-off between compression and image quality.
@@ -128,6 +130,7 @@ impl<'a> Slice<'a> {
         pic_size_in_mbs = pic_width_in_mbs * pic_height_in_mbs;
         pic_size_in_mbs
       },
+      pic_width_in_samples_l: pic_width_in_mbs * 16,
       sliceqpy: 26 + pps.pic_init_qp_minus26 + header.slice_qp_delta,
       mbaff_frame_flag: sps.mb_adaptive_frame_field_flag && !header.field_pic_flag,
       qp_bd_offset_y: 6 * sps.bit_depth_luma_minus8 as i16,
@@ -180,7 +183,7 @@ impl<'a> Slice<'a> {
           let save = self.macroblocks[self.curr_mb_addr as usize].mb_field_decoding_flag;
           let ival = if self.mbaff_frame_flag
             && (self.curr_mb_addr & 1) != 0
-            && self.macroblocks[self.curr_mb_addr as usize - 1].mb_type != skip_type
+            && *self.macroblocks[self.curr_mb_addr as usize - 1].mb_type != skip_type
           {
             self.macroblocks[self.curr_mb_addr as usize - 1].mb_field_decoding_flag
           } else {
@@ -199,7 +202,7 @@ impl<'a> Slice<'a> {
               self.macroblocks[first_addr as usize].mb_field_decoding_flag =
                 cabac.mb_field_decoding_flag(self)? != 0;
             } else {
-              if self.macroblocks[first_addr as usize].mb_type == skip_type {
+              if *self.macroblocks[first_addr as usize].mb_type == skip_type {
                 self.macroblocks[first_addr as usize].mb_field_decoding_flag =
                   cabac.mb_field_decoding_flag(self)? != 0
               }
@@ -244,7 +247,7 @@ impl<'a> Slice<'a> {
               )));
             }
             self.last_mb_in_slice = self.curr_mb_addr;
-            self.macroblocks[self.curr_mb_addr as usize].mb_type = skip_type;
+            self.macroblocks[self.curr_mb_addr as usize].set_mb_type(skip_type);
             self.infer_skip()?;
             self.prev_mb_addr = self.curr_mb_addr;
             self.last_mb_in_slice = self.curr_mb_addr;
@@ -265,7 +268,7 @@ impl<'a> Slice<'a> {
           if self.curr_mb_addr == first_addr {
             self.macroblocks[first_addr as usize].mb_field_decoding_flag = self.stream.bit_flag();
           } else {
-            if self.macroblocks[first_addr as usize].mb_type == skip_type {
+            if *self.macroblocks[first_addr as usize].mb_type == skip_type {
               self.macroblocks[first_addr as usize].mb_field_decoding_flag = self.stream.bit_flag();
             }
             self.macroblocks[first_addr as usize + 1].mb_field_decoding_flag =
@@ -307,9 +310,9 @@ impl<'a> Slice<'a> {
     if self.mbaff_frame_flag {
       let mb_a = self.mb_nb_p(MbPosition::A, 0);
       let mb_b = self.mb_nb_p(MbPosition::B, 0);
-      if mb_a.mb_type != MB_TYPE_UNAVAILABLE {
+      if mb_a.mb_type.is_available() {
         mb_a.mb_field_decoding_flag
-      } else if mb_b.mb_type != MB_TYPE_UNAVAILABLE {
+      } else if mb_b.mb_type.is_available() {
         mb_b.mb_field_decoding_flag
       } else {
         false
@@ -327,7 +330,10 @@ impl<'a> Slice<'a> {
     };
     if self.mbaff_frame_flag {
       if (self.curr_mb_addr & 1) != 0 {
-        if is_skip_mb_type(self.macroblocks[self.curr_mb_addr as usize & !1].mb_type) {
+        if self.macroblocks[self.curr_mb_addr as usize & !1]
+          .mb_type
+          .is_skip()
+        {
           let val = self.inferred_mb_field_decoding_flag();
           self.macroblocks[self.curr_mb_addr as usize - 1].mb_field_decoding_flag = val;
         }
@@ -339,7 +345,7 @@ impl<'a> Slice<'a> {
     }
     {
       let mb = &mut self.macroblocks[self.curr_mb_addr as usize];
-      mb.mb_type = skip_type;
+      mb.set_mb_type(skip_type);
       mb.mb_qp_delta = 0;
       mb.transform_size_8x8_flag = 0;
       mb.coded_block_pattern = 0;
@@ -376,7 +382,7 @@ impl<'a> Slice<'a> {
     if inter == 0
       && self.pps.constrained_intra_pred_flag
       && matches!(self.nal_unit_type, NALUnitType::DataPartitionA)
-      && is_inter_mb_type(self.mb().mb_type)
+      && self.mb().mb_type.is_inter()
     {
       Macroblock::unavailable(1)
     } else {
@@ -391,7 +397,7 @@ impl<'a> Slice<'a> {
       MbPosition::This => mbp,
       MbPosition::A => {
         if self.mbaff_frame_flag
-          && mbp.mb_type != MB_TYPE_UNAVAILABLE
+          && mbp.mb_type.is_available()
           && (self.curr_mb_addr & 1) != 0
           && mbp.mb_field_decoding_flag == mbt.mb_field_decoding_flag
         {
@@ -403,7 +409,7 @@ impl<'a> Slice<'a> {
       MbPosition::B => {
         if self.mbaff_frame_flag {
           if mbt.mb_field_decoding_flag {
-            if mbp.mb_type == MB_TYPE_UNAVAILABLE
+            if mbp.mb_type.is_unavailable()
               || (self.curr_mb_addr & 1 == 0 && mbp.mb_field_decoding_flag)
             {
               mbp
@@ -412,7 +418,7 @@ impl<'a> Slice<'a> {
             }
           } else if (self.curr_mb_addr & 1) != 0 {
             mbt.offset(&self.macroblocks, -1)?
-          } else if mbp.mb_type != MB_TYPE_UNAVAILABLE {
+          } else if mbp.mb_type.is_available() {
             mbp.offset(&self.macroblocks, 1)?
           } else {
             mbp

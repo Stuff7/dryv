@@ -2,6 +2,7 @@ pub mod atom;
 pub mod cabac;
 pub mod codec;
 pub mod decoder;
+pub mod frame;
 pub mod sample;
 pub mod slice;
 

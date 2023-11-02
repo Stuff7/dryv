@@ -4,7 +4,6 @@ pub mod table;
 
 use super::slice::{
   consts::*,
-  consts::{is_skip_mb_type, MB_TYPE_UNAVAILABLE},
   header::SliceType,
   macroblock::{BlockSize, Macroblock, MacroblockError, MbPosition},
   Slice,
@@ -94,7 +93,7 @@ impl CabacContext {
     let bit_depth_luma_minus8 = slice.sps.bit_depth_luma_minus8 as usize;
     let bit_depth_chroma_minus8 = slice.sps.bit_depth_chroma_minus8 as usize;
     self.mb_type(slice)?;
-    if slice.mb().mb_type == MB_TYPE_I_PCM {
+    if slice.mb().mb_type.is_pcm() {
       if !slice.stream.is_byte_aligned(0) {
         return Err(CabacError::PcmAlignmentZeroBit);
       }
@@ -125,7 +124,7 @@ impl CabacContext {
       }
     } else {
       let mut no_sub_mb_part_size_less_than8x8_flag = 1;
-      if is_submb_mb_type(slice.mb().mb_type) {
+      if slice.mb().mb_type.is_submb() {
         self.sub_mb_pred(slice)?;
         for i in 0..4 {
           if slice.mb().sub_mb_type[i] != SUB_MB_TYPE_B_DIRECT_8X8 {
@@ -138,7 +137,7 @@ impl CabacContext {
         }
         slice.mb_mut().intra_chroma_pred_mode = 0;
       } else {
-        if slice.mb().mb_type == MB_TYPE_I_NXN || slice.mb().mb_type == MB_TYPE_SI {
+        if slice.mb().mb_type.is_i_nxn() || slice.mb().mb_type.is_si() {
           if transform_8x8_mode_flag {
             slice.mb_mut().transform_size_8x8_flag = self.transform_size_8x8_flag(slice)?;
           } else {
@@ -147,17 +146,17 @@ impl CabacContext {
         }
         self.mb_pred(slice)?;
       }
-      if slice.mb().mb_type == MB_TYPE_I_NXN
-        || slice.mb().mb_type == MB_TYPE_SI
-        || slice.mb().mb_type >= MB_TYPE_SI
+      if slice.mb().mb_type.is_i_nxn()
+        || slice.mb().mb_type.is_si()
+        || *slice.mb().mb_type >= MB_TYPE_SI
       {
         let has_chroma = slice.chroma_array_type < 3 && slice.chroma_array_type != 0;
         slice.mb_mut().coded_block_pattern = self.coded_block_pattern(slice, has_chroma)?;
-        if slice.mb().mb_type >= MB_TYPE_SI {
+        if *slice.mb().mb_type >= MB_TYPE_SI {
           if (slice.mb().coded_block_pattern & 0xf) != 0
             && transform_8x8_mode_flag
             && no_sub_mb_part_size_less_than8x8_flag != 0
-            && (slice.mb().mb_type != MB_TYPE_B_DIRECT_16X16 || direct_8x8_inference_flag)
+            && (!slice.mb().mb_type.is_b_direct_16x16() || direct_8x8_inference_flag)
           {
             slice.mb_mut().transform_size_8x8_flag = self.transform_size_8x8_flag(slice)?;
           } else {
@@ -165,14 +164,14 @@ impl CabacContext {
           }
         }
       } else {
-        let mut infer_cbp = (((slice.mb().mb_type - MB_TYPE_I_16X16_0_0_0) >> 2) % 3) << 4;
-        if slice.mb().mb_type >= MB_TYPE_I_16X16_0_0_1 {
+        let mut infer_cbp = (((*slice.mb().mb_type - MB_TYPE_I_16X16_0_0_0) >> 2) % 3) << 4;
+        if *slice.mb().mb_type >= MB_TYPE_I_16X16_0_0_1 {
           infer_cbp |= 0xf;
         }
         slice.mb_mut().coded_block_pattern = infer_cbp;
         slice.mb_mut().transform_size_8x8_flag = 0;
       }
-      if slice.mb().coded_block_pattern != 0 || is_intra_16x16_mb_type(slice.mb().mb_type) {
+      if slice.mb().coded_block_pattern != 0 || slice.mb().mb_type.is_intra_16x16() {
         slice.mb_mut().mb_qp_delta = self.mb_qp_delta(slice)?;
       } else {
         slice.mb_mut().mb_qp_delta = 0;
@@ -183,8 +182,8 @@ impl CabacContext {
   }
 
   pub fn mb_pred(&mut self, slice: &mut Slice) -> CabacResult {
-    if slice.mb().mb_type < MB_TYPE_P_L0_16X16 {
-      if !is_intra_16x16_mb_type(slice.mb().mb_type) {
+    if *slice.mb().mb_type < MB_TYPE_P_L0_16X16 {
+      if !slice.mb().mb_type.is_intra_16x16() {
         if slice.mb().transform_size_8x8_flag == 0 {
           for i in 0..16 {
             slice.mb_mut().prev_intra4x4_pred_mode_flag[i] =
@@ -210,12 +209,12 @@ impl CabacContext {
       }
       slice.infer_intra(0);
       slice.infer_intra(1);
-    } else if slice.mb().mb_type != MB_TYPE_B_DIRECT_16X16 {
+    } else if !slice.mb().mb_type.is_b_direct_16x16() {
       let mut ifrom = [0; 4];
       let mut pmode = [0; 4];
       ifrom[0] = -1isize as usize;
-      pmode[0] = MB_PART_INFO[slice.mb().mb_type as usize][1];
-      let mb_type = slice.mb().mb_type as usize;
+      pmode[0] = MB_PART_INFO[*slice.mb().mb_type as usize][1];
+      let mb_type = *slice.mb().mb_type as usize;
       match MB_PART_INFO[mb_type][0] {
         0 => {
           // 16x16
@@ -353,7 +352,7 @@ impl CabacContext {
       max += 1;
     }
     for (i, pmode) in pmode.iter().enumerate() {
-      if (pmode & 1) != 0 && slice.mb().mb_type != MB_TYPE_P_8X8REF0 {
+      if (pmode & 1) != 0 && !slice.mb().mb_type.is_p_8x8ref0() {
         slice.mb_mut().ref_idx[0][i] = self.ref_idx(slice, i as isize, 0, max)?;
       } else {
         slice.mb_mut().ref_idx[0][i] = 0;
@@ -446,7 +445,7 @@ impl CabacContext {
     end: usize,
     which: usize,
   ) -> CabacResult {
-    if start == 0 && is_intra_16x16_mb_type(slice.mb().mb_type) {
+    if start == 0 && slice.mb().mb_type.is_intra_16x16() {
       self.residual_cabac(
         slice,
         ResidualBlock::LumaDc(which),
@@ -460,12 +459,12 @@ impl CabacContext {
     } else {
       slice.mb_mut().coded_block_flag[which][16] = 0;
     }
-    let n = if is_intra_16x16_mb_type(slice.mb().mb_type) {
+    let n = if slice.mb().mb_type.is_intra_16x16() {
       15
     } else {
       16
     };
-    let ss = if is_intra_16x16_mb_type(slice.mb().mb_type) {
+    let ss = if slice.mb().mb_type.is_intra_16x16() {
       if start != 0 {
         start - 1
       } else {
@@ -474,7 +473,7 @@ impl CabacContext {
     } else {
       start
     };
-    let se = if is_intra_16x16_mb_type(slice.mb().mb_type) {
+    let se = if slice.mb().mb_type.is_intra_16x16() {
       end - 1
     } else {
       end
@@ -488,7 +487,7 @@ impl CabacContext {
             *tmp = slice.mb().block_luma_8x8[which][i >> 2][4 * j + (i & 3)];
           }
           cat = LUMA_CAT_TAB[which][3];
-        } else if is_intra_16x16_mb_type(slice.mb().mb_type) {
+        } else if slice.mb().mb_type.is_intra_16x16() {
           tmp[..15].copy_from_slice(&slice.mb().block_luma_ac[which][i][..15]);
           cat = LUMA_CAT_TAB[which][1];
         } else {
@@ -509,7 +508,7 @@ impl CabacContext {
           for (j, tmp) in tmp.iter().enumerate() {
             slice.mb_mut().block_luma_8x8[which][i >> 2][4 * j + (i & 3)] = *tmp;
           }
-        } else if is_intra_16x16_mb_type(slice.mb().mb_type) {
+        } else if slice.mb().mb_type.is_intra_16x16() {
           slice.mb_mut().block_luma_ac[which][i][..15].copy_from_slice(&tmp[..15]);
         } else {
           slice.mb_mut().block_luma_4x4[which][i][..16].copy_from_slice(&tmp[..16]);
@@ -718,7 +717,7 @@ impl CabacContext {
     mut idx: isize,
   ) -> CabacResult<u8> {
     let mb_t = slice.mb_nb_p(MbPosition::This, 0);
-    let inter = is_inter_mb_type(mb_t.mb_type) as u8;
+    let inter = mb_t.mb_type.is_inter() as u8;
     let which;
     match cat {
       CTXBLOCKCAT_LUMA_DC | CTXBLOCKCAT_LUMA_AC | CTXBLOCKCAT_LUMA_4X4 | CTXBLOCKCAT_LUMA_8X8 => {
@@ -761,14 +760,14 @@ impl CabacContext {
         idx_a *= 4;
         idx_b *= 4;
         if mb_a.transform_size_8x8_flag == 0
-          && mb_a.mb_type != MB_TYPE_I_PCM
-          && mb_a.mb_type != MB_TYPE_UNAVAILABLE
+          && !mb_a.mb_type.is_pcm()
+          && mb_a.mb_type.is_available()
         {
           Macroblock::unavailable(1);
         }
         if mb_b.transform_size_8x8_flag == 0
-          && mb_b.mb_type != MB_TYPE_I_PCM
-          && mb_b.mb_type != MB_TYPE_UNAVAILABLE
+          && !mb_b.mb_type.is_pcm()
+          && mb_b.mb_type.is_available()
         {
           Macroblock::unavailable(1);
         }
@@ -983,12 +982,12 @@ impl CabacContext {
 
   pub fn mb_type(&mut self, slice: &mut Slice) -> CabacResult {
     let mut bidx = [0i16; 11];
-    let mbt_a = slice.mb_nb(MbPosition::A, 0)?.mb_type;
-    let mbt_b = slice.mb_nb(MbPosition::B, 0)?.mb_type;
+    let mbt_a = *slice.mb_nb(MbPosition::A, 0)?.mb_type;
+    let mbt_b = *slice.mb_nb(MbPosition::B, 0)?.mb_type;
     let mut cond_term_flag_a = mbt_a != MB_TYPE_UNAVAILABLE;
     let mut cond_term_flag_b = mbt_b != MB_TYPE_UNAVAILABLE;
     let slice_type = slice.slice_type;
-    let mut val = slice.mb().mb_type;
+    let mut val = *slice.mb().mb_type;
     match slice_type {
       SliceType::SI => {
         cond_term_flag_a = cond_term_flag_a && mbt_a != MB_TYPE_SI;
@@ -1054,7 +1053,7 @@ impl CabacContext {
         self.se(slice, MB_TYPE_B_TABLE, &bidx, &mut val)?;
       }
     }
-    slice.macroblocks[slice.curr_mb_addr as usize].mb_type = val;
+    slice.macroblocks[slice.curr_mb_addr as usize].set_mb_type(val);
     Ok(())
   }
 
@@ -1069,8 +1068,8 @@ impl CabacContext {
     }
     let mb_a = slice.mb_nb(MbPosition::A, 0)?;
     let mb_b = slice.mb_nb(MbPosition::B, 0)?;
-    let cond_term_flag_a = mb_a.mb_type != MB_TYPE_UNAVAILABLE && !is_skip_mb_type(mb_a.mb_type);
-    let cond_term_flag_b = mb_b.mb_type != MB_TYPE_UNAVAILABLE && !is_skip_mb_type(mb_b.mb_type);
+    let cond_term_flag_a = mb_a.mb_type.is_available() && !mb_a.mb_type.is_skip();
+    let cond_term_flag_b = mb_b.mb_type.is_available() && !mb_b.mb_type.is_skip();
     let ctx_idx_inc = cond_term_flag_a as i16 + cond_term_flag_b as i16;
     self.decision(slice, ctx_idx_offset + ctx_idx_inc)
   }

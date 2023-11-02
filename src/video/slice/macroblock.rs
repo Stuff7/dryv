@@ -1,6 +1,7 @@
 use std::{
   fmt::Debug,
   hash::{Hash, Hasher},
+  ops::Deref,
 };
 
 use crate::display::DisplayArray;
@@ -23,7 +24,7 @@ pub struct Macroblock {
 
   /// Macroblock type, which defines the coding mode for the macroblock.
   /// The type determines how the macroblock is predicted and encoded.
-  pub mb_type: u8,
+  pub mb_type: MbType,
 
   /// Coded block pattern, indicating which 4x4 blocks within the macroblock are coded.
   pub coded_block_pattern: u8,
@@ -105,10 +106,20 @@ pub struct Macroblock {
 }
 
 impl Macroblock {
+  pub fn set_mb_type(&mut self, mb_type: u8) {
+    self.mb_type = MbType::new(mb_type, self.transform_size_8x8_flag != 0);
+  }
+
   pub const fn empty() -> Self {
     Self {
       mb_field_decoding_flag: false,
-      mb_type: 0,
+      mb_type: MbType::Intra {
+        code: 0,
+        intra_pred_mode: 0,
+        part_pred_mode: PartPredMode::Intra4x4,
+        coded_block_pattern_chroma: 0,
+        coded_block_pattern_luma: 0,
+      },
       coded_block_pattern: 0,
       transform_size_8x8_flag: 0,
       mb_qp_delta: 0,
@@ -138,7 +149,7 @@ impl Macroblock {
 
   pub const fn empty_unavailable(coded_block_flag: u8) -> Self {
     Self {
-      mb_type: MB_TYPE_UNAVAILABLE,
+      mb_type: MbType::Unavailable,
       coded_block_pattern: 0x0F,
       coded_block_flag: [
         [coded_block_flag; 17],
@@ -187,7 +198,7 @@ impl Eq for Macroblock {}
 
 impl PartialEq for Macroblock {
   fn eq(&self, other: &Self) -> bool {
-    self.mb_type == other.mb_type
+    *self.mb_type == *other.mb_type
   }
 }
 
@@ -201,10 +212,7 @@ impl std::fmt::Debug for Macroblock {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     let mut f = f.debug_struct("Macroblock");
     f.field("mb_field_decoding_flag", &self.mb_field_decoding_flag)
-      .field(
-        &format!("mb_type [{}]", name_mb_type(self.mb_type)),
-        &self.mb_type,
-      )
+      .field(&format!("mb_type [{}]", self.mb_type.name()), &self.mb_type)
       .field("transform_size_8x8_flag", &self.transform_size_8x8_flag)
       .field("coded_block_pattern", &self.coded_block_pattern)
       .field(
@@ -221,7 +229,7 @@ impl std::fmt::Debug for Macroblock {
       .field("qpy_prev", &self.qpprime_y);
 
     const BLOCK_NAME: [&str; 3] = ["Luma", "Cb", "Cr"];
-    if is_intra_16x16_mb_type(self.mb_type) {
+    if self.mb_type.is_intra_16x16() {
       for (i, name) in BLOCK_NAME.iter().enumerate() {
         f.field(
           &format!("{} DC", name),
@@ -332,14 +340,11 @@ pub enum MbMode {
 
 impl MbMode {
   pub fn new(mb_t: &Macroblock, mb_p: &Macroblock) -> Self {
-    if !mb_t.mb_field_decoding_flag
-      && mb_p.mb_field_decoding_flag
-      && mb_p.mb_type != MB_TYPE_UNAVAILABLE
-    {
+    if !mb_t.mb_field_decoding_flag && mb_p.mb_field_decoding_flag && !mb_p.mb_type.is_available() {
       Self::FrameFromField
     } else if mb_t.mb_field_decoding_flag
       && !mb_p.mb_field_decoding_flag
-      && mb_p.mb_type != MB_TYPE_UNAVAILABLE
+      && !mb_p.mb_type.is_available()
     {
       Self::FieldFromFrame
     } else {
@@ -363,5 +368,285 @@ impl BlockSize {
   /// Checks if the block size represents a chroma (color) block.
   pub fn is_chroma(&self) -> bool {
     matches!(self, BlockSize::Chroma)
+  }
+}
+
+#[derive(Debug)]
+pub enum MbType {
+  Unavailable,
+  Pcm,
+  Intra {
+    code: u8,
+    intra_pred_mode: u8,
+    part_pred_mode: PartPredMode,
+    coded_block_pattern_chroma: u8,
+    coded_block_pattern_luma: u8,
+  },
+  Inter {
+    code: u8,
+    num_mb_part: i8,
+    part_pred_mode: [PartPredMode; 2],
+    part_width: u8,
+    part_height: u8,
+  },
+}
+
+impl Deref for MbType {
+  type Target = u8;
+
+  fn deref(&self) -> &Self::Target {
+    match self {
+      Self::Pcm => &MB_TYPE_I_PCM,
+      Self::Intra { code, .. } => code,
+      Self::Inter { code, .. } => code,
+      Self::Unavailable => &MB_TYPE_UNAVAILABLE,
+    }
+  }
+}
+
+impl MbType {
+  pub fn new(mb_type: u8, transform_size_8x8_flag: bool) -> Self {
+    if mb_type < MB_TYPE_I_PCM {
+      let (part_pred_mode, intra_pred_mode, coded_block_pattern_luma, coded_block_pattern_chroma) =
+        mb_type_intra(mb_type, transform_size_8x8_flag);
+      MbType::Intra {
+        code: mb_type,
+        intra_pred_mode,
+        part_pred_mode,
+        coded_block_pattern_luma,
+        coded_block_pattern_chroma,
+      }
+    } else if mb_type == MB_TYPE_I_PCM {
+      MbType::Pcm
+    } else {
+      let (num_mb_part, part_pred_mode, part_width, part_height) = mb_type_inter(mb_type);
+      MbType::Inter {
+        code: mb_type,
+        num_mb_part,
+        part_pred_mode,
+        part_width,
+        part_height,
+      }
+    }
+  }
+
+  pub fn mode(&self) -> &PartPredMode {
+    match self {
+      Self::Intra { part_pred_mode, .. } => part_pred_mode,
+      Self::Inter { part_pred_mode, .. } => &part_pred_mode[0],
+      _ => &PartPredMode::NA,
+    }
+  }
+
+  pub fn mode_idx(&self, idx: usize) -> &PartPredMode {
+    match self {
+      Self::Intra { part_pred_mode, .. } => part_pred_mode,
+      Self::Inter { part_pred_mode, .. } => &part_pred_mode[idx],
+      _ => &PartPredMode::NA,
+    }
+  }
+
+  pub fn name(&self) -> &str {
+    name_mb_type(**self)
+  }
+
+  pub fn is_intra_16x16(&self) -> bool {
+    is_intra_16x16_mb_type(**self)
+  }
+
+  pub fn is_inter(&self) -> bool {
+    **self >= MB_TYPE_P_L0_16X16
+  }
+
+  pub fn is_unavailable(&self) -> bool {
+    matches!(self, Self::Unavailable)
+  }
+
+  pub fn is_available(&self) -> bool {
+    !matches!(self, Self::Unavailable)
+  }
+
+  pub fn is_si(&self) -> bool {
+    **self == MB_TYPE_SI
+  }
+
+  pub fn is_i_nxn(&self) -> bool {
+    **self == MB_TYPE_I_NXN
+  }
+
+  pub fn is_b_direct_16x16(&self) -> bool {
+    **self == MB_TYPE_B_DIRECT_16X16
+  }
+
+  pub fn is_pcm(&self) -> bool {
+    matches!(self, Self::Pcm)
+  }
+
+  pub fn is_p_8x8ref0(&self) -> bool {
+    **self == MB_TYPE_P_8X8REF0
+  }
+
+  pub fn is_skip(&self) -> bool {
+    matches!(**self, MB_TYPE_P_SKIP | MB_TYPE_B_SKIP)
+  }
+
+  pub fn is_submb(&self) -> bool {
+    matches!(**self, MB_TYPE_P_8X8 | MB_TYPE_P_8X8REF0 | MB_TYPE_B_8X8)
+  }
+}
+
+#[derive(Debug)]
+pub struct SubMbType {
+  code: u8,
+  sub_num_mb_part: u8,
+  sub_part_pred_mode: PartPredMode,
+  sub_part_width: u8,
+  sub_part_height: u8,
+}
+
+impl SubMbType {
+  pub fn new(sub_mb_type: u8) -> Self {
+    let (sub_num_mb_part, sub_part_pred_mode, sub_part_width, sub_part_height) =
+      sub_mb_type_fields(sub_mb_type);
+    Self {
+      code: sub_mb_type,
+      sub_num_mb_part,
+      sub_part_pred_mode,
+      sub_part_width,
+      sub_part_height,
+    }
+  }
+}
+
+#[derive(Debug)]
+pub enum PartPredMode {
+  Intra4x4,
+  Intra8x8,
+  Intra16x16,
+  PredL0,
+  PredL1,
+  Direct,
+  BiPred,
+  NA,
+}
+
+impl PartPredMode {
+  pub fn is_inter_frame(&self) -> bool {
+    matches!(self, Self::PredL0 | Self::PredL1 | Self::BiPred)
+  }
+
+  pub fn is_intra_4x4(&self) -> bool {
+    matches!(self, Self::Intra4x4)
+  }
+
+  pub fn is_intra_8x8(&self) -> bool {
+    matches!(self, Self::Intra8x8)
+  }
+
+  pub fn is_intra_16x16(&self) -> bool {
+    matches!(self, Self::Intra16x16)
+  }
+}
+
+/// Table 7-11 - Macroblock types for I slices
+/// Returns (MbPartPredMode, Intra16x16PredMode, CodedBlockPatternChroma, CodedBlockPatternLuma)
+fn mb_type_intra(mb_type: u8, transform_size_8x8_flag: bool) -> (PartPredMode, u8, u8, u8) {
+  if mb_type == MB_TYPE_I_NXN {
+    return match transform_size_8x8_flag {
+      false => (PartPredMode::Intra4x4, 0, 0, 0),
+      true => (PartPredMode::Intra8x8, 0, 0, 0),
+    };
+  }
+  match mb_type {
+    MB_TYPE_I_16X16_0_0_0 => (PartPredMode::Intra16x16, 0, 0, 0),
+    MB_TYPE_I_16X16_1_0_0 => (PartPredMode::Intra16x16, 1, 0, 0),
+    MB_TYPE_I_16X16_2_0_0 => (PartPredMode::Intra16x16, 2, 0, 0),
+    MB_TYPE_I_16X16_3_0_0 => (PartPredMode::Intra16x16, 3, 0, 0),
+    MB_TYPE_I_16X16_0_1_0 => (PartPredMode::Intra16x16, 0, 1, 0),
+    MB_TYPE_I_16X16_1_1_0 => (PartPredMode::Intra16x16, 1, 1, 0),
+    MB_TYPE_I_16X16_2_1_0 => (PartPredMode::Intra16x16, 2, 1, 0),
+    MB_TYPE_I_16X16_3_1_0 => (PartPredMode::Intra16x16, 3, 1, 0),
+    MB_TYPE_I_16X16_0_2_0 => (PartPredMode::Intra16x16, 0, 2, 0),
+    MB_TYPE_I_16X16_1_2_0 => (PartPredMode::Intra16x16, 1, 2, 0),
+    MB_TYPE_I_16X16_2_2_0 => (PartPredMode::Intra16x16, 2, 2, 0),
+    MB_TYPE_I_16X16_3_2_0 => (PartPredMode::Intra16x16, 3, 2, 0),
+    MB_TYPE_I_16X16_0_0_1 => (PartPredMode::Intra16x16, 0, 0, 15),
+    MB_TYPE_I_16X16_1_0_1 => (PartPredMode::Intra16x16, 1, 0, 15),
+    MB_TYPE_I_16X16_2_0_1 => (PartPredMode::Intra16x16, 2, 0, 15),
+    MB_TYPE_I_16X16_3_0_1 => (PartPredMode::Intra16x16, 3, 0, 15),
+    MB_TYPE_I_16X16_0_1_1 => (PartPredMode::Intra16x16, 0, 1, 15),
+    MB_TYPE_I_16X16_1_1_1 => (PartPredMode::Intra16x16, 1, 1, 15),
+    MB_TYPE_I_16X16_2_1_1 => (PartPredMode::Intra16x16, 2, 1, 15),
+    MB_TYPE_I_16X16_3_1_1 => (PartPredMode::Intra16x16, 3, 1, 15),
+    MB_TYPE_I_16X16_0_2_1 => (PartPredMode::Intra16x16, 0, 2, 15),
+    MB_TYPE_I_16X16_1_2_1 => (PartPredMode::Intra16x16, 1, 2, 15),
+    MB_TYPE_I_16X16_2_2_1 => (PartPredMode::Intra16x16, 2, 2, 15),
+    MB_TYPE_I_16X16_3_2_1 => (PartPredMode::Intra16x16, 3, 2, 15),
+    n => panic!("Invalid intra mb_type {n}"),
+  }
+}
+
+/// Table 7-13 - Macroblock type values 0 to 4 for P and SP slices
+/// Table 7-14 - Macroblock type values 0 to 22 for B slices
+/// Returns (NumMbPart, [MbPartPredMode; 1], MbPartWidth, MbPartHeight)
+fn mb_type_inter(mb_type: u8) -> (i8, [PartPredMode; 2], u8, u8) {
+  match mb_type {
+    MB_TYPE_P_L0_16X16 => (1, [PartPredMode::PredL0, PartPredMode::NA], 16, 16),
+    MB_TYPE_P_L0_L0_16X8 => (2, [PartPredMode::PredL0, PartPredMode::PredL0], 16, 8),
+    MB_TYPE_P_L0_L0_8X16 => (2, [PartPredMode::PredL0, PartPredMode::PredL0], 8, 16),
+    MB_TYPE_P_8X8 => (4, [PartPredMode::NA, PartPredMode::NA], 8, 8),
+    MB_TYPE_P_8X8REF0 => (4, [PartPredMode::NA, PartPredMode::NA], 8, 8),
+    MB_TYPE_P_SKIP => (1, [PartPredMode::PredL0, PartPredMode::NA], 16, 16),
+    MB_TYPE_B_DIRECT_16X16 => (-1, [PartPredMode::Direct, PartPredMode::NA], 8, 8),
+    MB_TYPE_B_L0_16X16 => (1, [PartPredMode::PredL0, PartPredMode::NA], 16, 16),
+    MB_TYPE_B_L1_16X16 => (1, [PartPredMode::PredL1, PartPredMode::NA], 16, 16),
+    MB_TYPE_B_BI_16X16 => (1, [PartPredMode::BiPred, PartPredMode::NA], 16, 16),
+    MB_TYPE_B_L0_L0_16X8 => (2, [PartPredMode::PredL0, PartPredMode::PredL0], 16, 8),
+    MB_TYPE_B_L0_L0_8X16 => (2, [PartPredMode::PredL0, PartPredMode::PredL0], 8, 16),
+    MB_TYPE_B_L1_L1_16X8 => (2, [PartPredMode::PredL1, PartPredMode::PredL1], 16, 8),
+    MB_TYPE_B_L1_L1_8X16 => (2, [PartPredMode::PredL1, PartPredMode::PredL1], 8, 16),
+    MB_TYPE_B_L0_L1_16X8 => (2, [PartPredMode::PredL0, PartPredMode::PredL1], 16, 8),
+    MB_TYPE_B_L0_L1_8X16 => (2, [PartPredMode::PredL0, PartPredMode::PredL1], 8, 16),
+    MB_TYPE_B_L1_L0_16X8 => (2, [PartPredMode::PredL1, PartPredMode::PredL0], 16, 8),
+    MB_TYPE_B_L1_L0_8X16 => (2, [PartPredMode::PredL1, PartPredMode::PredL0], 8, 16),
+    MB_TYPE_B_L0_BI_16X8 => (2, [PartPredMode::PredL0, PartPredMode::BiPred], 16, 8),
+    MB_TYPE_B_L0_BI_8X16 => (2, [PartPredMode::PredL0, PartPredMode::BiPred], 8, 16),
+    MB_TYPE_B_L1_BI_16X8 => (2, [PartPredMode::PredL1, PartPredMode::BiPred], 16, 8),
+    MB_TYPE_B_L1_BI_8X16 => (2, [PartPredMode::PredL1, PartPredMode::BiPred], 8, 16),
+    MB_TYPE_B_BI_L0_16X8 => (2, [PartPredMode::BiPred, PartPredMode::PredL0], 16, 8),
+    MB_TYPE_B_BI_L0_8X16 => (2, [PartPredMode::BiPred, PartPredMode::PredL0], 8, 16),
+    MB_TYPE_B_BI_L1_16X8 => (2, [PartPredMode::BiPred, PartPredMode::PredL1], 16, 8),
+    MB_TYPE_B_BI_L1_8X16 => (2, [PartPredMode::BiPred, PartPredMode::PredL1], 8, 16),
+    MB_TYPE_B_BI_BI_16X8 => (2, [PartPredMode::BiPred, PartPredMode::BiPred], 16, 8),
+    MB_TYPE_B_BI_BI_8X16 => (2, [PartPredMode::BiPred, PartPredMode::BiPred], 8, 16),
+    MB_TYPE_B_8X8 => (4, [PartPredMode::NA, PartPredMode::NA], 8, 8),
+    MB_TYPE_B_SKIP => (-1, [PartPredMode::Direct, PartPredMode::NA], 8, 8),
+    n => panic!("Invalid inter mb_type {n}"),
+  }
+}
+
+/// Table 7-17 - Sub-macroblock types in P macroblocks
+/// Table 7-18 - Sub-macroblock types in B macroblocks
+/// Returns (NumSubMbPart, SubMbPartPredMode, SubMbPartWidth, SubMbPartHeight)
+fn sub_mb_type_fields(sub_mb_type: u8) -> (u8, PartPredMode, u8, u8) {
+  match sub_mb_type {
+    SUB_MB_TYPE_P_L0_8X8 => (1, PartPredMode::PredL0, 8, 8),
+    SUB_MB_TYPE_P_L0_8X4 => (2, PartPredMode::PredL0, 8, 4),
+    SUB_MB_TYPE_P_L0_4X8 => (2, PartPredMode::PredL0, 4, 8),
+    SUB_MB_TYPE_P_L0_4X4 => (4, PartPredMode::PredL0, 4, 4),
+    SUB_MB_TYPE_B_DIRECT_8X8 => (4, PartPredMode::Direct, 4, 4),
+    SUB_MB_TYPE_B_L0_8X8 => (1, PartPredMode::PredL0, 8, 8),
+    SUB_MB_TYPE_B_L1_8X8 => (1, PartPredMode::PredL1, 8, 8),
+    SUB_MB_TYPE_B_BI_8X8 => (1, PartPredMode::BiPred, 8, 8),
+    SUB_MB_TYPE_B_L0_8X4 => (2, PartPredMode::PredL0, 8, 4),
+    SUB_MB_TYPE_B_L0_4X8 => (2, PartPredMode::PredL0, 4, 8),
+    SUB_MB_TYPE_B_L1_8X4 => (2, PartPredMode::PredL1, 8, 4),
+    SUB_MB_TYPE_B_L1_4X8 => (2, PartPredMode::PredL1, 4, 8),
+    SUB_MB_TYPE_B_BI_8X4 => (2, PartPredMode::BiPred, 8, 4),
+    SUB_MB_TYPE_B_BI_4X8 => (2, PartPredMode::BiPred, 4, 8),
+    SUB_MB_TYPE_B_L0_4X4 => (4, PartPredMode::PredL0, 4, 4),
+    SUB_MB_TYPE_B_L1_4X4 => (4, PartPredMode::PredL1, 4, 4),
+    SUB_MB_TYPE_B_BI_4X4 => (4, PartPredMode::BiPred, 4, 4),
+    n => panic!("Invalid sub_mb_type {n}"),
   }
 }
