@@ -158,38 +158,6 @@ impl PicOrderCntTypeOne {
   }
 }
 
-#[derive(Debug)]
-pub struct ScalingList<const S: usize> {
-  pub data: [i16; S],
-  pub use_default_scaling_matrix_flag: bool,
-}
-
-impl<const S: usize> ScalingList<S> {
-  pub fn new(bits: &mut BitStream) -> Self {
-    let mut data = [0; S];
-    let mut use_default_scaling_matrix_flag = false;
-    let mut last_scale = 8;
-    let mut next_scale = 8;
-    for (i, scale) in data.iter_mut().enumerate() {
-      if next_scale != 0 {
-        let delta_scale: i16 = bits.signed_exponential_golomb();
-        next_scale = (last_scale + delta_scale + 256) % 256;
-        use_default_scaling_matrix_flag = i == 0 && next_scale == 0;
-      }
-      *scale = if next_scale == 0 {
-        last_scale
-      } else {
-        next_scale
-      };
-      last_scale = *scale;
-    }
-    Self {
-      data,
-      use_default_scaling_matrix_flag,
-    }
-  }
-}
-
 const DEFAULT_4X4_INTRA: [i16; 16] = [
   6, 13, 13, 20, 20, 20, 28, 28, 28, 28, 32, 32, 32, 37, 37, 42,
 ];
