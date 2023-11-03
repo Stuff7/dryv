@@ -552,6 +552,8 @@ impl<'a> Slice<'a> {
     }
   }
 
+  /// 6.4.9  Derivation process for neighbouring macroblock addresses and their availability
+  /// 6.4.10 Derivation process for neighbouring macroblock addresses and their availability in MBAFF frames
   pub fn mb_nb_p(&self, position: MbPosition, inter: u8) -> &Macroblock {
     let mut mbaddr = self.curr_mb_addr;
     if self.mbaff_frame_flag {

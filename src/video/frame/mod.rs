@@ -1,4 +1,4 @@
-use super::slice::Slice;
+use super::slice::{macroblock::MbPosition, Slice};
 use crate::math::{clamp, inverse_raster_scan};
 
 pub struct Frame {
@@ -25,7 +25,7 @@ impl Frame {
     };
 
     let idx = (i_y_cb_cr + if mb_is_inter_flag { 3 } else { 0 }) as usize;
-    let weight_scale4x4 = inverse_scanner_4x4(&slice.scaling_list4x4[idx]);
+    let weight_scale4x4 = inverse_scanner4x4(&slice.scaling_list4x4[idx]);
 
     const V4X4: [[i16; 3]; 6] = [
       [10, 16, 13],
@@ -80,6 +80,77 @@ impl Frame {
           }
         }
       }
+    }
+  }
+
+  /// 8.3.1.1 Derivation process for Intra4x4PredMode
+  pub fn intra4x4_pred_mode(&mut self, slice: &mut Slice, luma4x4_block_idx: usize, is_luma: bool) {
+    const INTRA4X4_DC: i16 = 2;
+    let x = inverse_raster_scan(luma4x4_block_idx / 4, 8, 8, 16, 0)
+      + inverse_raster_scan(luma4x4_block_idx % 4, 4, 4, 8, 0);
+    let y = inverse_raster_scan(luma4x4_block_idx / 4, 8, 8, 16, 1)
+      + inverse_raster_scan(luma4x4_block_idx % 4, 4, 4, 8, 1);
+
+    let (max_w, max_h) = if is_luma {
+      (16, 16)
+    } else {
+      (slice.mb_width_c as isize, slice.mb_height_c as isize)
+    };
+
+    let mb_a = slice.mb_nb_p(MbPosition::A, 0);
+    let luma4x4_block_idx_a = mb_a
+      .mb_type
+      .is_available()
+      .then(|| MbPosition::A.blk_idx4x4(max_w, max_h))
+      .unwrap_or(-1);
+
+    let mb_b = slice.mb_nb_p(MbPosition::B, 0);
+    let luma4x4_block_idx_b = mb_b
+      .mb_type
+      .is_available()
+      .then(|| MbPosition::B.blk_idx4x4(max_w, max_h))
+      .unwrap_or(-1);
+
+    let dc_pred_mode_predicted_flag = mb_a.mb_type.is_unavailable()
+      || mb_b.mb_type.is_unavailable()
+      || (mb_a.mb_type.mode().is_inter_frame() && slice.pps.constrained_intra_pred_flag)
+      || (mb_b.mb_type.mode().is_inter_frame() && slice.pps.constrained_intra_pred_flag);
+
+    let mut intra_mxm_pred_mode_a = -1;
+    let mut intra_mxm_pred_mode_b = -1;
+
+    if dc_pred_mode_predicted_flag
+      || (!mb_a.mb_type.mode().is_intra_4x4() && !mb_a.mb_type.mode().is_intra_8x8())
+    {
+      intra_mxm_pred_mode_a = INTRA4X4_DC;
+    } else if mb_a.mb_type.mode().is_intra_4x4() {
+      intra_mxm_pred_mode_a = mb_a.intra4x4_pred_mode[luma4x4_block_idx_a as usize];
+    } else {
+      intra_mxm_pred_mode_a = mb_a.intra8x8_pred_mode[luma4x4_block_idx_a as usize >> 2];
+    }
+
+    if dc_pred_mode_predicted_flag
+      || (!mb_b.mb_type.mode().is_intra_4x4() && !mb_b.mb_type.mode().is_intra_8x8())
+    {
+      intra_mxm_pred_mode_b = INTRA4X4_DC;
+    } else if mb_b.mb_type.mode().is_intra_4x4() {
+      intra_mxm_pred_mode_b = mb_b.intra4x4_pred_mode[luma4x4_block_idx_b as usize];
+    } else {
+      intra_mxm_pred_mode_b = mb_b.intra8x8_pred_mode[luma4x4_block_idx_b as usize >> 2];
+    }
+
+    let pred_intra4x4_pred_mode = std::cmp::min(intra_mxm_pred_mode_a, intra_mxm_pred_mode_b);
+
+    if slice.mb().prev_intra4x4_pred_mode_flag[luma4x4_block_idx] != 0 {
+      slice.mb_mut().intra4x4_pred_mode[luma4x4_block_idx] = pred_intra4x4_pred_mode as i16;
+    } else if (slice.mb().rem_intra4x4_pred_mode[luma4x4_block_idx] as i16)
+      < pred_intra4x4_pred_mode
+    {
+      slice.mb_mut().intra4x4_pred_mode[luma4x4_block_idx] =
+        slice.mb().rem_intra4x4_pred_mode[luma4x4_block_idx] as i16;
+    } else {
+      slice.mb_mut().intra4x4_pred_mode[luma4x4_block_idx] =
+        slice.mb().rem_intra4x4_pred_mode[luma4x4_block_idx] as i16 + 1;
     }
   }
 
@@ -262,7 +333,7 @@ impl BlockType {
 }
 
 /// Zig-zag
-fn inverse_scanner_4x4(value: &[i16; 16]) -> [[i16; 4]; 4] {
+fn inverse_scanner4x4(value: &[i16; 16]) -> [[i16; 4]; 4] {
   let mut c = [[0; 4]; 4];
 
   c[0][0] = value[0];

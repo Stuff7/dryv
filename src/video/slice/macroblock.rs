@@ -52,6 +52,10 @@ pub struct Macroblock {
 
   pub transform_bypass_mode_flag: bool,
 
+  pub intra4x4_pred_mode: [i16; 16],
+
+  pub intra8x8_pred_mode: [i16; 4],
+
   pub transform_bypass_flag: bool,
   /// PCM (Pulse Code Modulation) samples for luma (Y) component.
   /// PCM samples provide raw pixel values for luma.
@@ -142,6 +146,8 @@ impl Macroblock {
       qsy: 0,
       qsc: 0,
       qpprime_y: 0,
+      intra4x4_pred_mode: [0; 16],
+      intra8x8_pred_mode: [0; 4],
       transform_bypass_mode_flag: false,
       transform_bypass_flag: false,
       pcm_sample_luma: [0; 256],
@@ -343,6 +349,25 @@ pub enum MbPosition {
   C,
   /// Position D: Refers to the macroblock diagonally above and to the left of the current macroblock.
   D,
+}
+
+impl MbPosition {
+  pub fn mb_idx(&self) -> (isize, isize) {
+    match self {
+      Self::This => (0, 0),
+      Self::A => (-1, 0),
+      Self::B => (0, -1),
+      Self::C => (1, 1),
+      Self::D => (-1, -1),
+    }
+  }
+
+  pub fn blk_idx4x4(&self, max_w: isize, max_h: isize) -> isize {
+    let (x, y) = self.mb_idx();
+    let (x, y) = ((x + max_w) % max_w, (y + max_h) % max_h);
+
+    8 * (y / 8) + 4 * (x / 8) + 2 * ((y % 8) / 4) + ((x % 8) / 4)
+  }
 }
 
 /// Represents the mode of a macroblock (MB) in the context of interlaced video coding.
