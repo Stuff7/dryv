@@ -133,6 +133,12 @@ pub struct SliceHeader {
   pub scaling_list4x4: [[i16; 16]; 6],
 
   pub scaling_list8x8: Box<[[i16; 64]]>,
+
+  pub qp_bd_offset_c: i16,
+
+  pub bit_depth_y: i16,
+
+  pub bit_depth_c: i16,
 }
 
 impl SliceHeader {
@@ -302,6 +308,9 @@ impl SliceHeader {
       mb_height_c,
       scaling_list4x4,
       scaling_list8x8,
+      qp_bd_offset_c: sps.bit_depth_chroma_minus8 as i16 * 6,
+      bit_depth_y: sps.bit_depth_luma_minus8 as i16 + 8,
+      bit_depth_c: sps.bit_depth_chroma_minus8 as i16 + 8,
     }
   }
 
@@ -378,6 +387,10 @@ impl SliceType {
   /// Checks if the slice type is a switching slice (SP-slice or SI-slice).
   pub fn is_switching(&self) -> bool {
     matches!(self, SliceType::SP | SliceType::SI)
+  }
+
+  pub fn is_switching_p(&self) -> bool {
+    matches!(self, SliceType::SP)
   }
 
   /// Checks if the slice type is a bidirectional slice (B-slice).

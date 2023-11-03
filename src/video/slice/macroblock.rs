@@ -38,7 +38,19 @@ pub struct Macroblock {
 
   pub qpy: i16,
 
+  pub qpc: i16,
+
+  pub qp1c: i16,
+
+  pub qp1y: i16,
+
+  pub qsy: i16,
+
+  pub qsc: i16,
+
   pub qpprime_y: i16,
+
+  pub transform_bypass_mode_flag: bool,
 
   pub transform_bypass_flag: bool,
   /// PCM (Pulse Code Modulation) samples for luma (Y) component.
@@ -124,7 +136,13 @@ impl Macroblock {
       transform_size_8x8_flag: 0,
       mb_qp_delta: 0,
       qpy: 0,
+      qpc: 0,
+      qp1c: 0,
+      qp1y: 0,
+      qsy: 0,
+      qsc: 0,
       qpprime_y: 0,
+      transform_bypass_mode_flag: false,
       transform_bypass_flag: false,
       pcm_sample_luma: [0; 256],
       pcm_sample_chroma: [0; 512],

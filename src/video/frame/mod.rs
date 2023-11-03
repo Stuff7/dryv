@@ -1,5 +1,5 @@
 use super::slice::Slice;
-use crate::math::inverse_raster_scan;
+use crate::math::{clamp, inverse_raster_scan};
 
 pub struct Frame {
   pub luma_data: Box<[Box<[u8]>]>,
@@ -81,6 +81,92 @@ impl Frame {
         }
       }
     }
+  }
+
+  /// 8.5.12 Scaling and transformation process for residual 4x4 blocks
+  pub fn scaling_and_transform4x4(
+    &self,
+    slice: &mut Slice,
+    c: &[[i16; 4]; 4],
+    is_luma: bool,
+    is_chroma_cb: bool,
+  ) -> [[i16; 4]; 4] {
+    chroma_quantization_parameters(slice, is_chroma_cb);
+    let bit_depth = if is_luma {
+      slice.bit_depth_y
+    } else {
+      slice.bit_depth_c
+    };
+
+    let s_mb_flag = slice.mb().mb_type.is_si()
+      || (slice.slice_type.is_switching_p() && slice.mb().mb_type.mode().is_inter_frame());
+
+    let q_p = if is_luma && !s_mb_flag {
+      slice.mb().qp1y
+    } else if is_luma && s_mb_flag {
+      slice.mb().qsy
+    } else if !is_luma && !s_mb_flag {
+      slice.mb().qp1c
+    } else {
+      slice.mb().qsc
+    };
+
+    let mut r = [[0; 4]; 4];
+    if slice.mb().transform_bypass_mode_flag {
+      r.copy_from_slice(c);
+    } else {
+      let mut d = [[0; 4]; 4];
+      for i in 0..4 {
+        for j in 0..4 {
+          if i == 0
+            && j == 0
+            && ((is_luma && slice.mb().mb_type.mode().is_intra_16x16()) || !is_luma)
+          {
+            d[0][0] = c[0][0];
+          } else if q_p >= 24 {
+            d[i][j] = (c[i][j] * self.level_scale4x4[q_p as usize % 6][i][j]) << (q_p / 6 - 4);
+          } else {
+            d[i][j] = (c[i][j] * self.level_scale4x4[q_p as usize % 6][i][j]
+              + (2i16.pow(3 - q_p as u32 / 6)))
+              >> (4 - q_p / 6);
+          }
+        }
+      }
+
+      let mut f = [[0; 4]; 4];
+      let mut h = [[0; 4]; 4];
+      for i in 0..4 {
+        let ei0 = d[i][0] + d[i][2];
+        let ei1 = d[i][0] - d[i][2];
+        let ei2 = (d[i][1] >> 1) - d[i][3];
+        let ei3 = d[i][1] + (d[i][3] >> 1);
+
+        f[i][0] = ei0 + ei3;
+        f[i][1] = ei1 + ei2;
+        f[i][2] = ei1 - ei2;
+        f[i][3] = ei0 - ei3;
+      }
+
+      for j in 0..=3 {
+        let g0j = f[0][j] + f[2][j];
+        let g1j = f[0][j] - f[2][j];
+        let g2j = (f[1][j] >> 1) - f[3][j];
+        let g3j = f[1][j] + (f[3][j] >> 1);
+
+        h[0][j] = g0j + g3j;
+        h[1][j] = g1j + g2j;
+        h[2][j] = g1j - g2j;
+        h[3][j] = g0j - g3j;
+      }
+
+      for i in 0..4 {
+        for j in 0..4 {
+          r[i][j] = (h[i][j] + 32) >> 6;
+        }
+      }
+    }
+
+    r
   }
 
   /// 8.5.14 Picture construction process prior to deblocking filter process
@@ -275,4 +361,38 @@ fn inverse_scanner_8x8(value: &[i16; 64]) -> [[i16; 8]; 8] {
   c[7][7] = value[63];
 
   c
+}
+
+fn get_qpc(slice: &Slice, is_chroma_cb: bool) -> i16 {
+  let qp_offset = if is_chroma_cb {
+    slice.pps.chroma_qp_index_offset
+  } else {
+    slice
+      .pps
+      .extra_rbsp_data
+      .as_ref()
+      .map(|pps| pps.second_chroma_qp_index_offset)
+      .unwrap_or(slice.pps.chroma_qp_index_offset)
+  };
+
+  let qpi = clamp(slice.mb().qpy + qp_offset, -slice.qp_bd_offset_c, 51);
+
+  if qpi < 30 {
+    qpi
+  } else {
+    const QPCS: [i16; 22] = [
+      29, 30, 31, 32, 32, 33, 34, 34, 35, 35, 36, 36, 37, 37, 37, 38, 38, 38, 39, 39, 39, 39,
+    ];
+    QPCS[qpi as usize - 30]
+  }
+}
+
+fn chroma_quantization_parameters(slice: &mut Slice, is_chroma_cb: bool) {
+  slice.mb_mut().qpc = get_qpc(slice, is_chroma_cb);
+  slice.mb_mut().qp1c = slice.mb().qpc + slice.qp_bd_offset_c;
+
+  if slice.slice_type.is_switching() {
+    slice.mb_mut().qsy = slice.mb().qpy;
+    slice.mb_mut().qsc = slice.mb().qpc;
+  }
 }
