@@ -1,3 +1,4 @@
+pub mod pred16x16;
 pub mod pred4x4;
 pub mod trans_chroma;
 pub mod transform;

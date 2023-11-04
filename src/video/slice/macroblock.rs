@@ -58,6 +58,8 @@ pub struct Macroblock {
 
   pub luma_pred_samples: [[[i16; 4]; 4]; 16],
 
+  pub luma16x16_pred_samples: [[i16; 16]; 16],
+
   pub chroma_pred_samples: [[i16; 16]; 8],
 
   pub transform_bypass_flag: bool,
@@ -153,6 +155,7 @@ impl Macroblock {
       intra4x4_pred_mode: [0; 16],
       intra8x8_pred_mode: [0; 4],
       luma_pred_samples: [[[0; 4]; 4]; 16],
+      luma16x16_pred_samples: [[0; 16]; 16],
       chroma_pred_samples: [[0; 16]; 8],
       transform_bypass_mode_flag: false,
       transform_bypass_flag: false,
@@ -499,6 +502,15 @@ impl MbType {
         part_width,
         part_height,
       }
+    }
+  }
+
+  pub fn intra16x16_pred_mode(&self) -> u8 {
+    match self {
+      Self::Intra {
+        intra_pred_mode, ..
+      } => *intra_pred_mode,
+      _ => 255,
     }
   }
 
