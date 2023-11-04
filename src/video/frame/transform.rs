@@ -198,7 +198,7 @@ impl Frame {
   }
 }
 
-fn get_qpc(slice: &Slice, is_chroma_cb: bool) -> i16 {
+pub fn get_qpc(slice: &Slice, is_chroma_cb: bool) -> i16 {
   let qp_offset = if is_chroma_cb {
     slice.pps.chroma_qp_index_offset
   } else {
@@ -222,7 +222,7 @@ fn get_qpc(slice: &Slice, is_chroma_cb: bool) -> i16 {
   }
 }
 
-fn chroma_quantization_parameters(slice: &mut Slice, is_chroma_cb: bool) {
+pub fn chroma_quantization_parameters(slice: &mut Slice, is_chroma_cb: bool) {
   slice.mb_mut().qpc = get_qpc(slice, is_chroma_cb);
   slice.mb_mut().qp1c = slice.mb().qpc + slice.qp_bd_offset_c;
 

@@ -58,6 +58,8 @@ pub struct Macroblock {
 
   pub luma_pred_samples: [[[i16; 4]; 4]; 16],
 
+  pub chroma_pred_samples: [[i16; 16]; 8],
+
   pub transform_bypass_flag: bool,
   /// PCM (Pulse Code Modulation) samples for luma (Y) component.
   /// PCM samples provide raw pixel values for luma.
@@ -151,6 +153,7 @@ impl Macroblock {
       intra4x4_pred_mode: [0; 16],
       intra8x8_pred_mode: [0; 4],
       luma_pred_samples: [[[0; 4]; 4]; 16],
+      chroma_pred_samples: [[0; 16]; 8],
       transform_bypass_mode_flag: false,
       transform_bypass_flag: false,
       pcm_sample_luma: [0; 256],

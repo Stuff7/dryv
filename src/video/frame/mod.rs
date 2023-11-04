@@ -1,4 +1,5 @@
 pub mod pred4x4;
+pub mod trans_chroma;
 pub mod transform;
 
 use super::slice::Slice;
