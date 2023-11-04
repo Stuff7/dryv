@@ -56,6 +56,8 @@ pub struct Macroblock {
 
   pub intra8x8_pred_mode: [i16; 4],
 
+  pub luma_pred_samples: [[[i16; 4]; 4]; 16],
+
   pub transform_bypass_flag: bool,
   /// PCM (Pulse Code Modulation) samples for luma (Y) component.
   /// PCM samples provide raw pixel values for luma.
@@ -148,6 +150,7 @@ impl Macroblock {
       qpprime_y: 0,
       intra4x4_pred_mode: [0; 16],
       intra8x8_pred_mode: [0; 4],
+      luma_pred_samples: [[[0; 4]; 4]; 16],
       transform_bypass_mode_flag: false,
       transform_bypass_flag: false,
       pcm_sample_luma: [0; 256],
@@ -190,6 +193,10 @@ impl Macroblock {
     } else {
       &MB_UNAVAILABLE_INTRA
     }
+  }
+
+  pub fn index(&self, macroblocks: &[Macroblock]) -> isize {
+    unsafe { (self as *const Macroblock).offset_from(macroblocks.as_ptr()) }
   }
 
   pub fn offset<'a>(
@@ -352,6 +359,22 @@ pub enum MbPosition {
 }
 
 impl MbPosition {
+  pub fn from_coords(x: isize, y: isize, max_w: isize, max_h: isize) -> Option<Self> {
+    if x < 0 && y < 0 {
+      Some(Self::D)
+    } else if x < 0 && (y >= 0 && y <= max_h - 1) {
+      Some(Self::A)
+    } else if (x >= 0 && x <= max_w - 1) && y < 0 {
+      Some(Self::B)
+    } else if x > max_w - 1 && y < 0 {
+      Some(Self::C)
+    } else if (x >= 0 && x <= max_w - 1) && (y >= 0 && y <= max_h - 1) {
+      Some(Self::This)
+    } else {
+      None
+    }
+  }
+
   pub fn mb_idx(&self) -> (isize, isize) {
     match self {
       Self::This => (0, 0),
@@ -362,10 +385,13 @@ impl MbPosition {
     }
   }
 
-  pub fn blk_idx4x4(&self, max_w: isize, max_h: isize) -> isize {
+  pub fn coords(&self, max_w: isize, max_h: isize) -> (isize, isize) {
     let (x, y) = self.mb_idx();
-    let (x, y) = ((x + max_w) % max_w, (y + max_h) % max_h);
+    ((x + max_w) % max_w, (y + max_h) % max_h)
+  }
 
+  pub fn blk_idx4x4(&self, max_w: isize, max_h: isize) -> isize {
+    let (x, y) = self.coords(max_w, max_h);
     8 * (y / 8) + 4 * (x / 8) + 2 * ((y % 8) / 4) + ((x % 8) / 4)
   }
 }
