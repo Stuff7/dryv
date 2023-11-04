@@ -62,6 +62,8 @@ pub struct Slice<'a> {
 
   pub pic_width_in_samples_l: u16,
 
+  pub pic_height_in_samples_l: u16,
+
   /// Quantization parameter for the slice.
   /// The quantization parameter affects the trade-off between compression and image quality.
   pub sliceqpy: i16,
@@ -131,6 +133,7 @@ impl<'a> Slice<'a> {
         pic_size_in_mbs
       },
       pic_width_in_samples_l: pic_width_in_mbs * 16,
+      pic_height_in_samples_l: pic_height_in_mbs * 16,
       sliceqpy: 26 + pps.pic_init_qp_minus26 + header.slice_qp_delta,
       mbaff_frame_flag: sps.mb_adaptive_frame_field_flag && !header.field_pic_flag,
       qp_bd_offset_y: 6 * sps.bit_depth_luma_minus8 as i16,

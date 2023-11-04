@@ -2,8 +2,10 @@ pub mod pred4x4;
 pub mod trans_chroma;
 pub mod transform;
 
+use std::{fs::File, io::Write};
+
 use super::slice::Slice;
-use crate::math::inverse_raster_scan;
+use crate::math::{clamp, inverse_raster_scan};
 
 pub struct Frame {
   pub luma_data: Box<[Box<[u8]>]>,
@@ -14,6 +16,31 @@ pub struct Frame {
 }
 
 impl Frame {
+  pub fn write_to_yuv_file(
+    &self,
+    file_path: &str,
+    width: usize,
+    height: usize,
+  ) -> std::io::Result<()> {
+    let mut file = File::create(file_path)?;
+
+    for y in 0..height {
+      for x in 0..width {
+        file.write_all(&[self.luma_data[y][x]])?;
+      }
+
+      for x in 0..width / 2 {
+        file.write_all(&[self.chroma_cb_data[y][x]])?;
+      }
+
+      for x in 0..width / 2 {
+        file.write_all(&[self.chroma_cr_data[y][x]])?;
+      }
+    }
+
+    Ok(())
+  }
+
   /// 8.5.14 Picture construction process prior to deblocking filter process
   pub fn picture_construction(
     &mut self,
