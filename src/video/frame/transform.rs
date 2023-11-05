@@ -21,7 +21,7 @@ impl Frame {
     let idx = (i_y_cb_cr + if mb_is_inter_flag { 3 } else { 0 }) as usize;
     let weight_scale4x4 = inverse_scanner4x4(&slice.scaling_list4x4[idx]);
 
-    const V4X4: [[i16; 3]; 6] = [
+    const V4X4: [[isize; 3]; 6] = [
       [10, 16, 13],
       [11, 18, 14],
       [13, 20, 16],
@@ -47,7 +47,7 @@ impl Frame {
     let idx = (2 * i_y_cb_cr + mb_is_inter_flag as u8) as usize;
     let weight_scale8x8 = inverse_scanner_8x8(&slice.scaling_list8x8[idx]);
 
-    const V8X8: [[i16; 6]; 6] = [
+    const V8X8: [[isize; 6]; 6] = [
       [20, 18, 32, 19, 25, 24],
       [22, 19, 35, 21, 28, 26],
       [26, 23, 42, 24, 33, 31],
@@ -115,10 +115,10 @@ impl Frame {
   pub fn scaling_and_transform4x4(
     &self,
     slice: &mut Slice,
-    c: &[[i16; 4]; 4],
+    c: &[[isize; 4]; 4],
     is_luma: bool,
     is_chroma_cb: bool,
-  ) -> [[i16; 4]; 4] {
+  ) -> [[isize; 4]; 4] {
     chroma_quantization_parameters(slice, is_chroma_cb);
     let bit_depth = if is_luma {
       slice.bit_depth_y
@@ -137,7 +137,7 @@ impl Frame {
       slice.mb().qp1c
     } else {
       slice.mb().qsc
-    };
+    } as isize;
 
     let mut r = [[0; 4]; 4];
     if slice.mb().transform_bypass_mode_flag {
@@ -155,7 +155,7 @@ impl Frame {
             d[i][j] = (c[i][j] * self.level_scale4x4[q_p as usize % 6][i][j]) << (q_p / 6 - 4);
           } else {
             d[i][j] = (c[i][j] * self.level_scale4x4[q_p as usize % 6][i][j]
-              + (2i16.pow(3 - q_p as u32 / 6)))
+              + (1 << (3 - q_p as u32 / 6)))
               >> (4 - q_p / 6);
           }
         }
@@ -198,7 +198,7 @@ impl Frame {
   }
 }
 
-pub fn get_qpc(slice: &Slice, is_chroma_cb: bool) -> i16 {
+pub fn get_qpc(slice: &Slice, is_chroma_cb: bool) -> isize {
   let qp_offset = if is_chroma_cb {
     slice.pps.chroma_qp_index_offset
   } else {
@@ -208,14 +208,14 @@ pub fn get_qpc(slice: &Slice, is_chroma_cb: bool) -> i16 {
       .as_ref()
       .map(|pps| pps.second_chroma_qp_index_offset)
       .unwrap_or(slice.pps.chroma_qp_index_offset)
-  };
+  } as isize;
 
   let qpi = clamp(slice.mb().qpy + qp_offset, -slice.qp_bd_offset_c, 51);
 
   if qpi < 30 {
     qpi
   } else {
-    const QPCS: [i16; 22] = [
+    const QPCS: [isize; 22] = [
       29, 30, 31, 32, 32, 33, 34, 34, 35, 35, 36, 36, 37, 37, 37, 38, 38, 38, 39, 39, 39, 39,
     ];
     QPCS[qpi as usize - 30]

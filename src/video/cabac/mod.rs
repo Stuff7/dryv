@@ -2,11 +2,14 @@ pub mod consts;
 pub mod syntax_element;
 pub mod table;
 
-use super::slice::{
-  consts::*,
-  header::SliceType,
-  macroblock::{BlockSize, Macroblock, MacroblockError, MbPosition},
-  Slice,
+use super::{
+  frame::Frame,
+  slice::{
+    consts::*,
+    header::SliceType,
+    macroblock::{BlockSize, Macroblock, MacroblockError, MbPosition},
+    Slice,
+  },
 };
 use crate::math::clamp;
 use consts::*;
@@ -43,7 +46,7 @@ pub struct CabacContext {
   /// Probability state indices for CABAC encoding.
   /// CABAC adapts its encoding probability based on the context of previous symbols.
   /// These indices help track the state of probability models.
-  pub p_state_idx: [i16; CTX_IDX_COUNT],
+  pub p_state_idx: [isize; CTX_IDX_COUNT],
 
   /// Values representing Most Probable Symbols (MPS) for CABAC encoding.
   /// CABAC encodes binary symbols as either the MPS or the Least Probable Symbol (LPS).
@@ -83,7 +86,7 @@ impl CabacContext {
     })
   }
 
-  pub fn macroblock_layer(&mut self, slice: &mut Slice) -> CabacResult {
+  pub fn macroblock_layer(&mut self, slice: &mut Slice, frame: &mut Frame) -> CabacResult {
     let transform_8x8_mode_flag = slice
       .pps
       .extra_rbsp_data
@@ -187,6 +190,8 @@ impl CabacContext {
     slice.mb_mut().qp1y = slice.mb().qpy + slice.qp_bd_offset_y;
     slice.mb_mut().transform_bypass_mode_flag =
       slice.sps.qpprime_y_zero_transform_bypass_flag && slice.mb().qpy == 0;
+
+    // frame.decode(slice);
     Ok(())
   }
 
@@ -659,9 +664,9 @@ impl CabacContext {
     &mut self,
     slice: &mut Slice,
     cat: u8,
-    num1: i16,
-    numgt1: i16,
-  ) -> CabacResult<i16> {
+    num1: isize,
+    numgt1: isize,
+  ) -> CabacResult<isize> {
     let mut ctx_idx = [0; 2];
     ctx_idx[0] = COEFF_ABS_LEVEL_MINUS1_BASE_CTX[cat as usize]
       + if numgt1 != 0 {
@@ -686,7 +691,7 @@ impl CabacContext {
     idx: usize,
     last: usize,
   ) -> CabacResult<u8> {
-    let mut ctx_inc: i16;
+    let mut ctx_inc: isize;
     match cat {
       CTXBLOCKCAT_LUMA_DC
       | CTXBLOCKCAT_LUMA_AC
@@ -698,19 +703,19 @@ impl CabacContext {
       | CTXBLOCKCAT_CR_AC
       | CTXBLOCKCAT_CR_4X4
       | CTXBLOCKCAT_CHROMA_AC => {
-        ctx_inc = idx as i16;
+        ctx_inc = idx as isize;
       }
       CTXBLOCKCAT_CHROMA_DC => {
-        ctx_inc = idx as i16 / slice.chroma_array_type as i16;
+        ctx_inc = idx as isize / slice.chroma_array_type as isize;
         if ctx_inc > 2 {
           ctx_inc = 2;
         }
       }
       CTXBLOCKCAT_LUMA_8X8 | CTXBLOCKCAT_CB_8X8 | CTXBLOCKCAT_CR_8X8 => {
         if last != 0 {
-          ctx_inc = SIGNIFICANT_COEFF_FLAG_TAB8X8[idx][2] as i16;
+          ctx_inc = SIGNIFICANT_COEFF_FLAG_TAB8X8[idx][2] as isize;
         } else {
-          ctx_inc = SIGNIFICANT_COEFF_FLAG_TAB8X8[idx][field] as i16;
+          ctx_inc = SIGNIFICANT_COEFF_FLAG_TAB8X8[idx][field] as isize;
         }
       }
       cat => panic!("Invalid ctx_block_cat passed to significant_coeff_flag {cat}"),
@@ -789,13 +794,13 @@ impl CabacContext {
     }
     mb_a = slice.inter_filter(mb_a, inter);
     mb_b = slice.inter_filter(mb_b, inter);
-    let cond_term_flag_a = mb_a.coded_block_flag[which as usize][idx_a as usize] as i16;
-    let cond_term_flag_b = mb_b.coded_block_flag[which as usize][idx_b as usize] as i16;
+    let cond_term_flag_a = mb_a.coded_block_flag[which as usize][idx_a as usize] as isize;
+    let cond_term_flag_b = mb_b.coded_block_flag[which as usize][idx_b as usize] as isize;
     let ctx_idx = CODED_BLOCK_FLAG_BASE_CTX[cat as usize] + cond_term_flag_a + cond_term_flag_b * 2;
     self.decision(slice, ctx_idx)
   }
 
-  pub fn mb_qp_delta(&mut self, slice: &mut Slice) -> CabacResult<i16> {
+  pub fn mb_qp_delta(&mut self, slice: &mut Slice) -> CabacResult<isize> {
     let mut ctx_idx = [0; 3];
     if slice.prev_mb_addr != -1 && slice.macroblocks[slice.prev_mb_addr as usize].mb_qp_delta != 0 {
       ctx_idx[0] = CTXIDX_MB_QP_DELTA + 1;
@@ -804,7 +809,7 @@ impl CabacContext {
     }
     ctx_idx[1] = CTXIDX_MB_QP_DELTA + 2;
     ctx_idx[2] = CTXIDX_MB_QP_DELTA + 3;
-    let tmp = self.tu(slice, &ctx_idx, 3, -1i8 as u8)? as i16;
+    let tmp = self.tu(slice, &ctx_idx, 3, -1i8 as u8)? as isize;
     Ok(if (tmp & 1) != 0 {
       (tmp + 1) >> 1
     } else {
@@ -828,25 +833,25 @@ impl CabacContext {
         bit[idx_a as usize]
       } else {
         mb_a.coded_block_pattern >> idx_a & 1
-      }) == 0) as i16;
+      }) == 0) as isize;
       let cond_term_flag_b = ((if std::ptr::eq(mb_b as *const _, mb_t as *const _) {
         bit[idx_b as usize]
       } else {
         mb_b.coded_block_pattern >> idx_b & 1
-      }) == 0) as i16;
+      }) == 0) as isize;
       ctx_idx = CTXIDX_CODED_BLOCK_PATTERN_LUMA + cond_term_flag_a + cond_term_flag_b * 2;
       bit[i as usize] = self.decision(unsafe { &mut *(slice as *const _ as *mut _) }, ctx_idx)?;
     }
     if has_chroma {
       mb_a = slice.mb_nb(MbPosition::A, 0)?;
       mb_b = slice.mb_nb(MbPosition::B, 0)?;
-      let cond_term_flag_a = ((mb_a.coded_block_pattern >> 4) > 0) as i16;
-      let cond_term_flag_b = ((mb_b.coded_block_pattern >> 4) > 0) as i16;
+      let cond_term_flag_a = ((mb_a.coded_block_pattern >> 4) > 0) as isize;
+      let cond_term_flag_b = ((mb_b.coded_block_pattern >> 4) > 0) as isize;
       ctx_idx = CTXIDX_CODED_BLOCK_PATTERN_CHROMA + cond_term_flag_a + cond_term_flag_b * 2;
       bit[4] = self.decision(unsafe { &mut *(slice as *const _ as *mut _) }, ctx_idx)?;
       if bit[4] != 0 {
-        let cond_term_flag_a = ((mb_a.coded_block_pattern >> 4) > 1) as i16;
-        let cond_term_flag_b = ((mb_b.coded_block_pattern >> 4) > 1) as i16;
+        let cond_term_flag_a = ((mb_a.coded_block_pattern >> 4) > 1) as isize;
+        let cond_term_flag_b = ((mb_b.coded_block_pattern >> 4) > 1) as isize;
         ctx_idx = CTXIDX_CODED_BLOCK_PATTERN_CHROMA + cond_term_flag_a + cond_term_flag_b * 2 + 4;
         bit[5] = self.decision(slice, ctx_idx)?;
       }
@@ -855,8 +860,8 @@ impl CabacContext {
   }
 
   pub fn intra_chroma_pred_mode(&mut self, slice: &mut Slice) -> CabacResult<u8> {
-    let cond_term_flag_a = (slice.mb_nb(MbPosition::A, 0)?.intra_chroma_pred_mode != 0) as i16;
-    let cond_term_flag_b = (slice.mb_nb(MbPosition::B, 0)?.intra_chroma_pred_mode != 0) as i16;
+    let cond_term_flag_a = (slice.mb_nb(MbPosition::A, 0)?.intra_chroma_pred_mode != 0) as isize;
+    let cond_term_flag_b = (slice.mb_nb(MbPosition::B, 0)?.intra_chroma_pred_mode != 0) as isize;
     let ctx_idx = [
       CTXIDX_INTRA_CHROMA_PRED_MODE + cond_term_flag_a + cond_term_flag_b,
       CTXIDX_INTRA_CHROMA_PRED_MODE + 3,
@@ -882,7 +887,7 @@ impl CabacContext {
     let cond_term_flag_a = slice.mb_nb(MbPosition::A, 0)?.transform_size_8x8_flag;
     let cond_term_flag_b = slice.mb_nb(MbPosition::B, 0)?.transform_size_8x8_flag;
     let ctx_idx_inc = cond_term_flag_a + cond_term_flag_b;
-    self.decision(slice, ctx_idx_offset + ctx_idx_inc as i16)
+    self.decision(slice, ctx_idx_offset + ctx_idx_inc as isize)
   }
 
   pub fn mvd(
@@ -891,7 +896,7 @@ impl CabacContext {
     idx: isize,
     comp: usize,
     which: usize,
-  ) -> CabacResult<i16> {
+  ) -> CabacResult<isize> {
     let base_idx = if comp != 0 {
       CTXIDX_MVD_Y
     } else {
@@ -954,8 +959,8 @@ impl CabacContext {
     let mb_b = slice.mb_nb_b(MbPosition::B, BlockSize::B8x8, 0, idx, &mut idx_b)?;
     let thr_a = !mb_t.mb_field_decoding_flag && mb_a.mb_field_decoding_flag;
     let thr_b = !mb_t.mb_field_decoding_flag && mb_b.mb_field_decoding_flag;
-    let cond_term_flag_a = (mb_a.ref_idx[which][idx_a as usize] > thr_a as u8) as i16;
-    let cond_term_flag_b = (mb_b.ref_idx[which][idx_b as usize] > thr_b as u8) as i16;
+    let cond_term_flag_a = (mb_a.ref_idx[which][idx_a as usize] > thr_a as u8) as isize;
+    let cond_term_flag_b = (mb_b.ref_idx[which][idx_b as usize] > thr_b as u8) as isize;
     let ctx_idx = [
       CTXIDX_REF_IDX + cond_term_flag_a + 2 * cond_term_flag_b,
       CTXIDX_REF_IDX + 4,
@@ -990,7 +995,7 @@ impl CabacContext {
   }
 
   pub fn mb_type(&mut self, slice: &mut Slice) -> CabacResult {
-    let mut bidx = [0i16; 11];
+    let mut bidx = [0isize; 11];
     let mbt_a = *slice.mb_nb(MbPosition::A, 0)?.mb_type;
     let mbt_b = *slice.mb_nb(MbPosition::B, 0)?.mb_type;
     let mut cond_term_flag_a = mbt_a != MB_TYPE_UNAVAILABLE;
@@ -1001,11 +1006,11 @@ impl CabacContext {
       SliceType::SI => {
         cond_term_flag_a = cond_term_flag_a && mbt_a != MB_TYPE_SI;
         cond_term_flag_b = cond_term_flag_b && mbt_b != MB_TYPE_SI;
-        let ctx_idx_inc = cond_term_flag_a as i16 + cond_term_flag_b as i16;
+        let ctx_idx_inc = cond_term_flag_a as isize + cond_term_flag_b as isize;
         bidx[7] = CTXIDX_MB_TYPE_SI_PRE + ctx_idx_inc;
         cond_term_flag_a = cond_term_flag_a && mbt_a != MB_TYPE_I_NXN;
         cond_term_flag_b = cond_term_flag_b && mbt_b != MB_TYPE_I_NXN;
-        let ctx_idx_inc = cond_term_flag_a as i16 + cond_term_flag_b as i16;
+        let ctx_idx_inc = cond_term_flag_a as isize + cond_term_flag_b as isize;
         bidx[0] = CTXIDX_MB_TYPE_I + ctx_idx_inc;
         bidx[1] = CTXIDX_TERMINATE;
         bidx[2] = CTXIDX_MB_TYPE_I + 3;
@@ -1018,7 +1023,7 @@ impl CabacContext {
       SliceType::I => {
         cond_term_flag_a = cond_term_flag_a && mbt_a != MB_TYPE_I_NXN;
         cond_term_flag_b = cond_term_flag_b && mbt_b != MB_TYPE_I_NXN;
-        let ctx_idx_inc = cond_term_flag_a as i16 + cond_term_flag_b as i16;
+        let ctx_idx_inc = cond_term_flag_a as isize + cond_term_flag_b as isize;
         bidx[0] = CTXIDX_MB_TYPE_I + ctx_idx_inc;
         bidx[1] = CTXIDX_TERMINATE;
         bidx[2] = CTXIDX_MB_TYPE_I + 3;
@@ -1047,7 +1052,7 @@ impl CabacContext {
           cond_term_flag_a && mbt_a != MB_TYPE_B_SKIP && mbt_a != MB_TYPE_B_DIRECT_16X16;
         cond_term_flag_b =
           cond_term_flag_b && mbt_b != MB_TYPE_B_SKIP && mbt_b != MB_TYPE_B_DIRECT_16X16;
-        let ctx_idx_inc = cond_term_flag_a as i16 + cond_term_flag_b as i16;
+        let ctx_idx_inc = cond_term_flag_a as isize + cond_term_flag_b as isize;
         bidx[7] = CTXIDX_MB_TYPE_B_PRE + ctx_idx_inc;
         bidx[8] = CTXIDX_MB_TYPE_B_PRE + 3;
         bidx[9] = CTXIDX_MB_TYPE_B_PRE + 4;
@@ -1079,7 +1084,7 @@ impl CabacContext {
     let mb_b = slice.mb_nb(MbPosition::B, 0)?;
     let cond_term_flag_a = mb_a.mb_type.is_available() && !mb_a.mb_type.is_skip();
     let cond_term_flag_b = mb_b.mb_type.is_available() && !mb_b.mb_type.is_skip();
-    let ctx_idx_inc = cond_term_flag_a as i16 + cond_term_flag_b as i16;
+    let ctx_idx_inc = cond_term_flag_a as isize + cond_term_flag_b as isize;
     self.decision(slice, ctx_idx_offset + ctx_idx_inc)
   }
 
@@ -1087,7 +1092,7 @@ impl CabacContext {
     let ctx_idx_offset = CTXIDX_MB_FIELD_DECODING_FLAG;
     let cond_term_flag_a = slice.mb_nb_p(MbPosition::A, 0).mb_field_decoding_flag;
     let cond_term_flag_b = slice.mb_nb_p(MbPosition::B, 0).mb_field_decoding_flag;
-    let ctx_idx_inc = cond_term_flag_a as i16 + cond_term_flag_b as i16;
+    let ctx_idx_inc = cond_term_flag_a as isize + cond_term_flag_b as isize;
     self.decision(slice, ctx_idx_offset + ctx_idx_inc)
   }
 
@@ -1095,19 +1100,19 @@ impl CabacContext {
     &mut self,
     slice: &mut Slice,
     table: &[SEValue],
-    ctx_indices: &[i16],
+    ctx_indices: &[isize],
     val: &mut u8,
   ) -> CabacResult {
     let mut byte = [0u8; 8];
-    let mut bin_idx = [-1i16; 8];
+    let mut bin_idx = [-1isize; 8];
     for se_value in table {
       let mut j = 0;
       for bit in se_value.bits {
         if bin_idx[j] == -1 {
-          bin_idx[j] = bit.bin_idx as i16;
+          bin_idx[j] = bit.bin_idx as isize;
           byte[j] = self.decision(slice, ctx_indices[bin_idx[j] as usize])?;
         }
-        if bin_idx[j] != bit.bin_idx as i16 {
+        if bin_idx[j] != bit.bin_idx as isize {
           return Err(CabacError::SETable);
         }
         if byte[j] != bit.value {
@@ -1132,14 +1137,14 @@ impl CabacContext {
   pub fn ueg(
     &mut self,
     slice: &mut Slice,
-    ctx_indices: &[i16],
+    ctx_indices: &[isize],
     num_idx: u8,
-    mut k: i16,
-    sign: i16,
+    mut k: isize,
+    sign: isize,
     u_coff: u8,
-  ) -> CabacResult<i16> {
+  ) -> CabacResult<isize> {
     let tuval = self.tu(slice, ctx_indices, num_idx, u_coff)?;
-    let mut rval = tuval as i16;
+    let mut rval = tuval as isize;
     if tuval >= u_coff {
       loop {
         if self.bypass(slice)? == 0 {
@@ -1150,7 +1155,7 @@ impl CabacContext {
       }
       while k > 0 {
         k -= 1;
-        rval += (self.bypass(slice)? as i16) << k;
+        rval += (self.bypass(slice)? as isize) << k;
       }
     }
     Ok(if rval != 0 && sign != 0 {
@@ -1167,7 +1172,7 @@ impl CabacContext {
   pub fn tu(
     &mut self,
     slice: &mut Slice,
-    ctx_indices: &[i16],
+    ctx_indices: &[isize],
     num_idx: u8,
     c_max: u8,
   ) -> CabacResult<u8> {
@@ -1185,7 +1190,7 @@ impl CabacContext {
     Ok(i)
   }
 
-  pub fn decision(&mut self, slice: &mut Slice, ctx_idx: i16) -> CabacResult<u8> {
+  pub fn decision(&mut self, slice: &mut Slice, ctx_idx: isize) -> CabacResult<u8> {
     let bin_val;
     if ctx_idx == -1 {
       return self.bypass(slice);
@@ -1208,12 +1213,12 @@ impl CabacContext {
       bin_val = self.val_mps[ctx_idx];
     }
     if bin_val == self.val_mps[ctx_idx] {
-      self.p_state_idx[ctx_idx] = TRANS_IDX_MPS[p_state_idx] as i16;
+      self.p_state_idx[ctx_idx] = TRANS_IDX_MPS[p_state_idx] as isize;
     } else {
       if p_state_idx == 0 {
         self.val_mps[ctx_idx] = (self.val_mps[ctx_idx] == 0) as u8;
       }
-      self.p_state_idx[ctx_idx] = TRANS_IDX_LPS[p_state_idx] as i16;
+      self.p_state_idx[ctx_idx] = TRANS_IDX_LPS[p_state_idx] as isize;
     }
     self.renorm(slice)?;
     self.bin_count += 1;
@@ -1258,7 +1263,7 @@ impl CabacContext {
     Ok(())
   }
 
-  fn init_context_variables(slice: &Slice) -> ([i16; CTX_IDX_COUNT], [u8; CTX_IDX_COUNT]) {
+  fn init_context_variables(slice: &Slice) -> ([isize; CTX_IDX_COUNT], [u8; CTX_IDX_COUNT]) {
     let mut p_state_idx = [0; CTX_IDX_COUNT];
     let mut val_mps = [0; CTX_IDX_COUNT];
 

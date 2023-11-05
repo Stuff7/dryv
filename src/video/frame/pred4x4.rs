@@ -12,12 +12,12 @@ impl Frame {
     const REFERENCE_COORDINATE_X: [isize; 13] = [-1, -1, -1, -1, -1, 0, 1, 2, 3, 4, 5, 6, 7];
     const REFERENCE_COORDINATE_Y: [isize; 13] = [-1, 0, 1, 2, 3, -1, -1, -1, -1, -1, -1, -1, -1];
 
-    let x_o = inverse_raster_scan(luma4x4_blk_idx / 4, 8, 8, 16, 0) as i16
-      + inverse_raster_scan(luma4x4_blk_idx % 4, 4, 4, 8, 0) as i16;
-    let y_o = inverse_raster_scan(luma4x4_blk_idx / 4, 8, 8, 16, 1) as i16
-      + inverse_raster_scan(luma4x4_blk_idx % 4, 4, 4, 8, 1) as i16;
+    let x_o = inverse_raster_scan(luma4x4_blk_idx / 4, 8, 8, 16, 0) as isize
+      + inverse_raster_scan(luma4x4_blk_idx % 4, 4, 4, 8, 0) as isize;
+    let y_o = inverse_raster_scan(luma4x4_blk_idx / 4, 8, 8, 16, 1) as isize
+      + inverse_raster_scan(luma4x4_blk_idx % 4, 4, 4, 8, 1) as isize;
 
-    let mut samples = [-1i16; 45];
+    let mut samples = [-1isize; 45];
 
     for i in 0..13 {
       let x = REFERENCE_COORDINATE_X[i];
@@ -52,7 +52,7 @@ impl Frame {
         let y_m =
           inverse_raster_scan(mbaddr_n, 16, 16, slice.pic_width_in_samples_l as usize, 1) as isize;
 
-        *samples.p(x, y) = self.luma_data[(x_m + x_w) as usize][(y_m + y_w) as usize] as i16;
+        *samples.p(x, y) = self.luma_data[(x_m + x_w) as usize][(y_m + y_w) as usize] as isize;
       }
     }
 
@@ -70,15 +70,15 @@ impl Frame {
 
     self.intra4x4_pred_mode(slice, luma4x4_blk_idx, is_luma);
 
-    const INTRA_4X4_VERTICAL: i16 = 0;
-    const INTRA_4X4_HORIZONTAL: i16 = 1;
-    const INTRA_4X4_DC: i16 = 2;
-    const INTRA_4X4_DIAGONAL_DOWN_LEFT: i16 = 3;
-    const INTRA_4X4_DIAGONAL_DOWN_RIGHT: i16 = 4;
-    const INTRA_4X4_VERTICAL_RIGHT: i16 = 5;
-    const INTRA_4X4_HORIZONTAL_DOWN: i16 = 6;
-    const INTRA_4X4_VERTICAL_LEFT: i16 = 7;
-    const INTRA_4X4_HORIZONTAL_UP: i16 = 8;
+    const INTRA_4X4_VERTICAL: isize = 0;
+    const INTRA_4X4_HORIZONTAL: isize = 1;
+    const INTRA_4X4_DC: isize = 2;
+    const INTRA_4X4_DIAGONAL_DOWN_LEFT: isize = 3;
+    const INTRA_4X4_DIAGONAL_DOWN_RIGHT: isize = 4;
+    const INTRA_4X4_VERTICAL_RIGHT: isize = 5;
+    const INTRA_4X4_HORIZONTAL_DOWN: isize = 6;
+    const INTRA_4X4_VERTICAL_LEFT: isize = 7;
+    const INTRA_4X4_HORIZONTAL_UP: isize = 8;
 
     let intra4x4_pred_mode = slice.mb().intra4x4_pred_mode[luma4x4_blk_idx];
 
@@ -350,7 +350,7 @@ impl Frame {
 
   /// 8.3.1.1 Derivation process for intra4x4_pred_mode
   pub fn intra4x4_pred_mode(&mut self, slice: &mut Slice, luma4x4_block_idx: usize, is_luma: bool) {
-    const INTRA4X4_DC: i16 = 2;
+    const INTRA4X4_DC: isize = 2;
     let x = inverse_raster_scan(luma4x4_block_idx / 4, 8, 8, 16, 0)
       + inverse_raster_scan(luma4x4_block_idx % 4, 4, 4, 8, 0);
     let y = inverse_raster_scan(luma4x4_block_idx / 4, 8, 8, 16, 1)
@@ -407,23 +407,23 @@ impl Frame {
     let pred_intra4x4_pred_mode = std::cmp::min(intra_mxm_pred_mode_a, intra_mxm_pred_mode_b);
 
     if slice.mb().prev_intra4x4_pred_mode_flag[luma4x4_block_idx] != 0 {
-      slice.mb_mut().intra4x4_pred_mode[luma4x4_block_idx] = pred_intra4x4_pred_mode as i16;
-    } else if (slice.mb().rem_intra4x4_pred_mode[luma4x4_block_idx] as i16)
+      slice.mb_mut().intra4x4_pred_mode[luma4x4_block_idx] = pred_intra4x4_pred_mode as isize;
+    } else if (slice.mb().rem_intra4x4_pred_mode[luma4x4_block_idx] as isize)
       < pred_intra4x4_pred_mode
     {
       slice.mb_mut().intra4x4_pred_mode[luma4x4_block_idx] =
-        slice.mb().rem_intra4x4_pred_mode[luma4x4_block_idx] as i16;
+        slice.mb().rem_intra4x4_pred_mode[luma4x4_block_idx] as isize;
     } else {
       slice.mb_mut().intra4x4_pred_mode[luma4x4_block_idx] =
-        slice.mb().rem_intra4x4_pred_mode[luma4x4_block_idx] as i16 + 1;
+        slice.mb().rem_intra4x4_pred_mode[luma4x4_block_idx] as isize + 1;
     }
   }
 }
 
-trait SampleP: IndexMut<usize, Output = i16> + Index<usize, Output = i16> {
-  fn p(&mut self, x: isize, y: isize) -> &mut i16 {
+trait SampleP: IndexMut<usize, Output = isize> + Index<usize, Output = isize> {
+  fn p(&mut self, x: isize, y: isize) -> &mut isize {
     &mut self[(((y) + 1) * 9 + ((x) + 1)) as usize]
   }
 }
 
-impl<const N: usize> SampleP for [i16; N] {}
+impl<const N: usize> SampleP for [isize; N] {}

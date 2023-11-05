@@ -1,7 +1,7 @@
 pub const CTX_IDX_COUNT: usize = 1031;
 
 #[rustfmt::skip]
-pub const CTX_INIT_TABLE: [[(i16, i16); 4]; CTX_IDX_COUNT] = [
+pub const CTX_INIT_TABLE: [[(isize, isize); 4]; CTX_IDX_COUNT] = [
   /* 0-2 mb_type SI prefix */
   [( 20, -15), (  0,   0), (  0,   0), (  0,   0)], /*    0 */
   [(  2,  54), (  0,   0), (  0,   0), (  0,   0)], /*    1 */

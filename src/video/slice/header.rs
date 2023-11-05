@@ -130,15 +130,15 @@ pub struct SliceHeader {
 
   pub mb_height_c: u8,
 
-  pub scaling_list4x4: [[i16; 16]; 6],
+  pub scaling_list4x4: [[isize; 16]; 6],
 
-  pub scaling_list8x8: Box<[[i16; 64]]>,
+  pub scaling_list8x8: Box<[[isize; 64]]>,
 
-  pub qp_bd_offset_c: i16,
+  pub qp_bd_offset_c: isize,
 
-  pub bit_depth_y: i16,
+  pub bit_depth_y: isize,
 
-  pub bit_depth_c: i16,
+  pub bit_depth_c: isize,
 }
 
 impl SliceHeader {
@@ -308,16 +308,16 @@ impl SliceHeader {
       mb_height_c,
       scaling_list4x4,
       scaling_list8x8,
-      qp_bd_offset_c: sps.bit_depth_chroma_minus8 as i16 * 6,
-      bit_depth_y: sps.bit_depth_luma_minus8 as i16 + 8,
-      bit_depth_c: sps.bit_depth_chroma_minus8 as i16 + 8,
+      qp_bd_offset_c: sps.bit_depth_chroma_minus8 as isize * 6,
+      bit_depth_y: sps.bit_depth_luma_minus8 as isize + 8,
+      bit_depth_c: sps.bit_depth_chroma_minus8 as isize + 8,
     }
   }
 
   fn scaling_lists(
     sps: &mut SequenceParameterSet,
     pps: &mut PictureParameterSet,
-  ) -> ([[i16; 16]; 6], Box<[[i16; 64]]>) {
+  ) -> ([[isize; 16]; 6], Box<[[isize; 64]]>) {
     if let Some(scaling_list) = sps.seq_scaling_matrix.take() {
       (scaling_list.l4x4, scaling_list.l8x8)
     } else if let Some(scaling_list) = pps

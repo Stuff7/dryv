@@ -1,6 +1,6 @@
 use std::ops::{Index, IndexMut};
 
-use super::{transform::chroma_quantization_parameters, Frame};
+use super::{inverse_scanner4x4, transform::chroma_quantization_parameters, BlockType, Frame};
 use crate::{
   math::{clamp, inverse_raster_scan},
   video::slice::{
@@ -10,6 +10,73 @@ use crate::{
 };
 
 impl Frame {
+  pub fn transform_for_16x16_luma_residual_blocks(
+    &mut self,
+    slice: &mut Slice,
+    is_luma: bool,
+    is_chroma_cb: bool,
+  ) {
+    self.scaling(slice, is_luma, is_chroma_cb);
+
+    let c = inverse_scanner4x4(&slice.mb().block_luma_dc[0]);
+
+    let dc_y = self.transform_intra16x16_dc(slice, &c, is_luma, is_chroma_cb);
+
+    let mut r_mb = [[0; 16]; 16];
+
+    let dc_y_to_luma = [
+      dc_y[0][0], dc_y[0][1], dc_y[1][0], dc_y[1][1], dc_y[0][2], dc_y[0][3], dc_y[1][2],
+      dc_y[1][3], dc_y[2][0], dc_y[2][1], dc_y[3][0], dc_y[3][1], dc_y[2][2], dc_y[2][3],
+      dc_y[3][2], dc_y[3][3],
+    ];
+
+    for _4x4BlkIdx in 0..16 {
+      let mut luma_list = [0; 16];
+      luma_list[0] = dc_y_to_luma[_4x4BlkIdx];
+
+      for k in 1..16 {
+        luma_list[k] = slice.mb().block_luma_ac[0][_4x4BlkIdx][k - 1];
+      }
+
+      let c = inverse_scanner4x4(&luma_list);
+
+      let r = self.scaling_and_transform4x4(slice, &c, is_luma, false);
+
+      let x_o = inverse_raster_scan(_4x4BlkIdx / 4, 8, 8, 16, 0)
+        + inverse_raster_scan(_4x4BlkIdx % 4, 4, 4, 8, 0);
+      let y_o = inverse_raster_scan(_4x4BlkIdx / 4, 8, 8, 16, 1)
+        + inverse_raster_scan(_4x4BlkIdx % 4, 4, 4, 8, 1);
+
+      for i in 0..4 {
+        for j in 0..4 {
+          r_mb[x_o + j][y_o + i] = r[i][j];
+        }
+      }
+    }
+
+    if slice.mb().transform_bypass_mode_flag
+      && (slice.mb().mb_type.intra16x16_pred_mode() == 0
+        || slice.mb().mb_type.intra16x16_pred_mode() == 1)
+    {
+      todo!("Bypass conversion");
+    }
+
+    self.intra16x16_prediction(slice, true);
+
+    let mut u = [0; 16 * 16];
+
+    for i in 0..16 {
+      for j in 0..16 {
+        u[i * 16 + j] = clamp(
+          slice.mb().luma16x16_pred_samples[j][i] + r_mb[j][i],
+          0,
+          (1 << slice.bit_depth_y) - 1,
+        );
+      }
+    }
+    self.picture_construction(slice, &u, BlockType::B16x16, 0, true, false);
+  }
+
   /// 8.3.3 Intra_16x16 prediction process for luma samples
   pub fn intra16x16_prediction(&mut self, slice: &mut Slice, is_luma: bool) {
     const REFERENCE_COORDINATE_X: [isize; 33] = [
@@ -56,7 +123,7 @@ impl Frame {
         let y_m =
           inverse_raster_scan(mbaddr_n, 16, 16, slice.pic_width_in_samples_l as usize, 1) as isize;
 
-        *p.p(x, y) = self.luma_data[(x_m + xW) as usize][(y_m + yW) as usize] as i16;
+        *p.p(x, y) = self.luma_data[(x_m + xW) as usize][(y_m + yW) as usize] as isize;
       }
     }
 
@@ -345,7 +412,7 @@ impl Frame {
               (a + b * (x as isize - 7) + c * (y as isize - 7) + 16) >> 5,
               0,
               (1 << slice.bit_depth_y as isize) - 1,
-            ) as i16;
+            ) as isize;
           }
         }
       }
@@ -356,10 +423,10 @@ impl Frame {
   pub fn transform_intra16x16_dc(
     &mut self,
     slice: &mut Slice,
-    c: &[[i16; 4]; 4],
+    c: &[[isize; 4]; 4],
     is_luma: bool,
     is_chroma_cb: bool,
-  ) -> [[i16; 4]; 4] {
+  ) -> [[isize; 4]; 4] {
     let mut dc_y = [[0; 4]; 4];
     let q_p = if is_luma {
       slice.mb().qp1y
@@ -371,7 +438,7 @@ impl Frame {
     if slice.mb().transform_bypass_mode_flag {
       dc_y.copy_from_slice(c);
     } else {
-      const A: [[i16; 4]; 4] = [[1, 1, 1, 1], [1, 1, -1, -1], [1, -1, -1, 1], [1, -1, 1, -1]];
+      const A: [[isize; 4]; 4] = [[1, 1, 1, 1], [1, 1, -1, -1], [1, -1, -1, 1], [1, -1, 1, -1]];
 
       let mut g = [[0; 4]; 4];
       let mut f = [[0; 4]; 4];
@@ -410,10 +477,10 @@ impl Frame {
   }
 }
 
-trait SampleP: IndexMut<usize, Output = i16> + Index<usize, Output = i16> {
-  fn p(&mut self, x: isize, y: isize) -> &mut i16 {
+trait SampleP: IndexMut<usize, Output = isize> + Index<usize, Output = isize> {
+  fn p(&mut self, x: isize, y: isize) -> &mut isize {
     &mut self[(((y) + 1) * 17 + ((x) + 1)) as usize]
   }
 }
 
-impl<const N: usize> SampleP for [i16; N] {}
+impl<const N: usize> SampleP for [isize; N] {}

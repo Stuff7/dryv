@@ -158,31 +158,31 @@ impl PicOrderCntTypeOne {
   }
 }
 
-const DEFAULT_4X4_INTRA: [i16; 16] = [
+const DEFAULT_4X4_INTRA: [isize; 16] = [
   6, 13, 13, 20, 20, 20, 28, 28, 28, 28, 32, 32, 32, 37, 37, 42,
 ];
-const DEFAULT_4X4_INTER: [i16; 16] = [
+const DEFAULT_4X4_INTER: [isize; 16] = [
   10, 14, 14, 20, 20, 20, 24, 24, 24, 24, 27, 27, 27, 30, 30, 34,
 ];
 
-const DEFAULT_8X8_INTRA: [i16; 64] = [
+const DEFAULT_8X8_INTRA: [isize; 64] = [
   6, 10, 10, 13, 11, 13, 16, 16, 16, 16, 18, 18, 18, 18, 18, 23, 23, 23, 23, 23, 23, 25, 25, 25,
   25, 25, 25, 25, 27, 27, 27, 27, 27, 27, 27, 27, 29, 29, 29, 29, 29, 29, 29, 31, 31, 31, 31, 31,
   31, 33, 33, 33, 33, 33, 36, 36, 36, 36, 38, 38, 38, 40, 40, 42,
 ];
-const DEFAULT_8X8_INTER: [i16; 64] = [
+const DEFAULT_8X8_INTER: [isize; 64] = [
   9, 13, 13, 15, 13, 15, 17, 17, 17, 17, 19, 19, 19, 19, 19, 21, 21, 21, 21, 21, 21, 22, 22, 22,
   22, 22, 22, 22, 24, 24, 24, 24, 24, 24, 24, 24, 25, 25, 25, 25, 25, 25, 25, 27, 27, 27, 27, 27,
   27, 28, 28, 28, 28, 28, 30, 30, 30, 30, 32, 32, 32, 33, 33, 35,
 ];
 
-pub fn scaling_list<const S: usize>(bits: &mut BitStream, data: &mut [i16; S]) -> bool {
+pub fn scaling_list<const S: usize>(bits: &mut BitStream, data: &mut [isize; S]) -> bool {
   let mut use_default_scaling_matrix_flag = false;
   let mut last_scale = 8;
   let mut next_scale = 8;
   for (i, scale) in data.iter_mut().enumerate() {
     if next_scale != 0 {
-      let delta_scale: i16 = bits.signed_exponential_golomb();
+      let delta_scale = bits.signed_exponential_golomb::<i16>() as isize;
       next_scale = (last_scale + delta_scale + 256) % 256;
       use_default_scaling_matrix_flag = i == 0 && next_scale == 0;
     }
@@ -199,8 +199,8 @@ pub fn scaling_list<const S: usize>(bits: &mut BitStream, data: &mut [i16; S]) -
 
 #[derive(Debug)]
 pub struct ScalingLists {
-  pub l4x4: [[i16; 16]; 6],
-  pub l8x8: Box<[[i16; 64]]>,
+  pub l4x4: [[isize; 16]; 6],
+  pub l8x8: Box<[[isize; 64]]>,
 }
 
 impl ScalingLists {

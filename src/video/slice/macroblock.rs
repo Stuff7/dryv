@@ -34,33 +34,35 @@ pub struct Macroblock {
 
   /// Quantization parameter delta for the macroblock.
   /// It represents the adjustment to the quantization step size.
-  pub mb_qp_delta: i16,
+  pub mb_qp_delta: isize,
 
-  pub qpy: i16,
+  pub qpy: isize,
 
-  pub qpc: i16,
+  pub qpc: isize,
 
-  pub qp1c: i16,
+  pub qp1c: isize,
 
-  pub qp1y: i16,
+  pub qp1y: isize,
 
-  pub qsy: i16,
+  pub qsy: isize,
 
-  pub qsc: i16,
+  pub qsc: isize,
 
-  pub qpprime_y: i16,
+  pub qpprime_y: isize,
 
   pub transform_bypass_mode_flag: bool,
 
-  pub intra4x4_pred_mode: [i16; 16],
+  pub intra4x4_pred_mode: [isize; 16],
 
-  pub intra8x8_pred_mode: [i16; 4],
+  pub intra8x8_pred_mode: [isize; 4],
 
-  pub luma_pred_samples: [[[i16; 4]; 4]; 16],
+  pub luma_pred_samples: [[[isize; 4]; 4]; 16],
 
-  pub luma16x16_pred_samples: [[i16; 16]; 16],
+  pub luma16x16_pred_samples: [[isize; 16]; 16],
 
-  pub chroma_pred_samples: [[i16; 16]; 8],
+  pub luma8x8_pred_samples: [[[isize; 8]; 8]; 4],
+
+  pub chroma_pred_samples: [[isize; 16]; 8],
 
   pub transform_bypass_flag: bool,
   /// PCM (Pulse Code Modulation) samples for luma (Y) component.
@@ -93,33 +95,33 @@ pub struct Macroblock {
   pub ref_idx: [[u8; 4]; 2],
 
   /// Motion vector differences (MVD) for each 4x4 block within the macroblock.
-  pub mvd: [[[i16; 2]; 16]; 2],
+  pub mvd: [[[isize; 2]; 16]; 2],
 
   /// DC coefficients for luma (Y), chroma blue (Cb), and chroma red (Cr) components.
-  pub block_luma_dc: [[i16; 16]; 3],
+  pub block_luma_dc: [[isize; 16]; 3],
 
   /// AC coefficients for luma (Y), chroma blue (Cb), and chroma red (Cr) components
   /// for each 4x4 block within the macroblock.
-  pub block_luma_ac: [[[i16; 15]; 16]; 3],
+  pub block_luma_ac: [[[isize; 15]; 16]; 3],
 
   /// Coefficients for luma (Y), chroma blue (Cb), and chroma red (Cr) components
   /// for each 4x4 block within the macroblock.
-  pub block_luma_4x4: [[[i16; 16]; 16]; 3],
+  pub block_luma_4x4: [[[isize; 16]; 16]; 3],
 
   /// Coefficients for luma (Y), chroma blue (Cb), and chroma red (Cr) components
   /// for each 8x8 block within the macroblock.
-  pub block_luma_8x8: [[[i16; 64]; 4]; 3],
+  pub block_luma_8x8: [[[isize; 64]; 4]; 3],
 
   /// DC coefficients for chroma blue (Cb) and chroma red (Cr) components.
-  pub block_chroma_dc: [[i16; 8]; 2],
+  pub block_chroma_dc: [[isize; 8]; 2],
 
   /// AC coefficients for chroma blue (Cb) and chroma red (Cr) components
   /// for each 4x4 block within the macroblock.
-  pub block_chroma_ac: [[[i16; 15]; 8]; 2],
+  pub block_chroma_ac: [[[isize; 15]; 8]; 2],
 
   /// Total coefficients for each 4x4 block within the macroblock
   /// for luma (Y), chroma blue (Cb), and chroma red (Cr) components.
-  pub total_coeff: [[i16; 16]; 3],
+  pub total_coeff: [[isize; 16]; 3],
 
   /// Coded block flags for each 4x4 block within the macroblock.
   /// Indicates whether each block is coded or not (1 for coded, 0 for not coded).
@@ -156,6 +158,7 @@ impl Macroblock {
       intra8x8_pred_mode: [0; 4],
       luma_pred_samples: [[[0; 4]; 4]; 16],
       luma16x16_pred_samples: [[0; 16]; 16],
+      luma8x8_pred_samples: [[[0; 8]; 8]; 4],
       chroma_pred_samples: [[0; 16]; 8],
       transform_bypass_mode_flag: false,
       transform_bypass_flag: false,
@@ -399,6 +402,11 @@ impl MbPosition {
   pub fn blk_idx4x4(&self, max_w: isize, max_h: isize) -> isize {
     let (x, y) = self.coords(max_w, max_h);
     8 * (y / 8) + 4 * (x / 8) + 2 * ((y % 8) / 4) + ((x % 8) / 4)
+  }
+
+  pub fn blk_idx8x8(&self, max_w: isize, max_h: isize) -> isize {
+    let (x, y) = self.coords(max_w, max_h);
+    2 * (y / 8) + (x / 8)
   }
 }
 

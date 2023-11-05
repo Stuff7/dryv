@@ -11,7 +11,7 @@ use crate::{
 
 impl Frame {
   /// 8.5.4 Specification of transform decoding process for chroma samples
-  fn transform_chroma_samples(&mut self, slice: &mut Slice, is_chroma_cb: bool) {
+  pub fn transform_chroma_samples(&mut self, slice: &mut Slice, is_chroma_cb: bool) {
     if slice.chroma_array_type == 0 {
       panic!("Transform decoding process for chroma samples invoked for chroma_array_type 0");
     }
@@ -102,17 +102,17 @@ impl Frame {
       let mb_height_c = slice.mb_height_c as isize;
 
       let max_samples_val = mb_width_c + mb_height_c + 1;
-      let mut reference_coordinate_x = vec![0i16; max_samples_val as usize];
-      let mut reference_coordinate_y = vec![0i16; max_samples_val as usize];
+      let mut reference_coordinate_x = vec![0isize; max_samples_val as usize];
+      let mut reference_coordinate_y = vec![0isize; max_samples_val as usize];
 
-      for i in -1..mb_height_c as i16 {
+      for i in -1..mb_height_c as isize {
         reference_coordinate_x[(i + 1) as usize] = -1;
         reference_coordinate_y[(i + 1) as usize] = i;
       }
 
-      for i in 0..mb_width_c as i16 {
-        reference_coordinate_x[(mb_height_c as i16 + 1 + i) as usize] = i;
-        reference_coordinate_y[(mb_height_c as i16 + 1 + i) as usize] = -1;
+      for i in 0..mb_width_c as isize {
+        reference_coordinate_x[(mb_height_c as isize + 1 + i) as usize] = i;
+        reference_coordinate_y[(mb_height_c as isize + 1 + i) as usize] = -1;
       }
 
       let mut samples = vec![-1; ((mb_width_c + 1) * (mb_height_c + 1)) as usize];
@@ -147,9 +147,9 @@ impl Frame {
           let p_x = (x_m as isize + x_w) as usize;
           let p_y = (y_m as isize + y_w) as usize;
           if is_chroma_cb {
-            *samples.p(x, y) = self.chroma_cb_data[p_x][p_y] as i16;
+            *samples.p(x, y) = self.chroma_cb_data[p_x][p_y] as isize;
           } else {
-            *samples.p(x, y) = self.chroma_cr_data[p_x][p_y] as i16;
+            *samples.p(x, y) = self.chroma_cr_data[p_x][p_y] as isize;
           }
         }
       }
@@ -331,21 +331,26 @@ impl Frame {
           let mut v = 0;
 
           for x1 in 0..=3 + x_cf {
-            h += (x1 as i16 + 1) * (*samples.p(4 + x_cf + x1, -1) - *samples.p(2 + x_cf - x1, -1));
+            h +=
+              (x1 as isize + 1) * (*samples.p(4 + x_cf + x1, -1) - *samples.p(2 + x_cf - x1, -1));
           }
 
           for y1 in 0..=3 + y_cf {
-            v += (y1 as i16 + 1) * (*samples.p(-1, 4 + y_cf + y1) - *samples.p(-1, 2 + y_cf - y1));
+            v +=
+              (y1 as isize + 1) * (*samples.p(-1, 4 + y_cf + y1) - *samples.p(-1, 2 + y_cf - y1));
           }
 
           let a = 16 * (*samples.p(-1, mb_height_c - 1) + *samples.p(mb_width_c - 1, -1));
-          let b = ((34 - 29 * (slice.chroma_array_type == 3) as i16) * h + 32) >> 6;
-          let c = ((34 - 29 * (slice.chroma_array_type != 1) as i16) * v + 32) >> 6;
+          let b = ((34 - 29 * (slice.chroma_array_type == 3) as isize) * h + 32) >> 6;
+          let c = ((34 - 29 * (slice.chroma_array_type != 1) as isize) * v + 32) >> 6;
 
           for y in 0..mb_height_c {
             for x in 0..mb_width_c {
               slice.mb_mut().chroma_pred_samples[x as usize][y as usize] = clamp(
-                (a + b * (x as i16 - 3 - x_cf as i16) + c * (y as i16 - 3 - y_cf as i16) + 16) >> 5,
+                (a + b * (x as isize - 3 - x_cf as isize)
+                  + c * (y as isize - 3 - y_cf as isize)
+                  + 16)
+                  >> 5,
                 0,
                 (1 << slice.bit_depth_c) - 1,
               );
@@ -360,11 +365,11 @@ impl Frame {
   pub fn transform_chroma_dc(
     &mut self,
     slice: &mut Slice,
-    c: &[[i16; 2]],
+    c: &[[isize; 2]],
     mb_width_c: usize,
     mb_height_c: usize,
     is_chroma_cb: bool,
-  ) -> [[i16; 2]; 4] {
+  ) -> [[isize; 2]; 4] {
     let mut dc_c = [[0; 2]; 4];
     let bit_depth = slice.bit_depth_c;
 
@@ -448,10 +453,10 @@ impl Frame {
   }
 }
 
-trait SampleP: IndexMut<usize, Output = i16> + Index<usize, Output = i16> {
-  fn p(&mut self, x: isize, y: isize) -> &mut i16 {
+trait SampleP: IndexMut<usize, Output = isize> + Index<usize, Output = isize> {
+  fn p(&mut self, x: isize, y: isize) -> &mut isize {
     &mut self[(((y) + 1) * 9 + ((x) + 1)) as usize]
   }
 }
 
-impl SampleP for Vec<i16> {}
+impl SampleP for Vec<isize> {}

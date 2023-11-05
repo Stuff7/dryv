@@ -5,6 +5,7 @@ use super::slice::dpb::DecodedPictureBuffer;
 use super::slice::*;
 use crate::byte::{BitStream, Str};
 use crate::log;
+use crate::video::frame::Frame;
 use std::fs::File;
 use std::io::{Read, Seek};
 use std::path::Path;
@@ -120,7 +121,8 @@ impl Decoder {
           }
           NALUnitType::NonIDRPicture | NALUnitType::IDRPicture => {
             let mut slice = Slice::new(nal.data, &nal, &mut avc1.avcc.sps, &mut avc1.avcc.pps);
-            slice.data(&mut dpb)?;
+            let mut frame = Frame::new(&slice);
+            slice.data(&mut dpb, &mut frame)?;
             log!(File@"{msg}{:#?}", slice);
             use std::io::Write;
             let name = format!("temp/slice/{i}");
@@ -136,6 +138,9 @@ impl Decoder {
               .as_bytes(),
             )
             .expect("SLICE SAVING");
+            if i == 0 {
+              frame.write_to_yuv_file("temp/yuv_frame")?;
+            }
           }
           _ => log!(File@"{msg} [UNUSED]"),
         }

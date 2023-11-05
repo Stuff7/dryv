@@ -8,6 +8,7 @@ use self::dpb::DecodedPictureBuffer;
 use super::{
   atom::SliceGroup,
   cabac::{CabacContext, CabacError, CabacResult},
+  frame::Frame,
   sample::NALUnitType,
 };
 use crate::{
@@ -64,9 +65,13 @@ pub struct Slice<'a> {
 
   pub pic_height_in_samples_l: u16,
 
+  pub pic_width_in_samples_c: u16,
+
+  pub pic_height_in_samples_c: u16,
+
   /// Quantization parameter for the slice.
   /// The quantization parameter affects the trade-off between compression and image quality.
-  pub sliceqpy: i16,
+  pub sliceqpy: isize,
 
   /// Flag indicating the presence of macroblock adaptive frame/field (MBaff) mode.
   /// In video, "interlaced" refers to a display method where each frame is divided into two fields,
@@ -75,9 +80,9 @@ pub struct Slice<'a> {
   /// are processed differently to handle this interlaced structure.
   pub mbaff_frame_flag: bool,
 
-  pub qp_bd_offset_y: i16,
+  pub qp_bd_offset_y: isize,
 
-  pub qpy_prev: i16,
+  pub qpy_prev: isize,
 
   /// Index of the last macroblock in the slice.
   /// It helps identify the endpoint of macroblock processing within the slice.
@@ -134,9 +139,11 @@ impl<'a> Slice<'a> {
       },
       pic_width_in_samples_l: pic_width_in_mbs * 16,
       pic_height_in_samples_l: pic_height_in_mbs * 16,
-      sliceqpy: 26 + pps.pic_init_qp_minus26 + header.slice_qp_delta,
+      pic_width_in_samples_c: pic_width_in_mbs * header.mb_width_c as u16,
+      pic_height_in_samples_c: pic_height_in_mbs * header.mb_height_c as u16,
+      sliceqpy: 26 + pps.pic_init_qp_minus26 as isize + header.slice_qp_delta as isize,
       mbaff_frame_flag: sps.mb_adaptive_frame_field_flag && !header.field_pic_flag,
-      qp_bd_offset_y: 6 * sps.bit_depth_luma_minus8 as i16,
+      qp_bd_offset_y: 6 * sps.bit_depth_luma_minus8 as isize,
       qpy_prev: 0,
       last_mb_in_slice: 0,
       sgmap: SliceGroup::init_sgmap(
@@ -165,7 +172,7 @@ impl<'a> Slice<'a> {
     &mut self.macroblocks[self.curr_mb_addr as usize]
   }
 
-  pub fn data(&mut self, dpb: &mut DecodedPictureBuffer) -> CabacResult {
+  pub fn data(&mut self, dpb: &mut DecodedPictureBuffer, frame: &mut Frame) -> CabacResult {
     self.prev_mb_addr = -1isize;
     self.curr_mb_addr = (self.first_mb_in_slice * (1 + self.mbaff_frame_flag as u16)) as isize;
     self.last_mb_in_slice = self.curr_mb_addr;
@@ -216,7 +223,7 @@ impl<'a> Slice<'a> {
             self.macroblocks[self.curr_mb_addr as usize].mb_field_decoding_flag =
               self.field_pic_flag;
           }
-          cabac.macroblock_layer(self)?;
+          cabac.macroblock_layer(self, frame)?;
         }
         if !self.mbaff_frame_flag || (self.curr_mb_addr & 1) != 0 {
           let end_of_slice_flag = cabac.terminate(self)?;

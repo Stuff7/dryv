@@ -1,5 +1,6 @@
 pub mod pred16x16;
 pub mod pred4x4;
+pub mod pred8x8;
 pub mod trans_chroma;
 pub mod transform;
 
@@ -8,45 +9,104 @@ use std::{fs::File, io::Write};
 use super::slice::Slice;
 use crate::math::{clamp, inverse_raster_scan};
 
+#[derive(Debug)]
 pub struct Frame {
   pub luma_data: Box<[Box<[u8]>]>,
   pub chroma_cb_data: Box<[Box<[u8]>]>,
   pub chroma_cr_data: Box<[Box<[u8]>]>,
-  pub level_scale4x4: [[[i16; 4]; 4]; 6],
-  pub level_scale8x8: [[[i16; 4]; 4]; 6],
+  pub level_scale4x4: [[[isize; 4]; 4]; 6],
+  pub level_scale8x8: [[[isize; 8]; 8]; 6],
+  pub width_l: usize,
+  pub height_l: usize,
+  pub width_c: usize,
+  pub height_c: usize,
 }
 
 impl Frame {
-  pub fn write_to_yuv_file(
-    &self,
-    file_path: &str,
-    width: usize,
-    height: usize,
-  ) -> std::io::Result<()> {
+  pub fn new(slice: &Slice) -> Self {
+    let width_l = slice.pic_width_in_samples_l as usize;
+    let height_l = slice.pic_height_in_samples_l as usize;
+    let width_c = slice.pic_width_in_samples_c as usize;
+    let height_c = slice.pic_height_in_samples_c as usize;
+    // let width_l = 260;
+    // let height_l = 480;
+    // let width_c = width_l / 2;
+    // let height_c = height_l / 2;
+    Self {
+      luma_data: vec![vec![0; height_l].into(); width_l].into(),
+      chroma_cr_data: vec![vec![0; height_c].into(); width_c].into(),
+      chroma_cb_data: vec![vec![0; height_c].into(); width_c].into(),
+      level_scale4x4: [[[0; 4]; 4]; 6],
+      level_scale8x8: [[[0; 8]; 8]; 6],
+      width_l,
+      height_l,
+      width_c,
+      height_c,
+    }
+  }
+
+  pub fn write_to_yuv_file(&self, file_path: &str) -> std::io::Result<()> {
     let mut file = File::create(file_path)?;
+    println!(
+      "Writing YUV {} {} {}",
+      self.luma_data.len(),
+      self.chroma_cb_data.len(),
+      self.chroma_cr_data.len()
+    );
 
-    for y in 0..height {
-      for x in 0..width {
-        file.write_all(&[self.luma_data[y][x]])?;
+    for y in 0..self.height_l {
+      for x in 0..self.width_l {
+        file.write_all(&[self.luma_data[x][y]])?;
       }
+    }
 
-      for x in 0..width / 2 {
-        file.write_all(&[self.chroma_cb_data[y][x]])?;
+    for y in 0..self.height_c {
+      for x in 0..self.width_c {
+        file.write_all(&[self.chroma_cb_data[x][y]])?;
       }
+    }
 
-      for x in 0..width / 2 {
-        file.write_all(&[self.chroma_cr_data[y][x]])?;
+    for y in 0..self.height_c {
+      for x in 0..self.width_c {
+        file.write_all(&[self.chroma_cr_data[x][y]])?;
       }
     }
 
     Ok(())
   }
 
+  pub fn decode(&mut self, slice: &mut Slice) {
+    let mut is_chroma_cb;
+    if slice.mb().mb_type.mode().is_intra_4x4() {
+      self.transform_for_4x4_luma_residual_blocks(slice);
+      is_chroma_cb = true;
+      self.transform_chroma_samples(slice, is_chroma_cb);
+      is_chroma_cb = false;
+      self.transform_chroma_samples(slice, is_chroma_cb);
+    } else if slice.mb().mb_type.mode().is_intra_8x8() {
+      self.transform_for_8x8_luma_residual_blocks(slice);
+      is_chroma_cb = true;
+      self.transform_chroma_samples(slice, is_chroma_cb);
+      is_chroma_cb = false;
+      self.transform_chroma_samples(slice, is_chroma_cb);
+    } else if slice.mb().mb_type.mode().is_intra_16x16() {
+      self.transform_for_16x16_luma_residual_blocks(slice, true, false);
+      is_chroma_cb = true;
+      self.transform_chroma_samples(slice, is_chroma_cb);
+      is_chroma_cb = false;
+      self.transform_chroma_samples(slice, is_chroma_cb);
+    } else if slice.mb().mb_type.is_pcm() {
+      todo!("Sample construction process for I PCM macroblocks");
+    } else {
+      todo!("Inter prediction");
+    }
+  }
+
   /// 8.5.14 Picture construction process prior to deblocking filter process
   pub fn picture_construction(
     &mut self,
     slice: &Slice,
-    u: &[i16],
+    u: &[isize],
     blk_type: BlockType,
     blk_idx: usize,
     is_luma: bool,
@@ -135,7 +195,7 @@ impl BlockType {
 }
 
 /// Zig-zag
-fn inverse_scanner4x4(value: &[i16; 16]) -> [[i16; 4]; 4] {
+fn inverse_scanner4x4(value: &[isize; 16]) -> [[isize; 4]; 4] {
   let mut c = [[0; 4]; 4];
 
   c[0][0] = value[0];
@@ -162,7 +222,7 @@ fn inverse_scanner4x4(value: &[i16; 16]) -> [[i16; 4]; 4] {
 }
 
 /// 8x8 zig-zag scan
-fn inverse_scanner_8x8(value: &[i16; 64]) -> [[i16; 8]; 8] {
+fn inverse_scanner_8x8(value: &[isize; 64]) -> [[isize; 8]; 8] {
   let mut c = [[0; 8]; 8];
 
   c[0][0] = value[0];
