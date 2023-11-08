@@ -84,6 +84,8 @@ pub struct Slice<'a> {
 
   pub qpy_prev: isize,
 
+  pub qsy: isize,
+
   /// Index of the last macroblock in the slice.
   /// It helps identify the endpoint of macroblock processing within the slice.
   pub last_mb_in_slice: isize,
@@ -145,6 +147,9 @@ impl<'a> Slice<'a> {
       mbaff_frame_flag: sps.mb_adaptive_frame_field_flag && !header.field_pic_flag,
       qp_bd_offset_y: 6 * sps.bit_depth_luma_minus8 as isize,
       qpy_prev: 0,
+      qsy: 26
+        + pps.pic_init_qs_minus26 as isize
+        + header.slice_qs_delta.unwrap_or_default() as isize,
       last_mb_in_slice: 0,
       sgmap: SliceGroup::init_sgmap(
         header.slice_group_change_cycle.unwrap_or_default(),
@@ -652,11 +657,18 @@ impl<'a> std::fmt::Debug for Slice<'a> {
       .field("pic_height_in_mbs", &self.pic_height_in_mbs)
       .field("pic_size_in_mbs", &self.pic_size_in_mbs)
       .field("sliceqpy", &self.sliceqpy)
+      .field("qpy_prev", &self.qpy_prev)
+      .field("qsy", &self.qsy)
+      .field("qp_bd_offset_y", &self.qp_bd_offset_y)
       .field("mbaff_frame_flag", &self.mbaff_frame_flag)
       .field("last_mb_in_slice", &self.last_mb_in_slice)
       .field("prev_mb_addr", &self.prev_mb_addr)
       .field("curr_mb_addr", &self.curr_mb_addr)
       .field("sgmap", &self.sgmap)
+      .field("pic_width_in_samples_l", &self.pic_width_in_samples_l)
+      .field("pic_height_in_samples_l", &self.pic_height_in_samples_l)
+      .field("pic_width_in_samples_c", &self.pic_width_in_samples_c)
+      .field("pic_height_in_samples_c", &self.pic_height_in_samples_c)
       .field("macroblocks length", &self.macroblocks.len())
       .finish()
   }

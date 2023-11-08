@@ -132,7 +132,7 @@ impl Frame {
     let q_p = if is_luma && !s_mb_flag {
       slice.mb().qp1y
     } else if is_luma && s_mb_flag {
-      slice.mb().qsy
+      slice.qsy
     } else if !is_luma && !s_mb_flag {
       slice.mb().qp1c
     } else {
@@ -227,7 +227,7 @@ pub fn chroma_quantization_parameters(slice: &mut Slice, is_chroma_cb: bool) {
   slice.mb_mut().qp1c = slice.mb().qpc + slice.qp_bd_offset_c;
 
   if slice.slice_type.is_switching() {
-    slice.mb_mut().qsy = slice.mb().qpy;
+    slice.qsy = slice.mb().qpy;
     slice.mb_mut().qsc = slice.mb().qpc;
   }
 }

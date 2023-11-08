@@ -7,7 +7,7 @@ use super::{
   slice::{
     consts::*,
     header::SliceType,
-    macroblock::{BlockSize, Macroblock, MacroblockError, MbPosition},
+    macroblock::{BlockSize, Macroblock, MacroblockError, MbPosition, MbType},
     Slice,
   },
 };
@@ -182,16 +182,29 @@ impl CabacContext {
       self.residual(slice, 0, 15)?;
     }
 
+    slice.qpy_prev = slice.sliceqpy;
     slice.mb_mut().qpy =
       ((slice.qpy_prev + slice.mb().mb_qp_delta + 52 + 2 * slice.qp_bd_offset_y)
         % (52 + slice.qp_bd_offset_y))
         - slice.qp_bd_offset_y;
-    slice.qpy_prev = slice.mb().qpy;
     slice.mb_mut().qp1y = slice.mb().qpy + slice.qp_bd_offset_y;
     slice.mb_mut().transform_bypass_mode_flag =
       slice.sps.qpprime_y_zero_transform_bypass_flag && slice.mb().qpy == 0;
+    let coded_block_pattern = slice.mb().coded_block_pattern;
+    if let MbType::Intra {
+      code,
+      coded_block_pattern_chroma,
+      coded_block_pattern_luma,
+      ..
+    } = &mut slice.mb_mut().mb_type
+    {
+      if *code == MB_TYPE_I_NXN {
+        *coded_block_pattern_luma = coded_block_pattern % 16;
+        *coded_block_pattern_chroma = coded_block_pattern / 16;
+      }
+    }
 
-    // frame.decode(slice);
+    frame.decode(slice);
     Ok(())
   }
 

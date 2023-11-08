@@ -38,17 +38,13 @@ pub struct Macroblock {
 
   pub qpy: isize,
 
-  pub qpc: isize,
+  pub qp1y: isize,
 
   pub qp1c: isize,
 
-  pub qp1y: isize,
-
-  pub qsy: isize,
+  pub qpc: isize,
 
   pub qsc: isize,
-
-  pub qpprime_y: isize,
 
   pub transform_bypass_mode_flag: bool,
 
@@ -148,12 +144,10 @@ impl Macroblock {
       transform_size_8x8_flag: 0,
       mb_qp_delta: 0,
       qpy: 0,
-      qpc: 0,
-      qp1c: 0,
       qp1y: 0,
-      qsy: 0,
+      qp1c: 0,
+      qpc: 0,
       qsc: 0,
-      qpprime_y: 0,
       intra4x4_pred_mode: [0; 16],
       intra8x8_pred_mode: [0; 4],
       luma_pred_samples: [[[0; 4]; 4]; 16],
@@ -266,7 +260,49 @@ impl std::fmt::Debug for Macroblock {
       .field("intra_chroma_pred_mode", &self.intra_chroma_pred_mode)
       .field("mb_qp_delta", &self.mb_qp_delta)
       .field("qpy", &self.qpy)
-      .field("qpy_prev", &self.qpprime_y);
+      .field("qp1y", &self.qp1y)
+      .field("qp1c", &self.qp1c)
+      .field("qpc", &self.qpc)
+      .field("qsc", &self.qsc)
+      .field(
+        "transform_bypass_mode_flag",
+        &self.transform_bypass_mode_flag,
+      )
+      .field(
+        "intra4x4_pred_mode",
+        &DisplayArray(&self.intra4x4_pred_mode),
+      )
+      .field(
+        "intra8x8_pred_mode",
+        &DisplayArray(&self.intra8x8_pred_mode),
+      );
+
+    for i in 0..16 {
+      for j in 0..4 {
+        f.field(
+          &format!("luma_pred_samples[{i}][{j}]"),
+          &DisplayArray(&self.luma_pred_samples[i][j]),
+        );
+      }
+      f.field(
+        &format!("luma16x16_pred_samples[{i}]"),
+        &DisplayArray(&self.luma16x16_pred_samples[i]),
+      );
+    }
+    for i in 0..4 {
+      for j in 0..8 {
+        f.field(
+          &format!("luma8x8_pred_samples[{i}][{j}]"),
+          &DisplayArray(&self.luma8x8_pred_samples[i][j]),
+        );
+      }
+    }
+    for i in 0..8 {
+      f.field(
+        &format!("chroma_pred_samples[{i}]"),
+        &DisplayArray(&self.chroma_pred_samples[i]),
+      );
+    }
 
     const BLOCK_NAME: [&str; 3] = ["Luma", "Cb", "Cr"];
     if self.mb_type.is_intra_16x16() {
@@ -490,7 +526,7 @@ impl Deref for MbType {
 impl MbType {
   pub fn new(mb_type: u8, transform_size_8x8_flag: bool) -> Self {
     if mb_type < MB_TYPE_I_PCM {
-      let (part_pred_mode, intra_pred_mode, coded_block_pattern_luma, coded_block_pattern_chroma) =
+      let (part_pred_mode, intra_pred_mode, coded_block_pattern_chroma, coded_block_pattern_luma) =
         mb_type_intra(mb_type, transform_size_8x8_flag);
       MbType::Intra {
         code: mb_type,

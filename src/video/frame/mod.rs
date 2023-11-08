@@ -48,10 +48,22 @@ impl Frame {
   pub fn write_to_yuv_file(&self, file_path: &str) -> std::io::Result<()> {
     let mut file = File::create(file_path)?;
     println!(
-      "Writing YUV {} {} {}",
-      self.luma_data.len(),
-      self.chroma_cb_data.len(),
-      self.chroma_cr_data.len()
+      "Writing YUV {} ({} zeros) {} ({} zeros) {} ({} zeros)",
+      self.luma_data.len() * self.luma_data[0].len(),
+      (*self.luma_data)
+        .iter()
+        .map(|row| row.iter().filter(|&&x| x == 0).count())
+        .sum::<usize>(),
+      self.chroma_cb_data.len() * self.chroma_cb_data[0].len(),
+      (*self.chroma_cb_data)
+        .iter()
+        .map(|row| row.iter().filter(|&&x| x == 0).count())
+        .sum::<usize>(),
+      self.chroma_cr_data.len() * self.chroma_cr_data[0].len(),
+      (*self.chroma_cr_data)
+        .iter()
+        .map(|row| row.iter().filter(|&&x| x == 0).count())
+        .sum::<usize>(),
     );
 
     for y in 0..self.height_l {
