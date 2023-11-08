@@ -42,14 +42,14 @@ impl Frame {
 
       let r = self.scaling_and_transform4x4(slice, &c, is_luma, false);
 
-      let x_o = inverse_raster_scan(_4x4BlkIdx / 4, 8, 8, 16, 0)
-        + inverse_raster_scan(_4x4BlkIdx % 4, 4, 4, 8, 0);
-      let y_o = inverse_raster_scan(_4x4BlkIdx / 4, 8, 8, 16, 1)
-        + inverse_raster_scan(_4x4BlkIdx % 4, 4, 4, 8, 1);
+      let x_o = inverse_raster_scan(_4x4BlkIdx as isize / 4, 8, 8, 16, 0)
+        + inverse_raster_scan(_4x4BlkIdx as isize % 4, 4, 4, 8, 0);
+      let y_o = inverse_raster_scan(_4x4BlkIdx as isize / 4, 8, 8, 16, 1)
+        + inverse_raster_scan(_4x4BlkIdx as isize % 4, 4, 4, 8, 1);
 
       for i in 0..4 {
         for j in 0..4 {
-          r_mb[x_o + j][y_o + i] = r[i][j];
+          r_mb[(x_o + j as isize) as usize][(y_o + i as isize) as usize] = r[i][j];
         }
       }
     }
@@ -116,10 +116,20 @@ impl Frame {
       {
         *p.p(x, y) = -1;
       } else {
-        let x_m =
-          inverse_raster_scan(mbaddr_n, 16, 16, slice.pic_width_in_samples_l as usize, 0) as isize;
-        let y_m =
-          inverse_raster_scan(mbaddr_n, 16, 16, slice.pic_width_in_samples_l as usize, 1) as isize;
+        let x_m = inverse_raster_scan(
+          mbaddr_n as isize,
+          16,
+          16,
+          slice.pic_width_in_samples_l as isize,
+          0,
+        ) as isize;
+        let y_m = inverse_raster_scan(
+          mbaddr_n as isize,
+          16,
+          16,
+          slice.pic_width_in_samples_l as isize,
+          1,
+        ) as isize;
 
         *p.p(x, y) = self.luma_data[(x_m + xW) as usize][(y_m + yW) as usize] as isize;
       }

@@ -125,17 +125,17 @@ impl Frame {
     is_chroma_cb: bool,
   ) {
     let x_p = inverse_raster_scan(
-      slice.curr_mb_addr as usize,
+      slice.curr_mb_addr,
       16,
       16,
-      slice.pic_width_in_samples_l as usize,
+      slice.pic_width_in_samples_l as isize,
       0,
     );
     let y_p = inverse_raster_scan(
-      slice.curr_mb_addr as usize,
+      slice.curr_mb_addr,
       16,
       16,
-      slice.pic_width_in_samples_l as usize,
+      slice.pic_width_in_samples_l as isize,
       1,
     );
 
@@ -148,20 +148,23 @@ impl Frame {
         y_o = 0;
         n_e = 16;
       } else if blk_type.is_4x4() {
-        x_o = inverse_raster_scan(blk_idx / 4, 8, 8, 16, 0)
-          + inverse_raster_scan(blk_idx % 4, 4, 4, 8, 0);
-        y_o = inverse_raster_scan(blk_idx / 4, 8, 8, 16, 1)
-          + inverse_raster_scan(blk_idx % 4, 4, 4, 8, 1);
+        x_o = inverse_raster_scan(blk_idx as isize / 4, 8, 8, 16, 0)
+          + inverse_raster_scan(blk_idx as isize % 4, 4, 4, 8, 0);
+        y_o = inverse_raster_scan(blk_idx as isize / 4, 8, 8, 16, 1)
+          + inverse_raster_scan(blk_idx as isize % 4, 4, 4, 8, 1);
         n_e = 4;
       } else {
-        x_o = inverse_raster_scan(blk_idx, 8, 8, 16, 0);
-        y_o = inverse_raster_scan(blk_idx, 8, 8, 16, 1);
+        x_o = inverse_raster_scan(blk_idx as isize, 8, 8, 16, 0);
+        y_o = inverse_raster_scan(blk_idx as isize, 8, 8, 16, 1);
         n_e = 8;
       }
 
       for i in 0..n_e {
         for j in 0..n_e {
-          self.luma_data[x_p + x_o + j][y_p + y_o + i] = u[i * n_e + j] as u8;
+          let x = (x_p + x_o + j) as usize;
+          let y = (y_p + y_o + i) as usize;
+          let i = (i * n_e + j) as usize;
+          self.luma_data[x][y] = u[i] as u8;
         }
       }
     } else {
@@ -177,8 +180,9 @@ impl Frame {
 
         for i in 0..mb_width_c {
           for j in 0..mb_height_c {
-            chroma_data[x_p / slice.sub_width_c as usize + x_o + j]
-              [y_p / slice.sub_height_c as usize + y_o + i] = u[i * mb_width_c + j] as u8;
+            chroma_data[(x_p / slice.sub_width_c as isize + x_o + j as isize) as usize]
+              [(y_p / slice.sub_height_c as isize + y_o + i as isize) as usize] =
+              u[i * mb_width_c + j] as u8;
           }
         }
       }

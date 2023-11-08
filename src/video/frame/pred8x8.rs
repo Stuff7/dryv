@@ -162,8 +162,8 @@ impl Frame {
     let mut p = [-1; 9 * 17];
     let mut p1 = [-1; 9 * 17];
 
-    let x_o = inverse_raster_scan(luma8x8_blk_idx, 8, 8, 16, 0);
-    let y_o = inverse_raster_scan(luma8x8_blk_idx, 8, 8, 16, 1);
+    let x_o = inverse_raster_scan(luma8x8_blk_idx as isize, 8, 8, 16, 0);
+    let y_o = inverse_raster_scan(luma8x8_blk_idx as isize, 8, 8, 16, 1);
 
     for i in 0..25 {
       let max_w;
@@ -194,11 +194,22 @@ impl Frame {
       {
         *p.p(x, y) = -1;
       } else {
-        let x_m = inverse_raster_scan(mbaddr_n, 16, 16, slice.pic_width_in_samples_l as usize, 0);
-        let y_m = inverse_raster_scan(mbaddr_n, 16, 16, slice.pic_width_in_samples_l as usize, 1);
+        let x_m = inverse_raster_scan(
+          mbaddr_n as isize,
+          16,
+          16,
+          slice.pic_width_in_samples_l as isize,
+          0,
+        );
+        let y_m = inverse_raster_scan(
+          mbaddr_n as isize,
+          16,
+          16,
+          slice.pic_width_in_samples_l as isize,
+          1,
+        );
 
-        *p.p(x, y) =
-          self.luma_data[(x_m as isize + x_w) as usize][(y_m as isize + y_w) as usize] as isize;
+        *p.p(x, y) = self.luma_data[(x_m + x_w) as usize][(y_m + y_w) as usize] as isize;
       }
     }
 

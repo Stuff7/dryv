@@ -12,10 +12,10 @@ impl Frame {
     const REFERENCE_COORDINATE_X: [isize; 13] = [-1, -1, -1, -1, -1, 0, 1, 2, 3, 4, 5, 6, 7];
     const REFERENCE_COORDINATE_Y: [isize; 13] = [-1, 0, 1, 2, 3, -1, -1, -1, -1, -1, -1, -1, -1];
 
-    let x_o = inverse_raster_scan(luma4x4_blk_idx / 4, 8, 8, 16, 0) as isize
-      + inverse_raster_scan(luma4x4_blk_idx % 4, 4, 4, 8, 0) as isize;
-    let y_o = inverse_raster_scan(luma4x4_blk_idx / 4, 8, 8, 16, 1) as isize
-      + inverse_raster_scan(luma4x4_blk_idx % 4, 4, 4, 8, 1) as isize;
+    let x_o = inverse_raster_scan(luma4x4_blk_idx as isize / 4, 8, 8, 16, 0)
+      + inverse_raster_scan(luma4x4_blk_idx as isize % 4, 4, 4, 8, 0);
+    let y_o = inverse_raster_scan(luma4x4_blk_idx as isize / 4, 8, 8, 16, 1)
+      + inverse_raster_scan(luma4x4_blk_idx as isize % 4, 4, 4, 8, 1);
 
     let mut samples = [-1isize; 45];
 
@@ -45,10 +45,20 @@ impl Frame {
         *samples.p(x, y) = -1;
       } else {
         let mbaddr_n = mb_n.index(&slice.macroblocks) as usize;
-        let x_m =
-          inverse_raster_scan(mbaddr_n, 16, 16, slice.pic_width_in_samples_l as usize, 0) as isize;
-        let y_m =
-          inverse_raster_scan(mbaddr_n, 16, 16, slice.pic_width_in_samples_l as usize, 1) as isize;
+        let x_m = inverse_raster_scan(
+          mbaddr_n as isize,
+          16,
+          16,
+          slice.pic_width_in_samples_l as isize,
+          0,
+        );
+        let y_m = inverse_raster_scan(
+          mbaddr_n as isize,
+          16,
+          16,
+          slice.pic_width_in_samples_l as isize,
+          1,
+        );
 
         *samples.p(x, y) = self.luma_data[(x_m + x_w) as usize][(y_m + y_w) as usize] as isize;
       }
@@ -349,10 +359,10 @@ impl Frame {
   /// 8.3.1.1 Derivation process for intra4x4_pred_mode
   pub fn intra4x4_pred_mode(&mut self, slice: &mut Slice, luma4x4_block_idx: usize, is_luma: bool) {
     const INTRA4X4_DC: isize = 2;
-    let x = inverse_raster_scan(luma4x4_block_idx / 4, 8, 8, 16, 0) as isize
-      + inverse_raster_scan(luma4x4_block_idx % 4, 4, 4, 8, 0) as isize;
-    let y = inverse_raster_scan(luma4x4_block_idx / 4, 8, 8, 16, 1) as isize
-      + inverse_raster_scan(luma4x4_block_idx % 4, 4, 4, 8, 1) as isize;
+    let x = inverse_raster_scan(luma4x4_block_idx as isize / 4, 8, 8, 16, 0)
+      + inverse_raster_scan(luma4x4_block_idx as isize % 4, 4, 4, 8, 0);
+    let y = inverse_raster_scan(luma4x4_block_idx as isize / 4, 8, 8, 16, 1)
+      + inverse_raster_scan(luma4x4_block_idx as isize % 4, 4, 4, 8, 1);
 
     let (max_w, max_h) = if is_luma {
       (16, 16)

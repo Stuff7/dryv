@@ -98,7 +98,8 @@ impl Frame {
         let mut u = [0; 16];
         for i in 0..4 {
           for j in 0..4 {
-            u[i * 4 + j] = clamp(
+            let idx = i * 4 + j;
+            u[idx] = clamp(
               slice.mb().luma_pred_samples[luma4x4_blk_idx][j][i] + r[i][j],
               0,
               (1 << slice.bit_depth_y) - 1,
