@@ -186,9 +186,7 @@ impl Frame {
       let mb_n = pos_n
         .map(|pos| slice.mb_nb_p(pos, 0))
         .unwrap_or_else(|| Macroblock::unavailable(0));
-      let (x_w, y_w) = pos_n
-        .map(|pos| pos.coords(max_w, max_h))
-        .unwrap_or((-1, -1));
+      let (x_w, y_w) = MbPosition::coords(x_n, y_n, max_w, max_h);
       let mbaddr_n = mb_n.index(&slice.macroblocks) as usize;
 
       if mb_n.mb_type.is_unavailable()
@@ -713,23 +711,13 @@ impl Frame {
     let mb_a = pos_a
       .map(|pos| slice.mb_nb_p(pos, 0))
       .unwrap_or_else(|| Macroblock::unavailable(0));
-    let luma8x8_blk_idx_a = mb_a
-      .mb_type
-      .is_available()
-      .then(|| pos_a.map(|pos| pos.blk_idx8x8(max_w, max_h)))
-      .flatten()
-      .unwrap_or(-1);
+    let luma8x8_blk_idx_a = MbPosition::blk_idx8x8(x as isize - 1, y as isize, max_w, max_h);
 
     let pos_b = MbPosition::from_coords(x as isize, y as isize + (-1), max_w, max_h);
     let mb_b = pos_b
       .map(|pos| slice.mb_nb_p(pos, 0))
       .unwrap_or_else(|| Macroblock::unavailable(0));
-    let luma8x8_blk_idx_b = mb_b
-      .mb_type
-      .is_available()
-      .then(|| pos_b.map(|pos| pos.blk_idx8x8(max_w, max_h)))
-      .flatten()
-      .unwrap_or(-1);
+    let luma8x8_blk_idx_b = MbPosition::blk_idx8x8(x as isize, y as isize - 1, max_w, max_h);
 
     let dc_pred_mode_predicted_flag;
 

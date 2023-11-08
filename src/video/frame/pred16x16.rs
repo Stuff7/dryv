@@ -107,9 +107,7 @@ impl Frame {
       let mb_n = pos_n
         .map(|pos| slice.mb_nb_p(pos, 0))
         .unwrap_or_else(|| Macroblock::unavailable(0));
-      let (xW, yW) = pos_n
-        .map(|pos| pos.coords(max_w, max_h))
-        .unwrap_or((-1, -1));
+      let (xW, yW) = MbPosition::coords(x, y, max_w, max_h);
       let mbaddr_n = mb_n.index(&slice.macroblocks) as usize;
 
       if mb_n.mb_type.is_unavailable()

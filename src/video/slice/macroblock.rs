@@ -420,28 +420,17 @@ impl MbPosition {
     }
   }
 
-  pub fn mb_idx(&self) -> (isize, isize) {
-    match self {
-      Self::This => (0, 0),
-      Self::A => (-1, 0),
-      Self::B => (0, -1),
-      Self::C => (1, 1),
-      Self::D => (-1, -1),
-    }
-  }
-
-  pub fn coords(&self, max_w: isize, max_h: isize) -> (isize, isize) {
-    let (x, y) = self.mb_idx();
+  pub fn coords(x: isize, y: isize, max_w: isize, max_h: isize) -> (isize, isize) {
     ((x + max_w) % max_w, (y + max_h) % max_h)
   }
 
-  pub fn blk_idx4x4(&self, max_w: isize, max_h: isize) -> isize {
-    let (x, y) = self.coords(max_w, max_h);
+  pub fn blk_idx4x4(x: isize, y: isize, max_w: isize, max_h: isize) -> isize {
+    let (x, y) = Self::coords(x, y, max_w, max_h);
     8 * (y / 8) + 4 * (x / 8) + 2 * ((y % 8) / 4) + ((x % 8) / 4)
   }
 
-  pub fn blk_idx8x8(&self, max_w: isize, max_h: isize) -> isize {
-    let (x, y) = self.coords(max_w, max_h);
+  pub fn blk_idx8x8(x: isize, y: isize, max_w: isize, max_h: isize) -> isize {
+    let (x, y) = Self::coords(x, y, max_w, max_h);
     2 * (y / 8) + (x / 8)
   }
 }

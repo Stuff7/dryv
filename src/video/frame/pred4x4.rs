@@ -22,8 +22,8 @@ impl Frame {
     for i in 0..13 {
       let x = REFERENCE_COORDINATE_X[i];
       let y = REFERENCE_COORDINATE_Y[i];
-      let x_n = x_o as isize + x;
-      let y_n = y_o as isize + y;
+      let x_n = x_o + x;
+      let y_n = y_o + y;
 
       let (max_w, max_h) = if is_luma {
         (16, 16)
@@ -35,9 +35,7 @@ impl Frame {
       let mb_n = pos_a
         .map(|pos| slice.mb_nb_p(pos, 0))
         .unwrap_or_else(|| Macroblock::unavailable(0));
-      let (x_w, y_w) = pos_a
-        .map(|pos| pos.coords(max_w, max_h))
-        .unwrap_or((-1, -1));
+      let (x_w, y_w) = MbPosition::coords(x_n, y_n, max_w, max_h);
 
       if mb_n.mb_type.is_unavailable()
         || (mb_n.mb_type.mode().is_inter_frame() && slice.pps.constrained_intra_pred_flag)
@@ -351,10 +349,10 @@ impl Frame {
   /// 8.3.1.1 Derivation process for intra4x4_pred_mode
   pub fn intra4x4_pred_mode(&mut self, slice: &mut Slice, luma4x4_block_idx: usize, is_luma: bool) {
     const INTRA4X4_DC: isize = 2;
-    let x = inverse_raster_scan(luma4x4_block_idx / 4, 8, 8, 16, 0)
-      + inverse_raster_scan(luma4x4_block_idx % 4, 4, 4, 8, 0);
-    let y = inverse_raster_scan(luma4x4_block_idx / 4, 8, 8, 16, 1)
-      + inverse_raster_scan(luma4x4_block_idx % 4, 4, 4, 8, 1);
+    let x = inverse_raster_scan(luma4x4_block_idx / 4, 8, 8, 16, 0) as isize
+      + inverse_raster_scan(luma4x4_block_idx % 4, 4, 4, 8, 0) as isize;
+    let y = inverse_raster_scan(luma4x4_block_idx / 4, 8, 8, 16, 1) as isize
+      + inverse_raster_scan(luma4x4_block_idx % 4, 4, 4, 8, 1) as isize;
 
     let (max_w, max_h) = if is_luma {
       (16, 16)
@@ -363,26 +361,18 @@ impl Frame {
     };
 
     let mb_a = slice.mb_nb_p(MbPosition::A, 0);
-    let luma4x4_block_idx_a = mb_a
-      .mb_type
-      .is_available()
-      .then(|| MbPosition::A.blk_idx4x4(max_w, max_h))
-      .unwrap_or(-1);
+    let luma4x4_block_idx_a = MbPosition::blk_idx4x4(x - 1, y, max_w, max_h);
 
     let mb_b = slice.mb_nb_p(MbPosition::B, 0);
-    let luma4x4_block_idx_b = mb_b
-      .mb_type
-      .is_available()
-      .then(|| MbPosition::B.blk_idx4x4(max_w, max_h))
-      .unwrap_or(-1);
+    let luma4x4_block_idx_b = MbPosition::blk_idx4x4(x, y - 1, max_w, max_h);
 
     let dc_pred_mode_predicted_flag = mb_a.mb_type.is_unavailable()
       || mb_b.mb_type.is_unavailable()
       || (mb_a.mb_type.mode().is_inter_frame() && slice.pps.constrained_intra_pred_flag)
       || (mb_b.mb_type.mode().is_inter_frame() && slice.pps.constrained_intra_pred_flag);
 
-    let mut intra_mxm_pred_mode_a = -1;
-    let mut intra_mxm_pred_mode_b = -1;
+    let intra_mxm_pred_mode_a;
+    let intra_mxm_pred_mode_b;
 
     if dc_pred_mode_predicted_flag
       || (!mb_a.mb_type.mode().is_intra_4x4() && !mb_a.mb_type.mode().is_intra_8x8())
