@@ -116,7 +116,7 @@ pub fn clamp<T: PartialOrd>(value: T, min: T, max: T) -> T {
   }
 }
 
-pub fn inverse_raster_scan(a: usize, b: usize, c: usize, d: usize, e: usize) -> usize {
+pub fn inverse_raster_scan(a: isize, b: isize, c: isize, d: isize, e: isize) -> isize {
   if e == 0 {
     (a % (d / b)) * b
   } else {

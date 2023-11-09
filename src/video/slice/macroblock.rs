@@ -130,6 +130,26 @@ impl Macroblock {
     self.mb_type = MbType::new(mb_type, self.transform_size_8x8_flag != 0);
   }
 
+  pub fn blk_idx4x4(&self, x: isize, y: isize, max_w: isize, max_h: isize) -> isize {
+    if self.mb_type.is_unavailable() {
+      return -1;
+    }
+    MbPosition::blk_idx4x4(x, y, max_w, max_h)
+  }
+
+  pub fn blk_idx8x8(&self, x: isize, y: isize, max_w: isize, max_h: isize) -> isize {
+    if self.mb_type.is_unavailable() {
+      return -1;
+    }
+    MbPosition::blk_idx8x8(x, y, max_w, max_h)
+  }
+
+  pub fn update_intra_pred_mode(&mut self) {
+    if let MbType::Intra { code, .. } = self.mb_type {
+      self.mb_type = MbType::new(code, self.transform_size_8x8_flag != 0);
+    }
+  }
+
   pub const fn empty() -> Self {
     Self {
       mb_field_decoding_flag: false,

@@ -182,6 +182,7 @@ impl CabacContext {
       self.residual(slice, 0, 15)?;
     }
 
+    slice.mb_mut().update_intra_pred_mode();
     slice.qpy_prev = slice.sliceqpy;
     slice.mb_mut().qpy =
       ((slice.qpy_prev + slice.mb().mb_qp_delta + 52 + 2 * slice.qp_bd_offset_y)
