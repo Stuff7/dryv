@@ -297,25 +297,36 @@ impl std::fmt::Debug for Macroblock {
         &DisplayArray(&self.intra8x8_pred_mode),
       );
 
-    for i in 0..16 {
-      for j in 0..4 {
-        f.field(
-          &format!("luma_pred_samples[{i}][{j}]"),
-          &DisplayArray(&self.luma_pred_samples[i][j]),
-        );
+    match self.mb_type.mode() {
+      PartPredMode::Intra4x4 => {
+        for i in 0..16 {
+          for j in 0..4 {
+            f.field(
+              &format!("luma_pred_samples[{i}][{j}]"),
+              &DisplayArray(&self.luma_pred_samples[i][j]),
+            );
+          }
+        }
       }
-      f.field(
-        &format!("luma16x16_pred_samples[{i}]"),
-        &DisplayArray(&self.luma16x16_pred_samples[i]),
-      );
-    }
-    for i in 0..4 {
-      for j in 0..8 {
-        f.field(
-          &format!("luma8x8_pred_samples[{i}][{j}]"),
-          &DisplayArray(&self.luma8x8_pred_samples[i][j]),
-        );
+      PartPredMode::Intra8x8 => {
+        for i in 0..4 {
+          for j in 0..8 {
+            f.field(
+              &format!("luma8x8_pred_samples[{i}][{j}]"),
+              &DisplayArray(&self.luma8x8_pred_samples[i][j]),
+            );
+          }
+        }
       }
+      PartPredMode::Intra16x16 => {
+        for i in 0..16 {
+          f.field(
+            &format!("luma16x16_pred_samples[{i}]"),
+            &DisplayArray(&self.luma16x16_pred_samples[i]),
+          );
+        }
+      }
+      _ => (),
     }
     for i in 0..8 {
       f.field(
