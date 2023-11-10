@@ -17,6 +17,8 @@ pub enum SampleError {
   Atom(#[from] AtomError),
   #[error(transparent)]
   Bit(#[from] TryFromIntError),
+  #[error("NAL forbidden_zero_bit is not 0")]
+  NALForbiddenZeroBit,
 }
 
 pub type SampleResult<T = ()> = Result<T, SampleError>;

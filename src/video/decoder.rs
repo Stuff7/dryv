@@ -1,8 +1,11 @@
 use super::atom::*;
+use super::cabac::CabacError;
 use super::sample::*;
+use super::slice::dpb::DecodedPictureBuffer;
 use super::slice::*;
 use crate::byte::{BitStream, Str};
 use crate::log;
+use crate::video::frame::Frame;
 use std::fs::File;
 use std::io::{Read, Seek};
 use std::path::Path;
@@ -20,6 +23,8 @@ pub enum DecoderError {
   Sample(#[from] SampleError),
   #[error("Missing decoder config")]
   MissingConfig,
+  #[error(transparent)]
+  Cabac(#[from] CabacError),
 }
 
 pub type DecoderResult<T = ()> = Result<T, DecoderError>;
@@ -85,15 +90,17 @@ impl Decoder {
       .stsd
       .decode(self)?
       .sample_description_table
-      .get(0)
-      .map(|d| &d.data) else {
+      .get_mut(0)
+      .map(|d| &mut d.data) else {
         return Err(DecoderError::MissingConfig)
       };
     let nal_length_size = avc1.avcc.nal_length_size_minus_one as usize + 1;
+    let mut dpb = DecodedPictureBuffer::new();
 
     for (i, sample) in samples {
       log!(File@"{:-^100}", format!("SAMPLE #{} ({} bytes)", i + 1, sample.len()));
       for nal in sample.units(nal_length_size) {
+        let nal = nal?;
         let msg = format!(
           "[{:?} idc={}] ({} bytes) => ",
           nal.unit_type, nal.idc, nal.size
@@ -112,12 +119,28 @@ impl Decoder {
               log!(File@"{msg}{sei_msg:?}");
             }
           }
-          NALUnitType::IDRPicture => {
-            log!(File@"{msg}{:#?}", Slice::new(nal.data, &nal, &avc1.avcc.sps, &avc1.avcc.pps));
+          NALUnitType::NonIDRPicture | NALUnitType::IDRPicture => {
+            let mut slice = Slice::new(nal.data, &nal, &mut avc1.avcc.sps, &mut avc1.avcc.pps);
+            let mut frame = Frame::new(&slice);
+            slice.data(&mut dpb, &mut frame)?;
+            log!(File@"{msg}{:#?}", slice);
             use std::io::Write;
-            let name = format!("temp/idr-{i}.h264");
-            let mut img = std::fs::File::create(name).expect("IDR CREATION");
-            img.write_all(nal.data).expect("IDR SAVING");
+            let name = format!("temp/slice/{i}");
+            let mut f = std::fs::File::create(name).expect("SLICE CREATION");
+            f.write_all(
+              format!(
+                "{:#?}\n{:#?}\n{:#?}\n{:#?}",
+                dpb,
+                nal,
+                slice,
+                &slice.macroblocks[..10]
+              )
+              .as_bytes(),
+            )
+            .expect("SLICE SAVING");
+            if i == 0 {
+              frame.write_to_yuv_file("temp/yuv_frame")?;
+            }
           }
           _ => log!(File@"{msg} [UNUSED]"),
         }

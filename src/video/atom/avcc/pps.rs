@@ -1,6 +1,5 @@
+use super::{ScalingLists, SequenceParameterSet};
 use crate::byte::BitStream;
-
-use super::ScalingLists;
 
 #[derive(Debug)]
 pub struct PictureParameterSet {
@@ -12,6 +11,7 @@ pub struct PictureParameterSet {
   pub seq_parameter_set_id: u16,
   pub entropy_coding_mode_flag: bool,
   pub bottom_field_pic_order_in_frame_present_flag: bool,
+  pub num_slice_groups_minus1: u16,
   pub slice_group: Option<SliceGroup>,
   pub num_ref_idx_l0_default_active_minus1: u16,
   pub num_ref_idx_l1_default_active_minus1: u16,
@@ -28,6 +28,7 @@ pub struct PictureParameterSet {
 
 impl PictureParameterSet {
   pub fn decode(data: &mut BitStream, chroma_format_idc: u16) -> Self {
+    let num_slice_groups_minus1;
     Self {
       length: data.next_into(),
       forbidden_zero_bit: data.bit(),
@@ -37,7 +38,11 @@ impl PictureParameterSet {
       seq_parameter_set_id: data.exponential_golomb(),
       entropy_coding_mode_flag: data.bit_flag(),
       bottom_field_pic_order_in_frame_present_flag: data.bit_flag(),
-      slice_group: SliceGroup::new(data.exponential_golomb(), data),
+      num_slice_groups_minus1: {
+        num_slice_groups_minus1 = data.exponential_golomb();
+        num_slice_groups_minus1
+      },
+      slice_group: SliceGroup::new(num_slice_groups_minus1, data),
       num_ref_idx_l0_default_active_minus1: data.exponential_golomb(),
       num_ref_idx_l1_default_active_minus1: data.exponential_golomb(),
       weighted_pred_flag: data.bit_flag(),
@@ -69,10 +74,12 @@ impl ExtraRbspData {
           transform_8x8_mode = data.bit();
           transform_8x8_mode != 0
         },
-        pic_scaling_matrix: ScalingLists::new(
-          data,
-          6 + if chroma_format_idc != 3 { 2 } else { 6 } * transform_8x8_mode,
-        ),
+        pic_scaling_matrix: data.bit_flag().then(|| {
+          ScalingLists::new(
+            data,
+            (6 + if chroma_format_idc != 3 { 2 } else { 6 } * transform_8x8_mode) as usize,
+          )
+        }),
         second_chroma_qp_index_offset: data.signed_exponential_golomb(),
       }
     })
@@ -133,5 +140,162 @@ impl SliceGroup {
       },
       n => Self::Unknown(n),
     })
+  }
+
+  /// 8.2.2 - 8.2.2.7 Decoding process for macroblock to slice group map
+  pub fn init_sgmap(
+    slice_group_change_cycle: u16,
+    pic_width_in_mbs: u16,
+    sps: &SequenceParameterSet,
+    pps: &PictureParameterSet,
+  ) -> Box<[u8]> {
+    let Some(ref slice_group) = pps.slice_group else {
+      return [].into();
+    };
+    let width = sps.pic_width_in_mbs_minus1 as isize + 1;
+    let height = sps.pic_height_in_map_units_minus1 as isize + 1;
+    let num = pps.num_slice_groups_minus1 as isize + 1;
+    let (change_direction_flag, change_rate_minus1) = match slice_group {
+      SliceGroup::Change {
+        change_direction_flag,
+        change_rate_minus1,
+        ..
+      } => (*change_direction_flag, *change_rate_minus1),
+      _ => (false, 0),
+    };
+    let mut musg0 = (slice_group_change_cycle * (change_rate_minus1 + 1)) as isize;
+    if musg0 > width * height {
+      musg0 = width * height;
+    }
+    let sulg = if change_direction_flag {
+      width * height - musg0
+    } else {
+      musg0
+    };
+
+    let mut k = 0isize;
+    let mut j = 0isize;
+    let mut sgmap = (0..width * height)
+      .map(|i| {
+        let x = i % width;
+        let y = i / width;
+        match slice_group {
+          SliceGroup::Interleaved { run_length_minus1 } => {
+            let ret = j;
+            if k == run_length_minus1[j as usize] as isize {
+              k = 0;
+              j += 1;
+              j %= num;
+            } else {
+              k += 1;
+            }
+            ret as u8
+          }
+          SliceGroup::Dispersed => ((x + ((y * num) / 2)) % num) as u8,
+          SliceGroup::ForegroundWithLeftOver {
+            top_left,
+            bottom_right,
+          } => {
+            let mut ret = num - 1;
+            j = num - 2;
+            while j >= 0 {
+              let xtl = (top_left[j as usize] % pic_width_in_mbs) as isize;
+              let ytl = (top_left[j as usize] / pic_width_in_mbs) as isize;
+              let xbr = (bottom_right[j as usize] % pic_width_in_mbs) as isize;
+              let ybr = (bottom_right[j as usize] / pic_width_in_mbs) as isize;
+              if x >= xtl && x <= xbr && y >= ytl && y <= ybr {
+                ret = j;
+              }
+              j -= 1;
+            }
+            ret as u8
+          }
+          SliceGroup::Change {
+            map_type,
+            change_direction_flag,
+            ..
+          } => {
+            let change_direction_flag = *change_direction_flag as isize;
+            (match map_type {
+              3 => 1,
+              4 => change_direction_flag ^ (i >= sulg) as isize,
+              _ => {
+                k = x * height + y;
+                change_direction_flag ^ (k >= sulg) as isize
+              }
+            }) as u8
+          }
+          SliceGroup::Explicit {
+            pic_size_in_map_units_minus1,
+            id,
+          } => {
+            if width * height != *pic_size_in_map_units_minus1 as isize + 1 {
+              panic!("pic_size_in_map_units_minus1 mismatch!");
+            }
+            id[i as usize]
+          }
+          Self::Unknown(n) => panic!("Unknown slice group map {n}"),
+        }
+      })
+      .collect::<Box<_>>();
+    if let SliceGroup::Change {
+      map_type,
+      change_direction_flag,
+      ..
+    } = slice_group
+    {
+      if *map_type == 3 {
+        let cdf = *change_direction_flag as isize;
+        let width = width;
+        let height = height;
+        let mut x = (width - cdf) / 2;
+        let mut y = (height - cdf) / 2;
+        let mut xmin = x;
+        let mut xmax = x;
+        let mut ymin = y;
+        let mut ymax = y;
+        let mut xdir = cdf - 1;
+        let mut ydir = cdf;
+        let mut muv;
+        while k < musg0 {
+          muv = sgmap[(y * width + x) as usize];
+          sgmap[(y * width + x) as usize] = 0;
+          if xdir == -1 && x == xmin {
+            if xmin != 0 {
+              xmin -= 1;
+            }
+            x = xmin;
+            xdir = 0;
+            ydir = 2 * cdf - 1;
+          } else if xdir == 1 && x == xmax {
+            if xmax != width - 1 {
+              xmax += 1;
+            }
+            x = xmax;
+            xdir = 0;
+            ydir = 1 - 2 * cdf;
+          } else if ydir == -1 && y == ymin {
+            if ymin != 0 {
+              ymin -= 1;
+            }
+            y = ymin;
+            xdir = 1 - 2 * cdf;
+            ydir = 0;
+          } else if ydir == 1 && y == ymax {
+            if ymax != height - 1 {
+              ymax += 1;
+            }
+            y = ymax;
+            xdir = 2 * cdf - 1;
+            ydir = 0;
+          } else {
+            x += xdir;
+            y += ydir;
+            k += muv as isize;
+          }
+        }
+      }
+    }
+    sgmap
   }
 }

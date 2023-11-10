@@ -105,3 +105,21 @@ impl TryFromSlice for Matrix3x3 {
 pub fn fixed_point_to_f32(x: f32, n: u8) -> f32 {
   x / (1 << n) as f32
 }
+
+pub fn clamp<T: PartialOrd>(value: T, min: T, max: T) -> T {
+  if value < min {
+    min
+  } else if value > max {
+    max
+  } else {
+    value
+  }
+}
+
+pub fn inverse_raster_scan(a: isize, b: isize, c: isize, d: isize, e: isize) -> isize {
+  if e == 0 {
+    (a % (d / b)) * b
+  } else {
+    (a / (d / b)) * c
+  }
+}

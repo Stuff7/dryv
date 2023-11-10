@@ -1,5 +1,8 @@
 use core::time;
-use std::{fmt::Display, ops::Deref};
+use std::{
+  fmt::{Debug, Display},
+  ops::Deref,
+};
 
 #[derive(Debug, Default)]
 pub struct Duration(time::Duration);
@@ -44,5 +47,16 @@ impl Deref for Duration {
   type Target = time::Duration;
   fn deref(&self) -> &Self::Target {
     &self.0
+  }
+}
+
+pub struct DisplayArray<'a, T: Display, const N: usize>(pub &'a [T; N]);
+
+impl<'a, T: Display, const N: usize> Debug for DisplayArray<'a, T, N> {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    for n in self.0 {
+      write!(f, "{} ", n)?;
+    }
+    Ok(())
   }
 }

@@ -2,14 +2,15 @@ pub mod atom;
 pub mod cabac;
 pub mod codec;
 pub mod decoder;
+pub mod frame;
 pub mod sample;
 pub mod slice;
 
 use crate::{
   ascii::{Color, RESET},
+  display::Duration,
   log,
   math::Matrix3x3,
-  time::Duration,
 };
 use atom::AtomError;
 use codec::VideoCodec;

@@ -8,44 +8,180 @@ use crate::{
 
 #[derive(Debug)]
 pub struct SliceHeader {
+  /// The index of the first macroblock in the slice.
   pub first_mb_in_slice: u16,
+
+  /// The type of slice (I, P, B, etc.).
   pub slice_type: SliceType,
+
+  /// The index of the Picture Parameter Set (PPS) used for this slice.
   pub pps_id: u16,
+
+  /// An optional identifier for the color plane (only applicable in certain formats).
   pub color_plane_id: Option<u8>,
+
+  /// The frame number associated with the slice.
+  /// This is used for identifying frames in video sequences.
   pub frame_num: u16,
+
+  /// Indicates if the picture is a field picture.
+  /// In field pictures, a single frame is divided into two fields.
   pub field_pic_flag: bool,
+
+  /// Indicates if the picture is a bottom field.
+  /// This flag specifies whether the field is the top or bottom field in a frame.
   pub bottom_field_flag: bool,
+
+  /// An optional identifier for an Instantaneous Decoding Refresh (IDR) picture.
+  /// IDR pictures are self-contained and do not rely on other reference pictures.
   pub idr_pic_id: Option<u16>,
+
+  /// An optional value for the picture order count least significant bits (POC LSB).
+  /// The POC is used for ordering pictures in the decoding process.
   pub pic_order_cnt_lsb: Option<u16>,
+
+  /// An optional value for the delta picture order count bottom.
+  /// It represents the difference between POC values of adjacent frames.
   pub delta_pic_order_cnt_bottom: Option<i16>,
+
+  /// An optional tuple representing the delta picture order count (POC) values.
+  /// The first element is the POC value for reference picture 0, and the second element is for reference picture 1.
   pub delta_pic_order_cnt: Option<(i16, Option<i16>)>,
+
+  /// An optional value for redundant picture count.
+  /// Redundant slices are used for error recovery in video coding.
   pub redundant_pic_cnt: Option<u16>,
-  pub direct_spatial_mv_pref_flag: bool,
+
+  /// Indicates whether direct spatial motion vector prediction is used.
+  /// Direct spatial motion vector prediction is a technique in video coding where motion vectors are predicted directly
+  /// from spatial neighbors, typically in inter-coded frames (P-frames and B-frames).
+  pub direct_spatial_mv_pred_flag: bool,
+
+  /// Indicates if the number of reference indices is overridden.
+  /// When overridden, the decoder uses a different number of reference pictures for prediction.
   pub num_ref_idx_active_override_flag: bool,
-  pub num_ref_idx_l0_active_minus1: Option<u16>,
-  pub num_ref_idx_l1_active_minus1: Option<u16>,
+
+  /// The number of reference indices for List 0 minus 1.
+  /// This value determines the number of reference pictures available for List 0 prediction.
+  pub num_ref_idx_l0_active_minus1: u16,
+
+  /// The number of reference indices for List 1 minus 1.
+  /// This value determines the number of reference pictures available for List 1 prediction.
+  pub num_ref_idx_l1_active_minus1: u16,
+
+  /// An optional modification for reference picture list in MVC (Multi-View Coding).
+  /// This field is used for reference picture list modifications in multi-view video coding.
   pub ref_pic_list_mvc_modification: Option<RefPicListMvcModification>,
-  pub ref_pic_list_modification: Option<RefPicListModification>,
+
+  /// An optional modification for reference picture list.
+  /// It specifies the modification of reference pictures used for prediction.
+  pub ref_pic_list_modification_l0: Box<[RefPicListModification]>,
+  pub ref_pic_list_modification_l1: Box<[RefPicListModification]>,
+
+  /// An identifier for the chroma array type.
+  /// This value describes the chroma sampling format used in the video stream.
+  pub chroma_array_type: u16,
+
+  /// An optional prediction weight table.
+  /// This table contains information about prediction weights used in weighted prediction.
   pub pred_weight_table: Option<PredWeightTable>,
+
+  /// An optional decoding reference picture marking.
+  /// It contains information about reference picture management in the video stream.
   pub dec_ref_pic_marking: Option<DecRefPicMarking>,
+
+  /// An optional identifier for the Context-based Adaptive Binary Arithmetic Coding (CABAC) initialization.
+  /// CABAC is a technique for entropy coding used in video compression.
   pub cabac_init_idc: Option<u16>,
+
+  /// The slice quantization parameter (QP) delta.
+  /// QP affects the quantization of coefficients in video compression.
   pub slice_qp_delta: i16,
+
+  /// Indicates if the slice is switching SP/SI frames.
+  /// SP/SI frames are used in video coding for different prediction methods.
   pub sp_for_switch_flag: bool,
+
+  /// An optional value for the slice quantization parameter (QP) delta.
+  /// This field allows for finer control over quantization in certain cases.
   pub slice_qs_delta: Option<i16>,
+
+  /// An optional control for the deblocking filter.
+  /// The deblocking filter is used to reduce artifacts in compressed video.
   pub deblocking_filter_control: Option<DeblockingFilterControl>,
+
+  /// An optional value for the slice group change cycle.
+  /// This field is used in slice group-based video coding.
   pub slice_group_change_cycle: Option<u16>,
+
+  pub max_pic_order_cnt_lsb: i16,
+
+  pub max_frame_num: u16,
+
+  pub curr_pic_num: i16,
+
+  pub max_pic_num: i16,
+
+  pub sub_width_c: i8,
+
+  pub sub_height_c: i8,
+
+  pub mb_width_c: u8,
+
+  pub mb_height_c: u8,
+
+  pub scaling_list4x4: [[isize; 16]; 6],
+
+  pub scaling_list8x8: Box<[[isize; 64]]>,
+
+  pub qp_bd_offset_c: isize,
+
+  pub bit_depth_y: isize,
+
+  pub bit_depth_c: isize,
 }
 
 impl SliceHeader {
   pub fn new(
     data: &mut BitStream,
     nal: &NALUnit,
-    sps: &SequenceParameterSet,
-    pps: &PictureParameterSet,
+    sps: &mut SequenceParameterSet,
+    pps: &mut PictureParameterSet,
   ) -> Self {
     let mut field_pic_flag = false;
     let slice_type;
     let num_ref_idx_active_override_flag;
+    let num_ref_idx_l0_active_minus1;
+    let num_ref_idx_l1_active_minus1;
+    let frame_num;
+    let max_frame_num;
+    let (sub_width_c, sub_height_c) = if sps.separate_color_plane_flag {
+      (-1, -1)
+    } else {
+      match sps.chroma_format_idc {
+        1 => (2, 2),
+        2 => (2, 1),
+        3 => (1, 1),
+        _ => (-1, -1),
+      }
+    };
+    let chroma_array_type = match nal.unit_type {
+      NALUnitType::AuxiliaryCodedPicture => 0,
+      _ => {
+        if sps.separate_color_plane_flag {
+          0
+        } else {
+          sps.chroma_format_idc
+        }
+      }
+    };
+    let (mb_width_c, mb_height_c) = if sps.chroma_format_idc == 0 || sps.separate_color_plane_flag {
+      (0, 0)
+    } else {
+      (16 / sub_width_c as u8, 16 / sub_height_c as u8)
+    };
+    let (scaling_list4x4, scaling_list8x8) = Self::scaling_lists(sps, pps);
+
     Self {
       first_mb_in_slice: data.exponential_golomb(),
       slice_type: {
@@ -54,7 +190,10 @@ impl SliceHeader {
       },
       pps_id: data.exponential_golomb(),
       color_plane_id: sps.separate_color_plane_flag.then(|| data.bits_into(2)),
-      frame_num: data.bits_into(sps.log2_max_frame_num_minus4 as usize + 4),
+      frame_num: {
+        frame_num = data.bits_into(sps.log2_max_frame_num_minus4 as usize + 4);
+        frame_num
+      },
       field_pic_flag: !sps.frame_mbs_only_flag && {
         field_pic_flag = data.bit_flag();
         field_pic_flag
@@ -83,34 +222,52 @@ impl SliceHeader {
       redundant_pic_cnt: pps
         .redundant_pic_cnt_present_flag
         .then(|| data.exponential_golomb()),
-      direct_spatial_mv_pref_flag: matches!(slice_type, SliceType::B) && data.bit_flag(),
+      direct_spatial_mv_pred_flag: slice_type.is_bidirectional() && data.bit_flag(),
       num_ref_idx_active_override_flag: {
-        num_ref_idx_active_override_flag = match slice_type {
-          SliceType::P | SliceType::SP | SliceType::B => data.bit_flag(),
-          _ => false,
-        };
+        num_ref_idx_active_override_flag = !slice_type.is_intra() && data.bit_flag();
         num_ref_idx_active_override_flag
       },
-      num_ref_idx_l0_active_minus1: num_ref_idx_active_override_flag
-        .then(|| data.exponential_golomb()),
-      num_ref_idx_l1_active_minus1: (num_ref_idx_active_override_flag
-        && matches!(slice_type, SliceType::B))
-      .then(|| data.exponential_golomb()),
+      num_ref_idx_l0_active_minus1: {
+        num_ref_idx_l0_active_minus1 = num_ref_idx_active_override_flag
+          .then(|| data.exponential_golomb())
+          .unwrap_or(pps.num_ref_idx_l0_default_active_minus1);
+        num_ref_idx_l0_active_minus1
+      },
+      num_ref_idx_l1_active_minus1: {
+        num_ref_idx_l1_active_minus1 = (num_ref_idx_active_override_flag
+          && slice_type.is_bidirectional())
+        .then(|| data.exponential_golomb())
+        .unwrap_or(pps.num_ref_idx_l1_default_active_minus1);
+        num_ref_idx_l1_active_minus1
+      },
       ref_pic_list_mvc_modification: RefPicListMvcModification::new(data, &nal.unit_type),
-      ref_pic_list_modification: RefPicListModification::new(data, &nal.unit_type, &slice_type),
+      ref_pic_list_modification_l0: RefPicListModification::new_list(
+        data,
+        &nal.unit_type,
+        !slice_type.is_intra(),
+      ),
+      ref_pic_list_modification_l1: RefPicListModification::new_list(
+        data,
+        &nal.unit_type,
+        slice_type.is_bidirectional(),
+      ),
+      chroma_array_type,
       pred_weight_table: PredWeightTable::new(
         data,
+        chroma_array_type,
+        num_ref_idx_l0_active_minus1,
+        num_ref_idx_l1_active_minus1,
         pps.weighted_pred_flag,
         &slice_type,
         pps.weighted_bipred_idc,
       ),
       dec_ref_pic_marking: DecRefPicMarking::new(data, nal),
-      cabac_init_idc: (pps.entropy_coding_mode_flag
-        && !matches!(slice_type, SliceType::I | SliceType::SI))
-      .then(|| data.exponential_golomb()),
+      cabac_init_idc: (pps.entropy_coding_mode_flag && !slice_type.is_intra())
+        .then(|| data.exponential_golomb()),
       slice_qp_delta: data.signed_exponential_golomb(),
       sp_for_switch_flag: matches!(slice_type, SliceType::SP) && data.bit_flag(),
-      slice_qs_delta: matches!(slice_type, SliceType::SP | SliceType::I)
+      slice_qs_delta: slice_type
+        .is_switching()
         .then(|| data.signed_exponential_golomb()),
       deblocking_filter_control: DeblockingFilterControl::new(
         data,
@@ -127,18 +284,82 @@ impl SliceHeader {
           .ceil();
         Some(data.bits_into(size as usize))
       }),
+      max_pic_order_cnt_lsb: sps
+        .log2_max_pic_order_cnt_lsb_minus4
+        .map(|x| 1 << (x + 4))
+        .unwrap_or_default() as i16,
+      max_frame_num: {
+        max_frame_num = 1 << (sps.log2_max_frame_num_minus4 as i16 + 4);
+        max_frame_num
+      },
+      curr_pic_num: if field_pic_flag {
+        frame_num as i16
+      } else {
+        2 * frame_num as i16 + 1
+      },
+      max_pic_num: if !field_pic_flag {
+        max_frame_num as i16
+      } else {
+        2 * max_frame_num as i16
+      },
+      sub_width_c,
+      sub_height_c,
+      mb_width_c,
+      mb_height_c,
+      scaling_list4x4,
+      scaling_list8x8,
+      qp_bd_offset_c: sps.bit_depth_chroma_minus8 as isize * 6,
+      bit_depth_y: sps.bit_depth_luma_minus8 as isize + 8,
+      bit_depth_c: sps.bit_depth_chroma_minus8 as isize + 8,
+    }
+  }
+
+  fn scaling_lists(
+    sps: &mut SequenceParameterSet,
+    pps: &mut PictureParameterSet,
+  ) -> ([[isize; 16]; 6], Box<[[isize; 64]]>) {
+    if let Some(scaling_list) = sps.seq_scaling_matrix.take() {
+      (scaling_list.l4x4, scaling_list.l8x8)
+    } else if let Some(scaling_list) = pps
+      .extra_rbsp_data
+      .as_mut()
+      .and_then(|pps| pps.pic_scaling_matrix.take())
+    {
+      (scaling_list.l4x4, scaling_list.l8x8)
+    } else {
+      ([[16; 16]; 6], [[16; 64]; 6].into())
     }
   }
 }
 
 #[derive(Debug, Clone, Copy)]
 pub enum SliceType {
+  /// P-slice (Predictive Coded Slice):
+  /// A slice type containing inter-coded macroblocks for motion compensation,
+  /// typically referring to previously coded P or I slices.
   P,
+
+  /// B-slice (Bi-directional Predictive Coded Slice):
+  /// A slice type containing inter-coded macroblocks for motion compensation,
+  /// considering both past and future reference frames, allowing for more
+  /// complex temporal predictions.
   B,
+
+  /// I-slice (Intra-coded Slice):
+  /// A slice type containing intra-coded macroblocks, meaning that each macroblock
+  /// is independently coded without reference to other slices, providing a clean
+  /// entry point for error resilience.
   I,
+
+  /// SP-slice (Switching P-slice):
+  /// A slice type that serves as a switch from P-slice to I-slice coding modes
+  /// and vice versa, typically used for video streams with varying scene complexity.
   SP,
+
+  /// SI-slice (Switching I-slice):
+  /// A slice type that serves as a switch from I-slice to P-slice coding modes
+  /// and vice versa, similarly used for video streams with changing scene conditions.
   SI,
-  Unknown,
 }
 
 impl SliceType {
@@ -149,61 +370,71 @@ impl SliceType {
       2 | 7 => Self::I,
       3 | 8 => Self::SP,
       4 | 9 => Self::SI,
-      _ => Self::Unknown,
+      n => panic!("Unknown slice type {n}"),
     }
+  }
+
+  /// Checks if the slice type is an intra-coded slice (I-slice or SI-slice).
+  pub fn is_intra(&self) -> bool {
+    matches!(self, SliceType::I | SliceType::SI)
+  }
+
+  /// Checks if the slice type is a predictive slice (P-slice or SP-slice).
+  pub fn is_predictive(&self) -> bool {
+    matches!(self, SliceType::P | SliceType::SP)
+  }
+
+  /// Checks if the slice type is a switching slice (SP-slice or SI-slice).
+  pub fn is_switching(&self) -> bool {
+    matches!(self, SliceType::SP | SliceType::SI)
+  }
+
+  pub fn is_switching_p(&self) -> bool {
+    matches!(self, SliceType::SP)
+  }
+
+  /// Checks if the slice type is a bidirectional slice (B-slice).
+  pub fn is_bidirectional(&self) -> bool {
+    matches!(self, SliceType::B)
   }
 }
 
 #[derive(Debug)]
 pub struct RefPicListModification {
-  pub ref_pic_list_modification_flag_l0: bool,
-  pub ref_pic_list_modification_flag_l1: bool,
-  pub modification_of_pic_nums_idc: Option<u16>,
-  pub abs_diff_pic_num_minus1: Option<u16>,
-  pub long_term_pic_num: Option<u16>,
+  pub modification_of_pic_nums_idc: u16,
+  pub abs_diff_pic_num_minus1: u16,
+  pub long_term_pic_num: u16,
 }
 
 impl RefPicListModification {
-  pub fn new(data: &mut BitStream, nal_type: &NALUnitType, slice_type: &SliceType) -> Option<Self> {
-    (!matches!(
+  pub fn new_list(data: &mut BitStream, nal_type: &NALUnitType, condition: bool) -> Box<[Self]> {
+    match !matches!(
       nal_type,
       NALUnitType::CodedSliceExtension | NALUnitType::DepthOrTextureViewComponent
-    ))
-    .then(|| {
-      let mut list = Self {
-        ref_pic_list_modification_flag_l0: false,
-        ref_pic_list_modification_flag_l1: false,
-        modification_of_pic_nums_idc: None,
-        abs_diff_pic_num_minus1: None,
-        long_term_pic_num: None,
-      };
-      if !matches!(slice_type, SliceType::I | SliceType::SI) {
-        list.ref_pic_list_modification_flag_l0 = list.create(data)
-      }
-      if matches!(slice_type, SliceType::B) {
-        list.ref_pic_list_modification_flag_l1 = list.create(data)
-      }
-      list
-    })
-  }
-
-  fn create(&mut self, data: &mut BitStream) -> bool {
-    let ref_pic_list_modification_flag = data.bit_flag();
-    if ref_pic_list_modification_flag {
-      loop {
-        let pic_nums_idc = data.exponential_golomb();
-        match pic_nums_idc {
-          0 | 1 => self.abs_diff_pic_num_minus1 = Some(data.exponential_golomb()),
-          2 => self.long_term_pic_num = Some(data.exponential_golomb()),
-          _ => (),
+    ) && condition
+      && data.bit_flag()
+    {
+      true => std::iter::from_fn(|| {
+        let modification_of_pic_nums_idc = data.exponential_golomb();
+        match modification_of_pic_nums_idc {
+          3 => None,
+          0 | 1 | 2 => Some(Self {
+            modification_of_pic_nums_idc,
+            abs_diff_pic_num_minus1: match modification_of_pic_nums_idc {
+              1 | 0 => data.exponential_golomb(),
+              _ => 0,
+            },
+            long_term_pic_num: match modification_of_pic_nums_idc {
+              2 => data.exponential_golomb(),
+              _ => 0,
+            },
+          }),
+          n => panic!("Unknown ref_pic_list_modification {n}"),
         }
-        self.modification_of_pic_nums_idc = Some(pic_nums_idc);
-        if pic_nums_idc == 3 {
-          break;
-        }
-      }
+      })
+      .collect(),
+      false => [].into(),
     }
-    ref_pic_list_modification_flag
   }
 }
 
@@ -221,76 +452,155 @@ impl RefPicListMvcModification {
 }
 
 #[derive(Debug)]
-pub struct PredWeightTable;
+pub struct PredWeightTableEntry {
+  pub luma_weight: i16,
+  pub luma_offset: i16,
+  pub chroma_weight: [i16; 2],
+  pub chroma_offset: [i16; 2],
+}
 
-impl PredWeightTable {
-  pub fn new(
-    _: &mut BitStream,
-    weighted_pred_flag: bool,
-    slice_type: &SliceType,
-    weighted_bipred_idc: u8,
-  ) -> Option<Self> {
-    ((weighted_pred_flag && matches!(slice_type, SliceType::P | SliceType::SP))
-      || (weighted_bipred_idc == 1 && matches!(slice_type, SliceType::B)))
-    .then(|| todo!("PredWeightTable"))
+impl PredWeightTableEntry {
+  fn new(
+    stream: &mut BitStream,
+    luma_log2_weight_denom: u16,
+    chroma_log2_weight_denom: u16,
+  ) -> Self {
+    let (luma_weight, luma_offset) = match stream.bit_flag() {
+      true => (
+        stream.signed_exponential_golomb(),
+        stream.signed_exponential_golomb(),
+      ),
+      false => (1 << luma_log2_weight_denom, 0),
+    };
+    let (chroma_weight, chroma_offset) = match stream.bit_flag() {
+      true => {
+        let a = [stream.signed_exponential_golomb(); 4];
+        ([a[0], a[2]], [a[1], a[3]])
+      }
+      false => ([1 << chroma_log2_weight_denom; 2], [0; 2]),
+    };
+    Self {
+      luma_weight,
+      luma_offset,
+      chroma_weight,
+      chroma_offset,
+    }
   }
 }
 
 #[derive(Debug)]
-pub enum DecRefPicMarking {
-  Idr {
-    no_output_of_prior_pics_flag: bool,
-    long_term_reference_flag: bool,
+pub struct PredWeightTable {
+  pub luma_log2_weight_denom: u16,
+  pub chroma_log2_weight_denom: u16,
+  pub l0: Box<[PredWeightTableEntry]>,
+  pub l1: Box<[PredWeightTableEntry]>,
+}
+
+impl PredWeightTable {
+  pub fn new(
+    stream: &mut BitStream,
+    chroma_array_type: u16,
+    num_ref_idx_l0_active_minus1: u16,
+    num_ref_idx_l1_active_minus1: u16,
+    weighted_pred_flag: bool,
+    slice_type: &SliceType,
+    weighted_bipred_idc: u8,
+  ) -> Option<Self> {
+    ((weighted_pred_flag && slice_type.is_predictive())
+      || (weighted_bipred_idc == 1 && slice_type.is_bidirectional()))
+    .then(|| {
+      let luma_log2_weight_denom = stream.exponential_golomb();
+      let chroma_log2_weight_denom = (chroma_array_type != 0)
+        .then(|| stream.exponential_golomb())
+        .unwrap_or_default();
+      Self {
+        luma_log2_weight_denom,
+        chroma_log2_weight_denom,
+        l0: (0..=num_ref_idx_l0_active_minus1)
+          .map(|_| {
+            PredWeightTableEntry::new(stream, luma_log2_weight_denom, chroma_log2_weight_denom)
+          })
+          .collect(),
+        l1: if !slice_type.is_predictive() {
+          (0..=num_ref_idx_l1_active_minus1)
+            .map(|_| {
+              PredWeightTableEntry::new(stream, luma_log2_weight_denom, chroma_log2_weight_denom)
+            })
+            .collect()
+        } else {
+          [].into()
+        },
+      }
+    })
+  }
+}
+
+#[derive(Debug)]
+pub struct DecRefPicMarking {
+  pub no_output_of_prior_pics_flag: bool,
+  pub long_term_reference_flag: bool,
+  pub adaptive_ref_pic_marking_mode_flag: bool,
+  pub mmcos: Box<[Mmco]>,
+}
+
+#[derive(Debug)]
+pub enum Mmco {
+  ForgetShort {
+    difference_of_pic_nums_minus1: u16,
   },
-  AdaptiveRefPic {
-    memory_management_control_operation: u16,
-    difference_of_pic_nums_minus1: Option<u16>,
-    long_term_pic_num: Option<u16>,
-    long_term_frame_idx: Option<u16>,
-    max_long_term_frame_idx_plus1: Option<u16>,
+  ForgetLong {
+    long_term_pic_num: u16,
   },
-  None,
+  ShortToLong {
+    difference_of_pic_nums_minus1: u16,
+    long_term_frame_idx: u16,
+  },
+  ForgetLongMany {
+    max_long_term_frame_idx_plus1: u16,
+  },
+  ForgetAll,
+  ThisToLong {
+    long_term_frame_idx: u16,
+  },
 }
 
 impl DecRefPicMarking {
   pub fn new(data: &mut BitStream, nal: &NALUnit) -> Option<Self> {
     (nal.idc != 0).then(|| {
-      if nal.unit_type.is_idr() {
-        Self::Idr {
-          no_output_of_prior_pics_flag: data.bit_flag(),
-          long_term_reference_flag: data.bit_flag(),
-        }
-      } else if data.bit_flag() {
-        let memory_management_control_operation = data.exponential_golomb();
-        let mut difference_of_pic_nums_minus1 = None;
-        let mut long_term_pic_num = None;
-        let mut long_term_frame_idx = None;
-        let mut max_long_term_frame_idx_plus1 = None;
-        loop {
-          if matches!(memory_management_control_operation, 1 | 3) {
-            difference_of_pic_nums_minus1 = Some(data.exponential_golomb());
-          }
-          match memory_management_control_operation {
-            0 => break,
-            1 | 3 => difference_of_pic_nums_minus1 = Some(data.exponential_golomb()),
-            2 => long_term_pic_num = Some(data.exponential_golomb()),
-            _ => (),
-          }
-          match memory_management_control_operation {
-            3 | 6 => long_term_frame_idx = Some(data.exponential_golomb()),
-            4 => max_long_term_frame_idx_plus1 = Some(data.exponential_golomb()),
-            _ => (),
-          }
-        }
-        Self::AdaptiveRefPic {
-          memory_management_control_operation,
-          difference_of_pic_nums_minus1,
-          long_term_pic_num,
-          long_term_frame_idx,
-          max_long_term_frame_idx_plus1,
-        }
-      } else {
-        Self::None
+      let (no_output_of_prior_pics_flag, long_term_reference_flag) = match nal.unit_type.is_idr() {
+        true => (data.bit_flag(), data.bit_flag()),
+        false => (false, false),
+      };
+      let adaptive_ref_pic_marking_mode_flag = !nal.unit_type.is_idr() && data.bit_flag();
+      Self {
+        no_output_of_prior_pics_flag,
+        long_term_reference_flag,
+        adaptive_ref_pic_marking_mode_flag,
+        mmcos: match adaptive_ref_pic_marking_mode_flag {
+          true => std::iter::from_fn(|| match data.exponential_golomb() {
+            0 => None,
+            1 => Some(Mmco::ForgetShort {
+              difference_of_pic_nums_minus1: data.exponential_golomb(),
+            }),
+            2 => Some(Mmco::ForgetLong {
+              long_term_pic_num: data.exponential_golomb(),
+            }),
+            3 => Some(Mmco::ShortToLong {
+              difference_of_pic_nums_minus1: data.exponential_golomb(),
+              long_term_frame_idx: data.exponential_golomb(),
+            }),
+            4 => Some(Mmco::ForgetLongMany {
+              max_long_term_frame_idx_plus1: data.exponential_golomb(),
+            }),
+            5 => Some(Mmco::ForgetAll),
+            6 => Some(Mmco::ThisToLong {
+              long_term_frame_idx: data.exponential_golomb(),
+            }),
+            n => panic!("Unknown MMCO {n}"),
+          })
+          .collect(),
+          false => [].into(),
+        },
       }
     })
   }
