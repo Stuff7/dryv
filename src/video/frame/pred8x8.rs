@@ -16,8 +16,7 @@ impl Frame {
 
     for luma8x8_blk_idx in 0..4 {
       let c = inverse_scanner_8x8(&slice.mb().block_luma_8x8[0][luma8x8_blk_idx]);
-      let r = [[0; 8]; 8];
-      self.scaling_and_transform8x8(slice, &c, true, false);
+      let r = self.scaling_and_transform8x8(slice, &c, true, false);
 
       if slice.mb().transform_bypass_mode_flag
         && slice.mb().mb_type.mode().is_intra_8x8()
@@ -187,27 +186,15 @@ impl Frame {
         .map(|pos| slice.mb_nb_p(pos, 0))
         .unwrap_or_else(|| Macroblock::unavailable(0));
       let (x_w, y_w) = MbPosition::coords(x_n, y_n, max_w, max_h);
-      let mbaddr_n = mb_n.index(&slice.macroblocks) as usize;
+      let mbaddr_n = mb_n.index(&slice.macroblocks);
 
       if mb_n.mb_type.is_unavailable()
         || (mb_n.mb_type.mode().is_inter_frame() && slice.pps.constrained_intra_pred_flag)
       {
         *p.p(x, y) = -1;
       } else {
-        let x_m = inverse_raster_scan(
-          mbaddr_n as isize,
-          16,
-          16,
-          slice.pic_width_in_samples_l as isize,
-          0,
-        );
-        let y_m = inverse_raster_scan(
-          mbaddr_n as isize,
-          16,
-          16,
-          slice.pic_width_in_samples_l as isize,
-          1,
-        );
+        let x_m = inverse_raster_scan(mbaddr_n, 16, 16, slice.pic_width_in_samples_l as isize, 0);
+        let y_m = inverse_raster_scan(mbaddr_n, 16, 16, slice.pic_width_in_samples_l as isize, 1);
 
         *p.p(x, y) = self.luma_data[(x_m + x_w) as usize][(y_m + y_w) as usize] as isize;
       }
@@ -304,6 +291,7 @@ impl Frame {
     self.intra8x8_pred_mode(slice, luma8x8_blk_idx, is_luma);
 
     let intra8x8_pred_mode = slice.mb().intra8x8_pred_mode[luma8x8_blk_idx];
+    // println!("P: {:?}", crate::display::DisplayArray(&p));
 
     if intra8x8_pred_mode == 0 {
       if *p.p(0, -1) >= 0

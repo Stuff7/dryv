@@ -44,6 +44,8 @@ pub struct Macroblock {
 
   pub qpc: isize,
 
+  pub qsy: isize,
+
   pub qsc: isize,
 
   pub transform_bypass_mode_flag: bool,
@@ -167,6 +169,7 @@ impl Macroblock {
       qp1y: 0,
       qp1c: 0,
       qpc: 0,
+      qsy: 0,
       qsc: 0,
       intra4x4_pred_mode: [0; 16],
       intra8x8_pred_mode: [0; 4],
@@ -219,7 +222,12 @@ impl Macroblock {
   }
 
   pub fn index(&self, macroblocks: &[Macroblock]) -> isize {
-    unsafe { (self as *const Macroblock).offset_from(macroblocks.as_ptr()) }
+    let index = unsafe { (self as *const Macroblock).offset_from(macroblocks.as_ptr()) };
+    if index >= macroblocks.len() as isize {
+      -1
+    } else {
+      index
+    }
   }
 
   pub fn offset<'a>(
@@ -283,6 +291,7 @@ impl std::fmt::Debug for Macroblock {
       .field("qp1y", &self.qp1y)
       .field("qp1c", &self.qp1c)
       .field("qpc", &self.qpc)
+      .field("qsy", &self.qsy)
       .field("qsc", &self.qsc)
       .field(
         "transform_bypass_mode_flag",

@@ -117,6 +117,7 @@ impl<'a> Slice<'a> {
     let pic_width_in_mbs;
     let mut pic_height_in_mbs;
     let pic_size_in_mbs;
+    let sliceqpy;
     let mut stream = BitStream::new(data);
     let header = SliceHeader::new(&mut stream, nal, sps, pps);
     Self {
@@ -143,10 +144,13 @@ impl<'a> Slice<'a> {
       pic_height_in_samples_l: pic_height_in_mbs * 16,
       pic_width_in_samples_c: pic_width_in_mbs * header.mb_width_c as u16,
       pic_height_in_samples_c: pic_height_in_mbs * header.mb_height_c as u16,
-      sliceqpy: 26 + pps.pic_init_qp_minus26 as isize + header.slice_qp_delta as isize,
+      sliceqpy: {
+        sliceqpy = 26 + pps.pic_init_qp_minus26 as isize + header.slice_qp_delta as isize;
+        sliceqpy
+      },
       mbaff_frame_flag: sps.mb_adaptive_frame_field_flag && !header.field_pic_flag,
       qp_bd_offset_y: 6 * sps.bit_depth_luma_minus8 as isize,
-      qpy_prev: 0,
+      qpy_prev: sliceqpy,
       qsy: 26
         + pps.pic_init_qs_minus26 as isize
         + header.slice_qs_delta.unwrap_or_default() as isize,

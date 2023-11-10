@@ -199,7 +199,7 @@ impl Frame {
   }
 }
 
-pub fn get_qpc(slice: &Slice, is_chroma_cb: bool) -> isize {
+pub fn get_qpc(slice: &Slice, qpy: isize, is_chroma_cb: bool) -> isize {
   let qp_offset = if is_chroma_cb {
     slice.pps.chroma_qp_index_offset
   } else {
@@ -211,7 +211,7 @@ pub fn get_qpc(slice: &Slice, is_chroma_cb: bool) -> isize {
       .unwrap_or(slice.pps.chroma_qp_index_offset)
   } as isize;
 
-  let qpi = clamp(slice.mb().qpy + qp_offset, -slice.qp_bd_offset_c, 51);
+  let qpi = clamp(qpy + qp_offset, -slice.qp_bd_offset_c, 51);
 
   if qpi < 30 {
     qpi
@@ -224,11 +224,11 @@ pub fn get_qpc(slice: &Slice, is_chroma_cb: bool) -> isize {
 }
 
 pub fn chroma_quantization_parameters(slice: &mut Slice, is_chroma_cb: bool) {
-  slice.mb_mut().qpc = get_qpc(slice, is_chroma_cb);
+  slice.mb_mut().qpc = get_qpc(slice, slice.mb().qpy, is_chroma_cb);
   slice.mb_mut().qp1c = slice.mb().qpc + slice.qp_bd_offset_c;
 
   if slice.slice_type.is_switching() {
-    slice.qsy = slice.mb().qpy;
+    slice.mb_mut().qsy = slice.mb().qpy;
     slice.mb_mut().qsc = slice.mb().qpc;
   }
 }
