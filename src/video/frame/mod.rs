@@ -4,7 +4,10 @@ pub mod pred8x8;
 pub mod trans_chroma;
 pub mod transform;
 
-use std::{fs::File, io::Write};
+use std::{
+  fs::File,
+  io::{BufWriter, Write},
+};
 
 use super::slice::Slice;
 use crate::math::inverse_raster_scan;
@@ -28,10 +31,7 @@ impl Frame {
     let height_l = slice.pic_height_in_samples_l as usize;
     let width_c = slice.pic_width_in_samples_c as usize;
     let height_c = slice.pic_height_in_samples_c as usize;
-    // let width_l = 260;
-    // let height_l = 480;
-    // let width_c = width_l / 2;
-    // let height_c = height_l / 2;
+
     Self {
       luma_data: vec![vec![0; height_l].into(); width_l].into(),
       chroma_cr_data: vec![vec![0; height_c].into(); width_c].into(),
@@ -46,25 +46,7 @@ impl Frame {
   }
 
   pub fn write_to_yuv_file(&self, file_path: &str) -> std::io::Result<()> {
-    let mut file = File::create(file_path)?;
-    println!(
-      "Writing YUV {} ({} zeros) {} ({} zeros) {} ({} zeros)",
-      self.luma_data.len() * self.luma_data[0].len(),
-      (*self.luma_data)
-        .iter()
-        .map(|row| row.iter().filter(|&&x| x == 0).count())
-        .sum::<usize>(),
-      self.chroma_cb_data.len() * self.chroma_cb_data[0].len(),
-      (*self.chroma_cb_data)
-        .iter()
-        .map(|row| row.iter().filter(|&&x| x == 0).count())
-        .sum::<usize>(),
-      self.chroma_cr_data.len() * self.chroma_cr_data[0].len(),
-      (*self.chroma_cr_data)
-        .iter()
-        .map(|row| row.iter().filter(|&&x| x == 0).count())
-        .sum::<usize>(),
-    );
+    let mut file = BufWriter::new(File::create(file_path)?);
 
     for y in 0..self.height_l {
       for x in 0..self.width_l {
@@ -88,25 +70,18 @@ impl Frame {
   }
 
   pub fn decode(&mut self, slice: &mut Slice) {
-    let mut is_chroma_cb;
     if slice.mb().mb_type.mode().is_intra_4x4() {
       self.transform_for_4x4_luma_residual_blocks(slice);
-      is_chroma_cb = true;
-      self.transform_chroma_samples(slice, is_chroma_cb);
-      is_chroma_cb = false;
-      self.transform_chroma_samples(slice, is_chroma_cb);
+      self.transform_chroma_samples(slice, true);
+      self.transform_chroma_samples(slice, false);
     } else if slice.mb().mb_type.mode().is_intra_8x8() {
       self.transform_for_8x8_luma_residual_blocks(slice);
-      is_chroma_cb = true;
-      self.transform_chroma_samples(slice, is_chroma_cb);
-      is_chroma_cb = false;
-      self.transform_chroma_samples(slice, is_chroma_cb);
+      self.transform_chroma_samples(slice, true);
+      self.transform_chroma_samples(slice, false);
     } else if slice.mb().mb_type.mode().is_intra_16x16() {
       self.transform_for_16x16_luma_residual_blocks(slice, true, false);
-      is_chroma_cb = true;
-      self.transform_chroma_samples(slice, is_chroma_cb);
-      is_chroma_cb = false;
-      self.transform_chroma_samples(slice, is_chroma_cb);
+      self.transform_chroma_samples(slice, true);
+      self.transform_chroma_samples(slice, false);
     } else if slice.mb().mb_type.is_pcm() {
       todo!("Sample construction process for I PCM macroblocks");
     } else {
