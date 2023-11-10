@@ -291,7 +291,6 @@ impl Frame {
     self.intra8x8_pred_mode(slice, luma8x8_blk_idx, is_luma);
 
     let intra8x8_pred_mode = slice.mb().intra8x8_pred_mode[luma8x8_blk_idx];
-    // println!("P: {:?}", crate::display::DisplayArray(&p));
 
     if intra8x8_pred_mode == 0 {
       if *p.p(0, -1) >= 0
