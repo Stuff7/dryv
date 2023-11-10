@@ -1,4 +1,7 @@
-use std::ops::{Index, IndexMut};
+use std::{
+  cmp::Ordering,
+  ops::{Index, IndexMut},
+};
 
 use crate::{
   math::{clamp, inverse_raster_scan},
@@ -55,15 +58,11 @@ impl Frame {
     let mut r = [[0; 8]; 8];
     chroma_quantization_parameters(slice, is_chroma_cb);
 
-    let bit_depth;
-    let q_p;
-    if is_luma {
-      bit_depth = slice.bit_depth_y;
-      q_p = slice.mb().qp1y as usize;
+    let q_p = if is_luma {
+      slice.mb().qp1y as usize
     } else {
-      bit_depth = slice.bit_depth_c;
-      q_p = slice.mb().qp1c as usize;
-    }
+      slice.mb().qp1c as usize
+    };
     if slice.mb().transform_bypass_mode_flag {
       r.copy_from_slice(c);
     } else {
@@ -178,8 +177,8 @@ impl Frame {
       let x = REFERENCE_COORDINATE_X[i];
       let y = REFERENCE_COORDINATE_Y[i];
 
-      let x_n = x_o as isize + x;
-      let y_n = y_o as isize + y;
+      let x_n = x_o + x;
+      let y_n = y_o + y;
 
       let pos_n = MbPosition::from_coords(x_n, y_n, max_w, max_h);
       let mb_n = pos_n
@@ -475,16 +474,20 @@ impl Frame {
       {
         for y in 0..8isize {
           for x in 0..8isize {
-            if x > y {
-              slice.mb_mut().luma8x8_pred_samples[luma8x8_blk_idx][x as usize][y as usize] =
-                (*p.p(x - y - 2, -1) + 2 * *p.p(x - y - 1, -1) + *p.p(x - y, -1) + 2) >> 2;
-            } else if x < y {
-              slice.mb_mut().luma8x8_pred_samples[luma8x8_blk_idx][x as usize][y as usize] =
-                (*p.p(-1, y - x - 2) + 2 * *p.p(-1, y - x - 1) + *p.p(-1, y - x) + 2) >> 2;
-            } else {
-              slice.mb_mut().luma8x8_pred_samples[luma8x8_blk_idx][x as usize][y as usize] =
-                (*p.p(0, -1) + 2 * *p.p(-1, -1) + *p.p(-1, 0) + 2) >> 2;
-            }
+            match x.cmp(&y) {
+              Ordering::Greater => {
+                slice.mb_mut().luma8x8_pred_samples[luma8x8_blk_idx][x as usize][y as usize] =
+                  (*p.p(x - y - 2, -1) + 2 * *p.p(x - y - 1, -1) + *p.p(x - y, -1) + 2) >> 2
+              }
+              Ordering::Less => {
+                slice.mb_mut().luma8x8_pred_samples[luma8x8_blk_idx][x as usize][y as usize] =
+                  (*p.p(-1, y - x - 2) + 2 * *p.p(-1, y - x - 1) + *p.p(-1, y - x) + 2) >> 2
+              }
+              Ordering::Equal => {
+                slice.mb_mut().luma8x8_pred_samples[luma8x8_blk_idx][x as usize][y as usize] =
+                  (*p.p(0, -1) + 2 * *p.p(-1, -1) + *p.p(-1, 0) + 2) >> 2
+              }
+            };
           }
         }
       }
@@ -717,17 +720,10 @@ impl Frame {
       .unwrap_or_else(|| Macroblock::unavailable(0));
     let luma8x8_blk_idx_b = mb_b.blk_idx8x8(x as isize, y as isize - 1, max_w, max_h);
 
-    let dc_pred_mode_predicted_flag;
-
-    if mb_a.mb_type.is_unavailable()
+    let dc_pred_mode_predicted_flag = mb_a.mb_type.is_unavailable()
       || mb_b.mb_type.is_unavailable()
       || (mb_a.mb_type.mode().is_inter_frame() && slice.pps.constrained_intra_pred_flag)
-      || (mb_b.mb_type.mode().is_inter_frame() && slice.pps.constrained_intra_pred_flag)
-    {
-      dc_pred_mode_predicted_flag = true;
-    } else {
-      dc_pred_mode_predicted_flag = false;
-    }
+      || (mb_b.mb_type.mode().is_inter_frame() && slice.pps.constrained_intra_pred_flag);
 
     let intra_mx_mpred_mode_a;
     let intra_mx_mpred_mode_b;

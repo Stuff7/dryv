@@ -30,22 +30,20 @@ impl Frame {
       dc_y[3][2], dc_y[3][3],
     ];
 
-    for _4x4BlkIdx in 0..16 {
+    for _4x4_blk_idx in 0..16 {
       let mut luma_list = [0; 16];
-      luma_list[0] = dc_y_to_luma[_4x4BlkIdx];
+      luma_list[0] = dc_y_to_luma[_4x4_blk_idx];
 
-      for k in 1..16 {
-        luma_list[k] = slice.mb().block_luma_ac[0][_4x4BlkIdx][k - 1];
-      }
+      luma_list[1..16].copy_from_slice(&slice.mb().block_luma_ac[0][_4x4_blk_idx][..(16 - 1)]);
 
       let c = inverse_scanner4x4(&luma_list);
 
       let r = self.scaling_and_transform4x4(slice, &c, is_luma, false);
 
-      let x_o = inverse_raster_scan(_4x4BlkIdx as isize / 4, 8, 8, 16, 0)
-        + inverse_raster_scan(_4x4BlkIdx as isize % 4, 4, 4, 8, 0);
-      let y_o = inverse_raster_scan(_4x4BlkIdx as isize / 4, 8, 8, 16, 1)
-        + inverse_raster_scan(_4x4BlkIdx as isize % 4, 4, 4, 8, 1);
+      let x_o = inverse_raster_scan(_4x4_blk_idx as isize / 4, 8, 8, 16, 0)
+        + inverse_raster_scan(_4x4_blk_idx as isize % 4, 4, 4, 8, 0);
+      let y_o = inverse_raster_scan(_4x4_blk_idx as isize / 4, 8, 8, 16, 1)
+        + inverse_raster_scan(_4x4_blk_idx as isize % 4, 4, 4, 8, 1);
 
       for i in 0..4 {
         for j in 0..4 {
@@ -107,7 +105,7 @@ impl Frame {
       let mb_n = pos_n
         .map(|pos| slice.mb_nb_p(pos, 0))
         .unwrap_or_else(|| Macroblock::unavailable(0));
-      let (xW, yW) = MbPosition::coords(x, y, max_w, max_h);
+      let (x_w, y_w) = MbPosition::coords(x, y, max_w, max_h);
       let mbaddr_n = mb_n.index(&slice.macroblocks) as usize;
 
       if mb_n.mb_type.is_unavailable()
@@ -122,16 +120,16 @@ impl Frame {
           16,
           slice.pic_width_in_samples_l as isize,
           0,
-        ) as isize;
+        );
         let y_m = inverse_raster_scan(
           mbaddr_n as isize,
           16,
           16,
           slice.pic_width_in_samples_l as isize,
           1,
-        ) as isize;
+        );
 
-        *p.p(x, y) = self.luma_data[(x_m + xW) as usize][(y_m + yW) as usize] as isize;
+        *p.p(x, y) = self.luma_data[(x_m + x_w) as usize][(y_m + y_w) as usize] as isize;
       }
     }
 
@@ -365,63 +363,62 @@ impl Frame {
           slice.mb_mut().luma16x16_pred_samples[x][y] = val;
         }
       }
-    } else if intra16x16_pred_mode == 3 {
-      if *p.p(0, -1) >= 0
-        && *p.p(1, -1) >= 0
-        && *p.p(2, -1) >= 0
-        && *p.p(3, -1) >= 0
-        && *p.p(4, -1) >= 0
-        && *p.p(5, -1) >= 0
-        && *p.p(6, -1) >= 0
-        && *p.p(7, -1) >= 0
-        && *p.p(8, -1) >= 0
-        && *p.p(9, -1) >= 0
-        && *p.p(10, -1) >= 0
-        && *p.p(11, -1) >= 0
-        && *p.p(12, -1) >= 0
-        && *p.p(13, -1) >= 0
-        && *p.p(14, -1) >= 0
-        && *p.p(15, -1) >= 0
-        && *p.p(-1, 0) >= 0
-        && *p.p(-1, 1) >= 0
-        && *p.p(-1, 2) >= 0
-        && *p.p(-1, 3) >= 0
-        && *p.p(-1, 4) >= 0
-        && *p.p(-1, 5) >= 0
-        && *p.p(-1, 6) >= 0
-        && *p.p(-1, 7) >= 0
-        && *p.p(-1, 8) >= 0
-        && *p.p(-1, 9) >= 0
-        && *p.p(-1, 10) >= 0
-        && *p.p(-1, 11) >= 0
-        && *p.p(-1, 12) >= 0
-        && *p.p(-1, 13) >= 0
-        && *p.p(-1, 14) >= 0
-        && *p.p(-1, 15) >= 0
-      {
-        let mut h = 0;
-        let mut v = 0;
+    } else if intra16x16_pred_mode == 3
+      && *p.p(0, -1) >= 0
+      && *p.p(1, -1) >= 0
+      && *p.p(2, -1) >= 0
+      && *p.p(3, -1) >= 0
+      && *p.p(4, -1) >= 0
+      && *p.p(5, -1) >= 0
+      && *p.p(6, -1) >= 0
+      && *p.p(7, -1) >= 0
+      && *p.p(8, -1) >= 0
+      && *p.p(9, -1) >= 0
+      && *p.p(10, -1) >= 0
+      && *p.p(11, -1) >= 0
+      && *p.p(12, -1) >= 0
+      && *p.p(13, -1) >= 0
+      && *p.p(14, -1) >= 0
+      && *p.p(15, -1) >= 0
+      && *p.p(-1, 0) >= 0
+      && *p.p(-1, 1) >= 0
+      && *p.p(-1, 2) >= 0
+      && *p.p(-1, 3) >= 0
+      && *p.p(-1, 4) >= 0
+      && *p.p(-1, 5) >= 0
+      && *p.p(-1, 6) >= 0
+      && *p.p(-1, 7) >= 0
+      && *p.p(-1, 8) >= 0
+      && *p.p(-1, 9) >= 0
+      && *p.p(-1, 10) >= 0
+      && *p.p(-1, 11) >= 0
+      && *p.p(-1, 12) >= 0
+      && *p.p(-1, 13) >= 0
+      && *p.p(-1, 14) >= 0
+      && *p.p(-1, 15) >= 0
+    {
+      let mut h = 0;
+      let mut v = 0;
 
-        for x in 0..=7 {
-          h += (x + 1) * (*p.p(8 + x, -1) - *p.p(6 - x, -1)) as isize;
-        }
+      for x in 0..=7 {
+        h += (x + 1) * (*p.p(8 + x, -1) - *p.p(6 - x, -1));
+      }
 
-        for y in 0..=7 {
-          v += (y + 1) * (*p.p(-1, 8 + y) - *p.p(-1, 6 - y)) as isize;
-        }
+      for y in 0..=7 {
+        v += (y + 1) * (*p.p(-1, 8 + y) - *p.p(-1, 6 - y));
+      }
 
-        let a = 16 * (*p.p(-1, 15) + *p.p(15, -1)) as isize;
-        let b = (5 * h + 32) >> 6;
-        let c = (5 * v + 32) >> 6;
+      let a = 16 * (*p.p(-1, 15) + *p.p(15, -1));
+      let b = (5 * h + 32) >> 6;
+      let c = (5 * v + 32) >> 6;
 
-        for y in 0..16 {
-          for x in 0..16 {
-            slice.mb_mut().luma16x16_pred_samples[x][y] = clamp(
-              (a + b * (x as isize - 7) + c * (y as isize - 7) + 16) >> 5,
-              0,
-              (1 << slice.bit_depth_y as isize) - 1,
-            ) as isize;
-          }
+      for y in 0..16 {
+        for x in 0..16 {
+          slice.mb_mut().luma16x16_pred_samples[x][y] = clamp(
+            (a + b * (x as isize - 7) + c * (y as isize - 7) + 16) >> 5,
+            0,
+            (1 << slice.bit_depth_y) - 1,
+          );
         }
       }
     }

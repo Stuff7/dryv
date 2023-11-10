@@ -121,11 +121,6 @@ impl Frame {
     is_chroma_cb: bool,
   ) -> [[isize; 4]; 4] {
     chroma_quantization_parameters(slice, is_chroma_cb);
-    let bit_depth = if is_luma {
-      slice.bit_depth_y
-    } else {
-      slice.bit_depth_c
-    };
 
     let s_mb_flag = slice.mb().mb_type.is_si()
       || (slice.slice_type.is_switching_p() && slice.mb().mb_type.mode().is_inter_frame());
@@ -138,7 +133,7 @@ impl Frame {
       slice.mb().qp1c
     } else {
       slice.mb().qsc
-    } as isize;
+    };
 
     let mut r = [[0; 4]; 4];
     if slice.mb().transform_bypass_mode_flag {
@@ -147,10 +142,7 @@ impl Frame {
       let mut d = [[0; 4]; 4];
       for i in 0..4 {
         for j in 0..4 {
-          if i == 0
-            && j == 0
-            && ((is_luma && slice.mb().mb_type.mode().is_intra_16x16()) || !is_luma)
-          {
+          if (slice.mb().mb_type.mode().is_intra_16x16() || !is_luma) && j == 0 && i == 0 {
             d[0][0] = c[0][0];
           } else if q_p >= 24 {
             d[i][j] = (c[i][j] * self.level_scale4x4[q_p as usize % 6][i][j]) << (q_p / 6 - 4);

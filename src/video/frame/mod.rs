@@ -7,7 +7,7 @@ pub mod transform;
 use std::{fs::File, io::Write};
 
 use super::slice::Slice;
-use crate::math::{clamp, inverse_raster_scan};
+use crate::math::inverse_raster_scan;
 
 #[derive(Debug)]
 pub struct Frame {
@@ -199,10 +199,6 @@ pub enum BlockType {
 impl BlockType {
   pub fn is_16x16(&self) -> bool {
     matches!(self, Self::B16x16)
-  }
-
-  pub fn is_8x8(&self) -> bool {
-    matches!(self, Self::B8x8)
   }
 
   pub fn is_4x4(&self) -> bool {

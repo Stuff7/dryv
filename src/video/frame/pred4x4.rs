@@ -1,10 +1,8 @@
 use super::Frame;
-use crate::video::slice::consts::{MB_UNAVAILABLE_INTER, MB_UNAVAILABLE_INTRA};
+use crate::video::slice::consts::MB_UNAVAILABLE_INTRA;
 use crate::video::slice::{macroblock::MbPosition, Slice};
-use crate::{
-  math::{clamp, inverse_raster_scan},
-  video::slice::macroblock::Macroblock,
-};
+use crate::{math::inverse_raster_scan, video::slice::macroblock::Macroblock};
+use std::cmp::Ordering;
 use std::ops::{Index, IndexMut};
 
 impl Frame {
@@ -206,23 +204,27 @@ impl Frame {
       {
         for y in 0..=3isize {
           for x in 0..=3isize {
-            if x > y {
-              slice.mb_mut().luma_pred_samples[luma4x4_blk_idx][x as usize][y as usize] = (*samples
-                .p(x - y - 2, -1)
-                + 2 * *samples.p(x - y - 1, -1)
-                + *samples.p(x - y, -1)
-                + 2)
-                >> 2;
-            } else if x < y {
-              slice.mb_mut().luma_pred_samples[luma4x4_blk_idx][x as usize][y as usize] = (*samples
-                .p(-1, y - x - 2)
-                + 2 * *samples.p(-1, y - x - 1)
-                + *samples.p(-1, y - x)
-                + 2)
-                >> 2;
-            } else {
-              slice.mb_mut().luma_pred_samples[luma4x4_blk_idx][x as usize][y as usize] =
-                (*samples.p(0, -1) + 2 * *samples.p(-1, -1) + *samples.p(-1, 0) + 2) >> 2;
+            match x.cmp(&y) {
+              Ordering::Greater => {
+                slice.mb_mut().luma_pred_samples[luma4x4_blk_idx][x as usize][y as usize] =
+                  (*samples.p(x - y - 2, -1)
+                    + 2 * *samples.p(x - y - 1, -1)
+                    + *samples.p(x - y, -1)
+                    + 2)
+                    >> 2;
+              }
+              Ordering::Less => {
+                slice.mb_mut().luma_pred_samples[luma4x4_blk_idx][x as usize][y as usize] =
+                  (*samples.p(-1, y - x - 2)
+                    + 2 * *samples.p(-1, y - x - 1)
+                    + *samples.p(-1, y - x)
+                    + 2)
+                    >> 2;
+              }
+              Ordering::Equal => {
+                slice.mb_mut().luma_pred_samples[luma4x4_blk_idx][x as usize][y as usize] =
+                  (*samples.p(0, -1) + 2 * *samples.p(-1, -1) + *samples.p(-1, 0) + 2) >> 2;
+              }
             }
           }
         }
@@ -412,7 +414,7 @@ impl Frame {
     let pred_intra4x4_pred_mode = std::cmp::min(intra_mxm_pred_mode_a, intra_mxm_pred_mode_b);
 
     if slice.mb().prev_intra4x4_pred_mode_flag[luma4x4_block_idx] != 0 {
-      slice.mb_mut().intra4x4_pred_mode[luma4x4_block_idx] = pred_intra4x4_pred_mode as isize;
+      slice.mb_mut().intra4x4_pred_mode[luma4x4_block_idx] = pred_intra4x4_pred_mode;
     } else if (slice.mb().rem_intra4x4_pred_mode[luma4x4_block_idx] as isize)
       < pred_intra4x4_pred_mode
     {

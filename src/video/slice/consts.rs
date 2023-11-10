@@ -324,20 +324,8 @@ pub const SUB_MB_TYPE_B_L1_4X4: u8 = 15;
 /// This mode uses both reference lists for motion and prediction with 4x4 block partitioning.
 pub const SUB_MB_TYPE_B_BI_4X4: u8 = 16;
 
-pub const fn is_skip_mb_type(mb_type: u8) -> bool {
-  matches!(mb_type, MB_TYPE_P_SKIP | MB_TYPE_B_SKIP)
-}
-
-pub const fn is_submb_mb_type(mb_type: u8) -> bool {
-  matches!(mb_type, MB_TYPE_P_8X8 | MB_TYPE_P_8X8REF0 | MB_TYPE_B_8X8)
-}
-
 pub const fn is_intra_16x16_mb_type(mb_type: u8) -> bool {
   mb_type >= MB_TYPE_I_16X16_0_0_0 && mb_type <= MB_TYPE_I_16X16_3_2_1
-}
-
-pub const fn is_inter_mb_type(mb_type: u8) -> bool {
-  mb_type >= MB_TYPE_P_L0_16X16
 }
 
 pub const fn name_mb_type(mb_type: u8) -> &'static str {

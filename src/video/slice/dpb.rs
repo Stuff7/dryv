@@ -49,7 +49,7 @@ impl DecodedPictureBuffer {
     for dpb in &mut self.buffer {
       if dpb.reference_marked_type.is_short_term_reference() {
         if dpb.frame_num > header.frame_num as i16 {
-          dpb.frame_num_wrap = dpb.frame_num_wrap - dpb.max_frame_num;
+          dpb.frame_num_wrap -= dpb.max_frame_num;
         } else {
           dpb.frame_num_wrap = dpb.frame_num;
         }
@@ -103,9 +103,7 @@ impl DecodedPictureBuffer {
       for i in 0..short_term.len() - 1 {
         for j in 0..short_term.len() - i - 1 {
           if short_term[j].pic_num < short_term[j + 1].pic_num {
-            let temp = short_term[j];
-            short_term[j] = short_term[j + 1];
-            short_term[j + 1] = temp;
+            short_term.swap(j, j + 1);
           }
         }
       }
@@ -115,9 +113,7 @@ impl DecodedPictureBuffer {
       for i in 0..long_term.len() - 1 {
         for j in 0..long_term.len() - i - 1 {
           if long_term[j].long_term_pic_num > long_term[j + 1].long_term_pic_num {
-            let temp = long_term[j];
-            long_term[j] = long_term[j + 1];
-            long_term[j + 1] = temp;
+            long_term.swap(j, j + 1);
           }
         }
       }
@@ -145,37 +141,31 @@ impl DecodedPictureBuffer {
       .filter(|dpb| dpb.reference_marked_type.is_long_term_reference())
       .collect();
 
-    if short_term_left.len() > 0 {
+    if !short_term_left.is_empty() {
       for i in 0..short_term_left.len() - 1 {
         for j in 0..short_term_left.len() - i - 1 {
           if short_term_left[j].pic_order_cnt < short_term_left[j + 1].pic_order_cnt {
-            let temp = short_term_left[j];
-            short_term_left[j] = short_term_left[j + 1];
-            short_term_left[j + 1] = temp;
+            short_term_left.swap(j, j + 1);
           }
         }
       }
     }
 
-    if short_term_right.len() > 0 {
+    if !short_term_right.is_empty() {
       for i in 0..short_term_right.len() - 1 {
         for j in 0..short_term_right.len() - i - 1 {
           if short_term_right[j].pic_order_cnt > short_term_right[j + 1].pic_order_cnt {
-            let temp = short_term_right[j];
-            short_term_right[j] = short_term_right[j + 1];
-            short_term_right[j + 1] = temp;
+            short_term_right.swap(j, j + 1);
           }
         }
       }
     }
 
-    if long_term.len() > 0 {
+    if !long_term.is_empty() {
       for i in 0..long_term.len() - 1 {
         for j in 0..long_term.len() - i - 1 {
           if long_term[j].long_term_pic_num > long_term[j + 1].long_term_pic_num {
-            let temp = long_term[j];
-            long_term[j] = long_term[j + 1];
-            long_term[j + 1] = temp;
+            long_term.swap(j, j + 1);
           }
         }
       }
@@ -204,37 +194,31 @@ impl DecodedPictureBuffer {
       .filter(|dpb| dpb.reference_marked_type.is_long_term_reference())
       .collect();
 
-    if short_term_left.len() > 0 {
+    if !short_term_left.is_empty() {
       for i in 0..short_term_left.len() - 1 {
         for j in 0..short_term_left.len() - i - 1 {
           if short_term_left[j].pic_order_cnt > short_term_left[j + 1].pic_order_cnt {
-            let temp = short_term_left[j];
-            short_term_left[j] = short_term_left[j + 1];
-            short_term_left[j + 1] = temp;
+            short_term_left.swap(j, j + 1);
           }
         }
       }
     }
 
-    if short_term_right.len() > 0 {
+    if !short_term_right.is_empty() {
       for i in 0..short_term_right.len() - 1 {
         for j in 0..short_term_right.len() - i - 1 {
           if short_term_right[j].pic_order_cnt < short_term_right[j + 1].pic_order_cnt {
-            let temp = short_term_right[j];
-            short_term_right[j] = short_term_right[j + 1];
-            short_term_right[j + 1] = temp;
+            short_term_right.swap(j, j + 1);
           }
         }
       }
     }
 
-    if long_term.len() > 0 {
+    if !long_term.is_empty() {
       for i in 0..long_term.len() - 1 {
         for j in 0..long_term.len() - i - 1 {
           if long_term[j].long_term_pic_num > long_term[j + 1].long_term_pic_num {
-            let temp = long_term[j];
-            long_term[j] = long_term[j + 1];
-            long_term[j + 1] = temp;
+            long_term.swap(j, j + 1);
           }
         }
       }
@@ -268,9 +252,7 @@ impl DecodedPictureBuffer {
     }
 
     if flag {
-      let tmp = self.ref_pic_list1[0];
-      self.ref_pic_list1[0] = self.ref_pic_list1[1];
-      self.ref_pic_list1[1] = tmp;
+      self.ref_pic_list1.swap(0, 1);
     }
   }
 
@@ -295,11 +277,9 @@ impl DecodedPictureBuffer {
         } else if ref_pic_list_mod.modification_of_pic_nums_idc == 2 {
           Self::modification_of_reference_picture_lists_for_long_term_reference_pictures(
             &mut ref_idx_l0,
-            &mut pic_num_l0_pred,
             ref_pic_list_mod.long_term_pic_num as i16,
             header.num_ref_idx_l0_active_minus1 as i16,
             &mut self.ref_pic_list0,
-            header,
           );
         } else {
           break;
@@ -318,7 +298,7 @@ impl DecodedPictureBuffer {
     ref_pic_listx: &mut Vec<Picture>,
     header: &SliceHeader,
   ) {
-    let mut pic_num_lx_no_wrap = 0i16;
+    let pic_num_lx_no_wrap;
 
     if modification_of_pic_nums_idc == 0 {
       if *pic_num_lx_pred - (abs_diff_pic_num_minus1 + 1) < 0 {
@@ -333,12 +313,11 @@ impl DecodedPictureBuffer {
     }
     *pic_num_lx_pred = pic_num_lx_no_wrap;
 
-    let mut pic_num_lx = 0;
-    if pic_num_lx_no_wrap > header.curr_pic_num {
-      pic_num_lx = pic_num_lx_no_wrap - header.max_pic_num;
+    let pic_num_lx = if pic_num_lx_no_wrap > header.curr_pic_num {
+      pic_num_lx_no_wrap - header.max_pic_num
     } else {
-      pic_num_lx = pic_num_lx_no_wrap;
-    }
+      pic_num_lx_no_wrap
+    };
 
     let length = if (num_ref_idx_lx_active_minus1 + 1) < ref_pic_listx.len() as i16 {
       num_ref_idx_lx_active_minus1 as usize + 1
@@ -387,11 +366,9 @@ impl DecodedPictureBuffer {
   /// 8.2.4.3.2 Modification process of reference picture lists for long-term reference pictures
   pub fn modification_of_reference_picture_lists_for_long_term_reference_pictures(
     ref_idx_lx: &mut usize,
-    pic_num_lx_pred: &mut i16,
     long_term_pic_num: i16,
     num_ref_idx_lx_active_minus1: i16,
     ref_pic_listx: &mut Vec<Picture>,
-    header: &SliceHeader,
   ) {
     let length = if (num_ref_idx_lx_active_minus1 as usize + 1) < ref_pic_listx.len() {
       num_ref_idx_lx_active_minus1 as usize + 1
@@ -700,7 +677,7 @@ impl DecodedPictureBuffer {
     }
 
     if slice.nal_idc == 0 && abs_frame_num > 0 {
-      abs_frame_num = abs_frame_num - 1;
+      abs_frame_num -= 1;
     }
     let mut pic_order_cnt_cycle_cnt = 0;
     let mut frame_num_in_pic_order_cnt_cycle = 0;
@@ -712,17 +689,16 @@ impl DecodedPictureBuffer {
 
     let mut expected_pic_order_cnt;
     if abs_frame_num > 0 {
-      expected_pic_order_cnt =
-        pic_order_cnt_cycle_cnt as i16 * expected_delta_per_pic_order_cnt_cycle;
+      expected_pic_order_cnt = pic_order_cnt_cycle_cnt * expected_delta_per_pic_order_cnt_cycle;
       for i in 0..frame_num_in_pic_order_cnt_cycle as usize {
-        expected_pic_order_cnt = expected_pic_order_cnt + offset_for_ref_frame[i];
+        expected_pic_order_cnt += offset_for_ref_frame[i];
       }
     } else {
       expected_pic_order_cnt = 0;
     }
 
     if slice.nal_idc == 0 {
-      expected_pic_order_cnt = expected_pic_order_cnt + offset_for_non_ref_pic;
+      expected_pic_order_cnt += offset_for_non_ref_pic;
     }
 
     let delta_pic_order_cnt = slice
@@ -783,6 +759,7 @@ impl DecodedPictureBuffer {
 
 const DEFAULT_PIC: Picture = Picture::unknown();
 
+#[allow(dead_code)]
 #[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
 pub enum PictureMarking {
   #[default]
@@ -793,6 +770,7 @@ pub enum PictureMarking {
   UnusedForReference,
 }
 
+#[allow(dead_code)]
 impl PictureMarking {
   pub fn is_used_for_reference(&self) -> bool {
     matches!(self, PictureMarking::UsedForReference)

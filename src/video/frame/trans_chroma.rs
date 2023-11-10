@@ -53,13 +53,12 @@ impl Frame {
 
       let mut r_mb = [[0; 16]; 8];
 
-      for chroma4x4_blk_idx in 0..num_chroma4x4_blks as usize {
+      for chroma4x4_blk_idx in 0..num_chroma4x4_blks {
         let mut chroma_list = [0; 16];
         chroma_list[0] = dc_cto_chroma[chroma4x4_blk_idx];
 
-        for k in 1..16 {
-          chroma_list[k] = slice.mb().block_chroma_ac[i_cb_cr][chroma4x4_blk_idx][k - 1];
-        }
+        chroma_list[1..16]
+          .copy_from_slice(&slice.mb().block_chroma_ac[i_cb_cr][chroma4x4_blk_idx][..(16 - 1)]);
 
         let c = inverse_scanner4x4(&chroma_list);
         let r = self.scaling_and_transform4x4(slice, &c, false, is_chroma_cb);
@@ -105,21 +104,21 @@ impl Frame {
       let mut reference_coordinate_x = vec![0isize; max_samples_val as usize];
       let mut reference_coordinate_y = vec![0isize; max_samples_val as usize];
 
-      for i in -1..mb_height_c as isize {
+      for i in -1..mb_height_c {
         reference_coordinate_x[(i + 1) as usize] = -1;
         reference_coordinate_y[(i + 1) as usize] = i;
       }
 
-      for i in 0..mb_width_c as isize {
-        reference_coordinate_x[(mb_height_c as isize + 1 + i) as usize] = i;
-        reference_coordinate_y[(mb_height_c as isize + 1 + i) as usize] = -1;
+      for i in 0..mb_width_c {
+        reference_coordinate_x[(mb_height_c + 1 + i) as usize] = i;
+        reference_coordinate_y[(mb_height_c + 1 + i) as usize] = -1;
       }
 
       let mut samples = vec![-1; ((mb_width_c + 1) * (mb_height_c + 1)) as usize];
 
       for i in 0..max_samples_val as usize {
-        let x = reference_coordinate_x[i] as isize;
-        let y = reference_coordinate_y[i] as isize;
+        let x = reference_coordinate_x[i];
+        let y = reference_coordinate_y[i];
 
         let pos_a = MbPosition::from_coords(x, y, mb_width_c, mb_height_c);
         let mb_n = pos_a
@@ -154,8 +153,8 @@ impl Frame {
           let x_m = (x_l >> 4) * mb_width_c;
           let y_m = ((y_l >> 4) * mb_height_c) + (y_l % 2);
 
-          let p_x = (x_m as isize + x_w) as usize;
-          let p_y = (y_m as isize + y_w) as usize;
+          let p_x = (x_m + x_w) as usize;
+          let p_y = (y_m + y_w) as usize;
           if is_chroma_cb {
             *samples.p(x, y) = self.chroma_cb_data[p_x][p_y] as isize;
           } else {
@@ -168,8 +167,8 @@ impl Frame {
 
       if intra_chroma_pred_mode == 0 {
         for chroma4x4_blk_idx in 0..(1 << (slice.chroma_array_type + 1)) {
-          let x_o = inverse_raster_scan(chroma4x4_blk_idx, 4, 4, 8, 0) as isize;
-          let y_o = inverse_raster_scan(chroma4x4_blk_idx, 4, 4, 8, 1) as isize;
+          let x_o = inverse_raster_scan(chroma4x4_blk_idx, 4, 4, 8, 0);
+          let y_o = inverse_raster_scan(chroma4x4_blk_idx, 4, 4, 8, 1);
 
           let mut val = 0;
           if (x_o == 0 && y_o == 0) || (x_o > 0 && y_o > 0) {
@@ -341,13 +340,11 @@ impl Frame {
           let mut v = 0;
 
           for x1 in 0..=3 + x_cf {
-            h +=
-              (x1 as isize + 1) * (*samples.p(4 + x_cf + x1, -1) - *samples.p(2 + x_cf - x1, -1));
+            h += (x1 + 1) * (*samples.p(4 + x_cf + x1, -1) - *samples.p(2 + x_cf - x1, -1));
           }
 
           for y1 in 0..=3 + y_cf {
-            v +=
-              (y1 as isize + 1) * (*samples.p(-1, 4 + y_cf + y1) - *samples.p(-1, 2 + y_cf - y1));
+            v += (y1 + 1) * (*samples.p(-1, 4 + y_cf + y1) - *samples.p(-1, 2 + y_cf - y1));
           }
 
           let a = 16 * (*samples.p(-1, mb_height_c - 1) + *samples.p(mb_width_c - 1, -1));
@@ -357,10 +354,7 @@ impl Frame {
           for y in 0..mb_height_c {
             for x in 0..mb_width_c {
               slice.mb_mut().chroma_pred_samples[x as usize][y as usize] = clamp(
-                (a + b * (x as isize - 3 - x_cf as isize)
-                  + c * (y as isize - 3 - y_cf as isize)
-                  + 16)
-                  >> 5,
+                (a + b * (x - 3 - x_cf) + c * (y - 3 - y_cf) + 16) >> 5,
                 0,
                 (1 << slice.bit_depth_c) - 1,
               );
@@ -381,7 +375,6 @@ impl Frame {
     is_chroma_cb: bool,
   ) -> [[isize; 2]; 4] {
     let mut dc_c = [[0; 2]; 4];
-    let bit_depth = slice.bit_depth_c;
 
     chroma_quantization_parameters(slice, is_chroma_cb);
 

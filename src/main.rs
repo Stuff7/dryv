@@ -1,3 +1,4 @@
+#![allow(clippy::needless_range_loop)]
 mod ascii;
 mod byte;
 mod cli;

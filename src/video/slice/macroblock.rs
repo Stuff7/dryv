@@ -1,4 +1,5 @@
 use std::{
+  cmp::Ordering,
   fmt::Debug,
   hash::{Hash, Hasher},
   ops::Deref,
@@ -447,13 +448,13 @@ impl MbPosition {
   pub fn from_coords(x: isize, y: isize, max_w: isize, max_h: isize) -> Option<Self> {
     if x < 0 && y < 0 {
       Some(Self::D)
-    } else if x < 0 && (y >= 0 && y <= max_h - 1) {
+    } else if x < 0 && (y >= 0 && y < max_h) {
       Some(Self::A)
-    } else if (x >= 0 && x <= max_w - 1) && y < 0 {
+    } else if (x >= 0 && x < max_w) && y < 0 {
       Some(Self::B)
     } else if x > max_w - 1 && y < 0 {
       Some(Self::C)
-    } else if (x >= 0 && x <= max_w - 1) && (y >= 0 && y <= max_h - 1) {
+    } else if (x >= 0 && x < max_w) && (y >= 0 && y < max_h) {
       Some(Self::This)
     } else {
       None
@@ -554,26 +555,28 @@ impl Deref for MbType {
 
 impl MbType {
   pub fn new(mb_type: u8, transform_size_8x8_flag: bool) -> Self {
-    if mb_type < MB_TYPE_I_PCM {
-      let (part_pred_mode, intra_pred_mode, coded_block_pattern_chroma, coded_block_pattern_luma) =
-        mb_type_intra(mb_type, transform_size_8x8_flag);
-      MbType::Intra {
-        code: mb_type,
-        intra_pred_mode,
-        part_pred_mode,
-        coded_block_pattern_luma,
-        coded_block_pattern_chroma,
+    match mb_type.cmp(&MB_TYPE_I_PCM) {
+      Ordering::Less => {
+        let (part_pred_mode, intra_pred_mode, coded_block_pattern_chroma, coded_block_pattern_luma) =
+          mb_type_intra(mb_type, transform_size_8x8_flag);
+        MbType::Intra {
+          code: mb_type,
+          intra_pred_mode,
+          part_pred_mode,
+          coded_block_pattern_luma,
+          coded_block_pattern_chroma,
+        }
       }
-    } else if mb_type == MB_TYPE_I_PCM {
-      MbType::Pcm
-    } else {
-      let (num_mb_part, part_pred_mode, part_width, part_height) = mb_type_inter(mb_type);
-      MbType::Inter {
-        code: mb_type,
-        num_mb_part,
-        part_pred_mode,
-        part_width,
-        part_height,
+      Ordering::Equal => MbType::Pcm,
+      Ordering::Greater => {
+        let (num_mb_part, part_pred_mode, part_width, part_height) = mb_type_inter(mb_type);
+        MbType::Inter {
+          code: mb_type,
+          num_mb_part,
+          part_pred_mode,
+          part_width,
+          part_height,
+        }
       }
     }
   }
@@ -591,14 +594,6 @@ impl MbType {
     match self {
       Self::Intra { part_pred_mode, .. } => part_pred_mode,
       Self::Inter { part_pred_mode, .. } => &part_pred_mode[0],
-      _ => &PartPredMode::NA,
-    }
-  }
-
-  pub fn mode_idx(&self, idx: usize) -> &PartPredMode {
-    match self {
-      Self::Intra { part_pred_mode, .. } => part_pred_mode,
-      Self::Inter { part_pred_mode, .. } => &part_pred_mode[idx],
       _ => &PartPredMode::NA,
     }
   }
@@ -649,29 +644,6 @@ impl MbType {
 
   pub fn is_submb(&self) -> bool {
     matches!(**self, MB_TYPE_P_8X8 | MB_TYPE_P_8X8REF0 | MB_TYPE_B_8X8)
-  }
-}
-
-#[derive(Debug)]
-pub struct SubMbType {
-  code: u8,
-  sub_num_mb_part: u8,
-  sub_part_pred_mode: PartPredMode,
-  sub_part_width: u8,
-  sub_part_height: u8,
-}
-
-impl SubMbType {
-  pub fn new(sub_mb_type: u8) -> Self {
-    let (sub_num_mb_part, sub_part_pred_mode, sub_part_width, sub_part_height) =
-      sub_mb_type_fields(sub_mb_type);
-    Self {
-      code: sub_mb_type,
-      sub_num_mb_part,
-      sub_part_pred_mode,
-      sub_part_width,
-      sub_part_height,
-    }
   }
 }
 
@@ -782,28 +754,51 @@ fn mb_type_inter(mb_type: u8) -> (i8, [PartPredMode; 2], u8, u8) {
   }
 }
 
-/// Table 7-17 - Sub-macroblock types in P macroblocks
-/// Table 7-18 - Sub-macroblock types in B macroblocks
-/// Returns (NumSubMbPart, SubMbPartPredMode, SubMbPartWidth, SubMbPartHeight)
-fn sub_mb_type_fields(sub_mb_type: u8) -> (u8, PartPredMode, u8, u8) {
-  match sub_mb_type {
-    SUB_MB_TYPE_P_L0_8X8 => (1, PartPredMode::PredL0, 8, 8),
-    SUB_MB_TYPE_P_L0_8X4 => (2, PartPredMode::PredL0, 8, 4),
-    SUB_MB_TYPE_P_L0_4X8 => (2, PartPredMode::PredL0, 4, 8),
-    SUB_MB_TYPE_P_L0_4X4 => (4, PartPredMode::PredL0, 4, 4),
-    SUB_MB_TYPE_B_DIRECT_8X8 => (4, PartPredMode::Direct, 4, 4),
-    SUB_MB_TYPE_B_L0_8X8 => (1, PartPredMode::PredL0, 8, 8),
-    SUB_MB_TYPE_B_L1_8X8 => (1, PartPredMode::PredL1, 8, 8),
-    SUB_MB_TYPE_B_BI_8X8 => (1, PartPredMode::BiPred, 8, 8),
-    SUB_MB_TYPE_B_L0_8X4 => (2, PartPredMode::PredL0, 8, 4),
-    SUB_MB_TYPE_B_L0_4X8 => (2, PartPredMode::PredL0, 4, 8),
-    SUB_MB_TYPE_B_L1_8X4 => (2, PartPredMode::PredL1, 8, 4),
-    SUB_MB_TYPE_B_L1_4X8 => (2, PartPredMode::PredL1, 4, 8),
-    SUB_MB_TYPE_B_BI_8X4 => (2, PartPredMode::BiPred, 8, 4),
-    SUB_MB_TYPE_B_BI_4X8 => (2, PartPredMode::BiPred, 4, 8),
-    SUB_MB_TYPE_B_L0_4X4 => (4, PartPredMode::PredL0, 4, 4),
-    SUB_MB_TYPE_B_L1_4X4 => (4, PartPredMode::PredL1, 4, 4),
-    SUB_MB_TYPE_B_BI_4X4 => (4, PartPredMode::BiPred, 4, 4),
-    n => panic!("Invalid sub_mb_type {n}"),
-  }
-}
+// #[derive(Debug)]
+// pub struct SubMbType {
+//   code: u8,
+//   sub_num_mb_part: u8,
+//   sub_part_pred_mode: PartPredMode,
+//   sub_part_width: u8,
+//   sub_part_height: u8,
+// }
+//
+// impl SubMbType {
+//   pub fn new(sub_mb_type: u8) -> Self {
+//     let (sub_num_mb_part, sub_part_pred_mode, sub_part_width, sub_part_height) =
+//       sub_mb_type_fields(sub_mb_type);
+//     Self {
+//       code: sub_mb_type,
+//       sub_num_mb_part,
+//       sub_part_pred_mode,
+//       sub_part_width,
+//       sub_part_height,
+//     }
+//   }
+// }
+
+// /// Table 7-17 - Sub-macroblock types in P macroblocks
+// /// Table 7-18 - Sub-macroblock types in B macroblocks
+// /// Returns (NumSubMbPart, SubMbPartPredMode, SubMbPartWidth, SubMbPartHeight)
+// fn sub_mb_type_fields(sub_mb_type: u8) -> (u8, PartPredMode, u8, u8) {
+//   match sub_mb_type {
+//     SUB_MB_TYPE_P_L0_8X8 => (1, PartPredMode::PredL0, 8, 8),
+//     SUB_MB_TYPE_P_L0_8X4 => (2, PartPredMode::PredL0, 8, 4),
+//     SUB_MB_TYPE_P_L0_4X8 => (2, PartPredMode::PredL0, 4, 8),
+//     SUB_MB_TYPE_P_L0_4X4 => (4, PartPredMode::PredL0, 4, 4),
+//     SUB_MB_TYPE_B_DIRECT_8X8 => (4, PartPredMode::Direct, 4, 4),
+//     SUB_MB_TYPE_B_L0_8X8 => (1, PartPredMode::PredL0, 8, 8),
+//     SUB_MB_TYPE_B_L1_8X8 => (1, PartPredMode::PredL1, 8, 8),
+//     SUB_MB_TYPE_B_BI_8X8 => (1, PartPredMode::BiPred, 8, 8),
+//     SUB_MB_TYPE_B_L0_8X4 => (2, PartPredMode::PredL0, 8, 4),
+//     SUB_MB_TYPE_B_L0_4X8 => (2, PartPredMode::PredL0, 4, 8),
+//     SUB_MB_TYPE_B_L1_8X4 => (2, PartPredMode::PredL1, 8, 4),
+//     SUB_MB_TYPE_B_L1_4X8 => (2, PartPredMode::PredL1, 4, 8),
+//     SUB_MB_TYPE_B_BI_8X4 => (2, PartPredMode::BiPred, 8, 4),
+//     SUB_MB_TYPE_B_BI_4X8 => (2, PartPredMode::BiPred, 4, 8),
+//     SUB_MB_TYPE_B_L0_4X4 => (4, PartPredMode::PredL0, 4, 4),
+//     SUB_MB_TYPE_B_L1_4X4 => (4, PartPredMode::PredL1, 4, 4),
+//     SUB_MB_TYPE_B_BI_4X4 => (4, PartPredMode::BiPred, 4, 4),
+//     n => panic!("Invalid sub_mb_type {n}"),
+//   }
+// }
