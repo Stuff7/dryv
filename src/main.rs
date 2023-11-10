@@ -6,14 +6,15 @@ mod display;
 mod math;
 mod video;
 
-use crate::cli::CLIArgs;
 use ascii::LogDisplay;
+use cli::CLIArgs;
 use std::{
   fs::File,
   ptr,
   sync::atomic::{AtomicPtr, Ordering},
   time::Instant,
 };
+use video::Video;
 
 macro_rules! unwrap {
   (Ok $wrapped: expr, Err $( $err: expr ),*) => {
@@ -38,7 +39,7 @@ fn main() {
 
   let start_time = Instant::now();
   let video = unwrap!(
-    Ok video::Video::open(&args.filepath),
+    Ok Video::open(&args.filepath),
     Err "Could not open video"
   );
   let end_time = Instant::now();
