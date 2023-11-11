@@ -130,7 +130,7 @@ impl CabacContext {
       if slice.mb().mb_type.is_submb() {
         self.sub_mb_pred(slice)?;
         for i in 0..4 {
-          if slice.mb().sub_mb_type[i].is_b_direct8x8() {
+          if !slice.mb().sub_mb_type[i].is_b_direct8x8() {
             if SUB_MB_PART_INFO[*slice.mb().sub_mb_type[i] as usize][0] != 0 {
               no_sub_mb_part_size_less_than8x8_flag = 0;
             }
