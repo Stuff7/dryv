@@ -1,3 +1,4 @@
+pub mod inter;
 pub mod pred16x16;
 pub mod pred4x4;
 pub mod pred8x8;
@@ -85,7 +86,7 @@ impl Frame {
     } else if slice.mb().mb_type.is_pcm() {
       todo!("Sample construction process for I PCM macroblocks");
     } else {
-      todo!("Inter prediction");
+      // todo!("Inter prediction");
     }
   }
 

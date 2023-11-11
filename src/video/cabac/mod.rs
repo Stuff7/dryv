@@ -130,8 +130,8 @@ impl CabacContext {
       if slice.mb().mb_type.is_submb() {
         self.sub_mb_pred(slice)?;
         for i in 0..4 {
-          if slice.mb().sub_mb_type[i] != SUB_MB_TYPE_B_DIRECT_8X8 {
-            if SUB_MB_PART_INFO[slice.mb().sub_mb_type[i] as usize][0] != 0 {
+          if slice.mb().sub_mb_type[i].is_b_direct8x8() {
+            if SUB_MB_PART_INFO[*slice.mb().sub_mb_type[i] as usize][0] != 0 {
               no_sub_mb_part_size_less_than8x8_flag = 0;
             }
           } else if !direct_8x8_inference_flag {
@@ -346,9 +346,10 @@ impl CabacContext {
     let mut pmode = [0; 4];
     let mut ifrom = [0; 16];
     for i in 0..4 {
-      slice.mb_mut().sub_mb_type[i] = self.sub_mb_type(slice)?;
-      pmode[i] = SUB_MB_PART_INFO[slice.mb().sub_mb_type[i] as usize][1];
-      let sm = SUB_MB_PART_INFO[slice.mb().sub_mb_type[i] as usize][0];
+      let sub_mb_type = self.sub_mb_type(slice)?;
+      slice.mb_mut().set_sub_mb_type(i, sub_mb_type);
+      pmode[i] = SUB_MB_PART_INFO[*slice.mb().sub_mb_type[i] as usize][1];
+      let sm = SUB_MB_PART_INFO[*slice.mb().sub_mb_type[i] as usize][0];
       ifrom[i * 4] = -1isize as usize;
       match sm {
         0 => {

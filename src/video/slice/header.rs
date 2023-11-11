@@ -122,9 +122,9 @@ pub struct SliceHeader {
 
   pub max_pic_num: i16,
 
-  pub sub_width_c: i8,
+  pub sub_width_c: isize,
 
-  pub sub_height_c: i8,
+  pub sub_height_c: isize,
 
   pub mb_width_c: u8,
 
