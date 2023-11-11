@@ -27,8 +27,8 @@ After running it you'll find the first frame from the video in `./temp/yuv_frame
 
 ### Options
 
-  <video-path>: The path to the video file you want to decode.
+  `<video-path>`: The path to the video file you want to decode.
 
 ### Additional Options
 
-  -d: Include this flag to print information about the video, such as it's dimensions, codec, duration.
+  `-d`: Include this flag to print information about the video, such as it's dimensions, codec, duration.
