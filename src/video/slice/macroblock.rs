@@ -445,8 +445,9 @@ impl std::fmt::Debug for Macroblock {
 
     for i in 0..2 {
       f.field(&format!("ref_idx_l{i}"), &DisplayArray(&self.ref_idx[i]));
-      for j in 0..16 {
-        f.field(&format!("mvd_l{i}[{j}]"), &DisplayArray(&self.mvd[i][j]));
+      for k in 0..2 {
+        let s: [isize; 16] = std::array::from_fn(|j| self.mvd[i][j][k]);
+        f.field(&format!("mvd_l{i}[...][{k}]"), &DisplayArray(&s));
       }
     }
 
@@ -634,6 +635,14 @@ impl MbType {
     }
   }
 
+  pub fn inter_mode(&self, idx: usize) -> &PartPredMode {
+    match self {
+      Self::Intra { part_pred_mode, .. } => part_pred_mode,
+      Self::Inter { part_pred_mode, .. } => &part_pred_mode[idx],
+      _ => &PartPredMode::NA,
+    }
+  }
+
   pub fn num_mb_part(&self) -> usize {
     match self {
       Self::Inter { num_mb_part, .. } => *num_mb_part as usize,
@@ -711,6 +720,10 @@ impl MbType {
     matches!(**self, MB_TYPE_B_SKIP)
   }
 
+  pub fn is_p_skip(&self) -> bool {
+    matches!(**self, MB_TYPE_P_SKIP)
+  }
+
   pub fn is_submb(&self) -> bool {
     matches!(**self, MB_TYPE_P_8X8 | MB_TYPE_P_8X8REF0 | MB_TYPE_B_8X8)
   }
@@ -731,6 +744,14 @@ pub enum PartPredMode {
 impl PartPredMode {
   pub fn is_inter_frame(&self) -> bool {
     matches!(self, Self::PredL0 | Self::PredL1 | Self::BiPred)
+  }
+
+  pub fn is_predl0(&self) -> bool {
+    matches!(self, Self::PredL0 | Self::BiPred)
+  }
+
+  pub fn is_predl1(&self) -> bool {
+    matches!(self, Self::PredL1 | Self::BiPred)
   }
 
   pub fn is_intra_4x4(&self) -> bool {
@@ -827,7 +848,7 @@ fn mb_type_inter(mb_type: u8) -> (i8, [PartPredMode; 2], u8, u8) {
 pub struct SubMbType {
   pub code: u8,
   pub num_sub_mb_part: usize,
-  pub sub_part_pred_mode: PartPredMode,
+  pub sub_mb_part_pred_mode: PartPredMode,
   pub sub_mb_part_width: u8,
   pub sub_mb_part_height: u8,
 }
@@ -848,12 +869,12 @@ impl PartialEq for SubMbType {
 
 impl SubMbType {
   pub fn new(sub_mb_type: u8) -> Self {
-    let (num_sub_mb_part, sub_part_pred_mode, sub_mb_part_width, sub_mb_part_height) =
+    let (num_sub_mb_part, sub_mb_part_pred_mode, sub_mb_part_width, sub_mb_part_height) =
       sub_mb_type_fields(sub_mb_type);
     Self {
       code: sub_mb_type,
       num_sub_mb_part,
-      sub_part_pred_mode,
+      sub_mb_part_pred_mode,
       sub_mb_part_width,
       sub_mb_part_height,
     }
@@ -863,7 +884,7 @@ impl SubMbType {
     Self {
       code: 0,
       num_sub_mb_part: 0,
-      sub_part_pred_mode: PartPredMode::PredL0,
+      sub_mb_part_pred_mode: PartPredMode::PredL0,
       sub_mb_part_width: 0,
       sub_mb_part_height: 0,
     }

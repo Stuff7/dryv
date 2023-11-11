@@ -11,9 +11,9 @@ impl Frame {
     &mut self,
     slice: &mut Slice,
     dpb: &DecodedPictureBuffer,
-    pred_part_l: [[u8; 16]; 16],
-    pred_part_cb: [[u8; 16]; 16],
-    pred_part_cr: [[u8; 16]; 16],
+    pred_part_l: &mut [[u8; 16]; 16],
+    pred_part_cb: &mut [[u8; 16]; 16],
+    pred_part_cr: &mut [[u8; 16]; 16],
     is_skip: bool,
   ) {
     let num_mb_part = if slice.mb().mb_type.is_b_skip() || slice.mb().mb_type.is_b_direct_16x16() {
@@ -37,16 +37,16 @@ impl Frame {
       1,
     );
 
-    for mbPartIdx in 0..num_mb_part {
+    for mb_part_idx in 0..num_mb_part {
       let x_p = inverse_raster_scan(
-        mbPartIdx as isize,
+        mb_part_idx as isize,
         slice.mb().mb_part_width(),
         slice.mb().mb_part_height(),
         16,
         0,
       );
       let y_p = inverse_raster_scan(
-        mbPartIdx as isize,
+        mb_part_idx as isize,
         slice.mb().mb_part_width(),
         slice.mb().mb_part_height(),
         16,
@@ -70,12 +70,12 @@ impl Frame {
         part_height = slice.mb().mb_part_height();
       } else if slice.mb().mb_type.is_p8x8()
         || slice.mb().mb_type.is_p_8x8ref0()
-        || (slice.mb().mb_type.is_b8x8() && !slice.mb().sub_mb_type[mbPartIdx].is_b_direct8x8())
+        || (slice.mb().mb_type.is_b8x8() && !slice.mb().sub_mb_type[mb_part_idx].is_b_direct8x8())
       {
-        num_sub_mb_part = slice.mb().sub_mb_type[mbPartIdx].num_sub_mb_part;
+        num_sub_mb_part = slice.mb().sub_mb_type[mb_part_idx].num_sub_mb_part;
 
-        part_width = slice.mb().sub_mb_type[mbPartIdx].sub_mb_part_width as isize;
-        part_height = slice.mb().sub_mb_type[mbPartIdx].sub_mb_part_height as isize;
+        part_width = slice.mb().sub_mb_type[mb_part_idx].sub_mb_part_width as isize;
+        part_height = slice.mb().sub_mb_type[mb_part_idx].sub_mb_part_height as isize;
       } else {
         num_sub_mb_part = 4;
 
@@ -88,33 +88,47 @@ impl Frame {
         part_height_c = part_height / slice.sub_height_c;
       }
 
-      for subMbPartIdx in 0..num_sub_mb_part {
+      for sub_mb_part_idx in 0..num_sub_mb_part {
         let x_s;
         let y_s;
         if slice.mb().mb_type.is_p8x8()
           || slice.mb().mb_type.is_p_8x8ref0()
           || slice.mb().mb_type.is_b8x8()
         {
-          x_s = inverse_raster_scan(subMbPartIdx as isize, part_width, part_height, 8, 0);
-          y_s = inverse_raster_scan(subMbPartIdx as isize, part_width, part_height, 8, 1);
+          x_s = inverse_raster_scan(sub_mb_part_idx as isize, part_width, part_height, 8, 0);
+          y_s = inverse_raster_scan(sub_mb_part_idx as isize, part_width, part_height, 8, 1);
         } else {
-          x_s = inverse_raster_scan(subMbPartIdx as isize, 4, 4, 8, 0);
-          y_s = inverse_raster_scan(subMbPartIdx as isize, 4, 4, 8, 1);
+          x_s = inverse_raster_scan(sub_mb_part_idx as isize, 4, 4, 8, 0);
+          y_s = inverse_raster_scan(sub_mb_part_idx as isize, 4, 4, 8, 1);
         }
 
-        let mv_cnt = 0;
+        let mut mv_cnt = 0;
 
         let mv_l0 = [0; 2];
         let mv_l1 = [0; 2];
-        let mv_cl0 = [0; 2];
-        let mv_cl1 = [0; 2];
-        let ref_idxl0 = 0;
-        let ref_idxl1 = 0;
-        let pred_flagl0 = 0;
-        let pred_flagl1 = 0;
-        let sub_mv_cnt = 0;
+        let mut mv_cl0 = [0; 2];
+        let mut mv_cl1 = [0; 2];
+        let mut ref_idxl0 = 0;
+        let mut ref_idxl1 = 0;
+        let mut pred_flagl0 = 0;
+        let mut pred_flagl1 = 0;
+        let mut sub_mv_cnt = 0;
 
-        todo!("Derivation process for motion vector components and reference indices");
+        self.mv_components_and_ref_indices(
+          slice,
+          dpb,
+          mb_part_idx,
+          sub_mb_part_idx,
+          &mv_l0,
+          &mv_l1,
+          &mut mv_cl0,
+          &mut mv_cl1,
+          &mut ref_idxl0,
+          &mut ref_idxl1,
+          &mut pred_flagl0,
+          &mut pred_flagl1,
+          &mut sub_mv_cnt,
+        );
 
         mv_cnt += sub_mv_cnt;
 
@@ -145,16 +159,16 @@ impl Frame {
 
         todo!("Decoding process for Inter prediction samples");
 
-        slice.mb_mut().mv_l0[mbPartIdx][subMbPartIdx][0] = mv_l0[0];
-        slice.mb_mut().mv_l0[mbPartIdx][subMbPartIdx][1] = mv_l0[1];
+        slice.mb_mut().mv_l0[mb_part_idx][sub_mb_part_idx][0] = mv_l0[0];
+        slice.mb_mut().mv_l0[mb_part_idx][sub_mb_part_idx][1] = mv_l0[1];
 
-        slice.mb_mut().mv_l1[mbPartIdx][subMbPartIdx][0] = mv_l1[0];
-        slice.mb_mut().mv_l1[mbPartIdx][subMbPartIdx][1] = mv_l1[1];
-        slice.mb_mut().ref_idxl0[mbPartIdx] = ref_idxl0;
-        slice.mb_mut().ref_idxl1[mbPartIdx] = ref_idxl1;
+        slice.mb_mut().mv_l1[mb_part_idx][sub_mb_part_idx][0] = mv_l1[0];
+        slice.mb_mut().mv_l1[mb_part_idx][sub_mb_part_idx][1] = mv_l1[1];
+        slice.mb_mut().ref_idxl0[mb_part_idx] = ref_idxl0;
+        slice.mb_mut().ref_idxl1[mb_part_idx] = ref_idxl1;
 
-        slice.mb_mut().pred_flagl0[mbPartIdx] = pred_flagl0;
-        slice.mb_mut().pred_flagl1[mbPartIdx] = pred_flagl1;
+        slice.mb_mut().pred_flagl0[mb_part_idx] = pred_flagl0;
+        slice.mb_mut().pred_flagl1[mb_part_idx] = pred_flagl1;
 
         if is_skip {
           for y in 0..part_height {
@@ -195,6 +209,122 @@ impl Frame {
             }
           }
         }
+      }
+    }
+  }
+
+  /// 8.4.1 Derivation process for motion vector components and reference indices
+  pub fn mv_components_and_ref_indices(
+    &mut self,
+    slice: &mut Slice,
+    dpb: &DecodedPictureBuffer,
+    mb_part_idx: usize,
+    sub_mb_part_idx: usize,
+    mv_l0: &[isize; 2],
+    mv_l1: &[isize; 2],
+    mv_cl0: &mut [isize; 2],
+    mv_cl1: &mut [isize; 2],
+    ref_idxl0: &mut isize,
+    ref_idxl1: &mut isize,
+    pred_flag_l0: &mut isize,
+    pred_flagl1: &mut isize,
+    sub_mv_cnt: &mut isize,
+  ) {
+    let mbaddr_a = -1;
+    let mbaddr_b = -1;
+    let mbaddr_c = -1;
+
+    let mv_l0_a = [0; 2];
+    let mv_l0_b = [0; 2];
+    let mv_l0_c = [0; 2];
+    let ref_idxl0_a = 0;
+    let ref_idxl0_b = 0;
+    let ref_idxl0_c = 0;
+
+    let mut curr_sub_mb_type = -1;
+
+    if slice.mb().mb_type.is_p_skip() {
+      *ref_idxl0 = 0;
+
+      todo!("Derivation process for motion data of neighbouring partitions");
+
+      if mbaddr_a == -1
+        || mbaddr_b == -1
+        || (ref_idxl0_a == 0 && mv_l0_a[0] == 0 && mv_l0_a[1] == 0)
+        || (ref_idxl0_b == 0 && mv_l0_b[0] == 0 && mv_l0_b[1] == 0)
+      {
+        mv_l0[0] = 0;
+        mv_l0[1] = 0;
+      } else {
+        todo!("Derivation_process_for_luma_motion_vector_prediction");
+      }
+
+      *pred_flag_l0 = 1;
+      *pred_flagl1 = 0;
+      mv_l1[0] = -1;
+      mv_l1[1] = -1;
+      *sub_mv_cnt = 1;
+    } else if slice.mb().mb_type.is_b_skip()
+      || slice.mb().mb_type.is_b_direct_16x16()
+      || slice.mb().sub_mb_type[mb_part_idx].is_b_direct8x8()
+    {
+      todo!(
+        "Derivation process for luma motion vectors for B Skip or B Direct 16x16 or B Direct 8x8"
+      );
+    } else {
+      let mvp_l0 = [0; 2];
+      let mvp_l1 = [0; 2];
+      let mode = slice.mb().mb_type.inter_mode(mb_part_idx);
+      let sub_mode = &slice.mb().sub_mb_type[mb_part_idx].sub_mb_part_pred_mode;
+
+      if mode.is_predl0() || sub_mode.is_predl0() {
+        *ref_idxl0 = slice.mb().ref_idxl0[mb_part_idx];
+        *pred_flag_l0 = 1;
+      } else {
+        *ref_idxl0 = -1;
+        *pred_flag_l0 = 0;
+      }
+
+      if mode.is_predl1() || sub_mode.is_predl1() {
+        *ref_idxl1 = slice.mb().ref_idxl1[mb_part_idx];
+        *pred_flagl1 = 1;
+      } else {
+        *ref_idxl1 = -1;
+        *pred_flagl1 = 0;
+      }
+
+      *sub_mv_cnt = *pred_flag_l0 + *pred_flagl1;
+
+      if slice.mb().mb_type.is_b8x8() {
+        curr_sub_mb_type = *slice.mb().sub_mb_type[mb_part_idx] as isize;
+      } else {
+        curr_sub_mb_type = -1;
+      }
+
+      if *pred_flag_l0 == 1 {
+        todo!("Derivation process for luma motion vector prediction");
+
+        mv_l0[0] = mvp_l0[0] + slice.mb().mvd[0][mb_part_idx * sub_mb_part_idx][0];
+        mv_l0[1] = mvp_l0[1] + slice.mb().mvd[0][mb_part_idx * sub_mb_part_idx][1];
+      }
+
+      if *pred_flagl1 == 1 {
+        todo!("Derivation process for luma motion vector prediction");
+
+        mv_l1[0] = mvp_l1[0] + slice.mb().mvd[1][mb_part_idx * sub_mb_part_idx][0];
+        mv_l1[1] = mvp_l1[1] + slice.mb().mvd[1][mb_part_idx * sub_mb_part_idx][1];
+      }
+    }
+
+    if slice.chroma_array_type != 0 {
+      if *pred_flag_l0 == 1 {
+        mv_cl0[0] = mv_l0[0];
+        mv_cl0[1] = mv_l0[1];
+      }
+
+      if *pred_flagl1 == 1 {
+        mv_cl1[0] = mv_l1[0];
+        mv_cl1[1] = mv_l1[1];
       }
     }
   }
