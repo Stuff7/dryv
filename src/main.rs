@@ -1,4 +1,5 @@
 #![allow(clippy::needless_range_loop)]
+#![allow(clippy::too_many_arguments)]
 mod ascii;
 mod byte;
 mod cli;

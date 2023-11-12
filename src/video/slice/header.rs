@@ -42,11 +42,11 @@ pub struct SliceHeader {
 
   /// An optional value for the delta picture order count bottom.
   /// It represents the difference between POC values of adjacent frames.
-  pub delta_pic_order_cnt_bottom: Option<i16>,
+  pub delta_pic_order_cnt_bottom: Option<isize>,
 
   /// An optional tuple representing the delta picture order count (POC) values.
   /// The first element is the POC value for reference picture 0, and the second element is for reference picture 1.
-  pub delta_pic_order_cnt: Option<(i16, Option<i16>)>,
+  pub delta_pic_order_cnt: Option<(isize, Option<isize>)>,
 
   /// An optional value for redundant picture count.
   /// Redundant slices are used for error recovery in video coding.
@@ -114,13 +114,13 @@ pub struct SliceHeader {
   /// This field is used in slice group-based video coding.
   pub slice_group_change_cycle: Option<u16>,
 
-  pub max_pic_order_cnt_lsb: i16,
+  pub max_pic_order_cnt_lsb: isize,
 
   pub max_frame_num: u16,
 
-  pub curr_pic_num: i16,
+  pub curr_pic_num: isize,
 
-  pub max_pic_num: i16,
+  pub max_pic_num: isize,
 
   pub sub_width_c: isize,
 
@@ -287,20 +287,20 @@ impl SliceHeader {
       max_pic_order_cnt_lsb: sps
         .log2_max_pic_order_cnt_lsb_minus4
         .map(|x| 1 << (x + 4))
-        .unwrap_or_default() as i16,
+        .unwrap_or_default() as isize,
       max_frame_num: {
         max_frame_num = 1 << (sps.log2_max_frame_num_minus4 as i16 + 4);
         max_frame_num
       },
       curr_pic_num: if field_pic_flag {
-        frame_num as i16
+        frame_num as isize
       } else {
-        2 * frame_num as i16 + 1
+        2 * frame_num as isize + 1
       },
       max_pic_num: if !field_pic_flag {
-        max_frame_num as i16
+        max_frame_num as isize
       } else {
-        2 * max_frame_num as i16
+        2 * max_frame_num as isize
       },
       sub_width_c,
       sub_height_c,
@@ -393,6 +393,10 @@ impl SliceType {
     matches!(self, SliceType::SP)
   }
 
+  pub fn is_non_switching_p(&self) -> bool {
+    matches!(self, SliceType::P)
+  }
+
   /// Checks if the slice type is a bidirectional slice (B-slice).
   pub fn is_bidirectional(&self) -> bool {
     matches!(self, SliceType::B)
@@ -453,17 +457,17 @@ impl RefPicListMvcModification {
 
 #[derive(Debug)]
 pub struct PredWeightTableEntry {
-  pub luma_weight: i16,
-  pub luma_offset: i16,
-  pub chroma_weight: [i16; 2],
-  pub chroma_offset: [i16; 2],
+  pub luma_weight: isize,
+  pub luma_offset: isize,
+  pub chroma_weight: [isize; 2],
+  pub chroma_offset: [isize; 2],
 }
 
 impl PredWeightTableEntry {
   fn new(
     stream: &mut BitStream,
-    luma_log2_weight_denom: u16,
-    chroma_log2_weight_denom: u16,
+    luma_log2_weight_denom: isize,
+    chroma_log2_weight_denom: isize,
   ) -> Self {
     let (luma_weight, luma_offset) = match stream.bit_flag() {
       true => (
@@ -488,10 +492,10 @@ impl PredWeightTableEntry {
   }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct PredWeightTable {
-  pub luma_log2_weight_denom: u16,
-  pub chroma_log2_weight_denom: u16,
+  pub luma_log2_weight_denom: isize,
+  pub chroma_log2_weight_denom: isize,
   pub l0: Box<[PredWeightTableEntry]>,
   pub l1: Box<[PredWeightTableEntry]>,
 }

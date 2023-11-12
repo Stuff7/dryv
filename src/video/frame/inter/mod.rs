@@ -1,5 +1,5 @@
 use crate::{
-  math::inverse_raster_scan,
+  math::{clamp, inverse_raster_scan},
   video::slice::{dpb::DecodedPictureBuffer, Slice},
 };
 
@@ -132,26 +132,48 @@ impl Frame {
 
         mv_cnt += sub_mv_cnt;
 
-        let log_wdl = 0;
-        let w0_l = 1;
-        let w1_l = 1;
-        let o0_l = 0;
-        let o1_l = 0;
-        let log_wdcb = 0;
-        let w0_cb = 1;
-        let w1_cb = 1;
-        let o0_cb = 0;
-        let o1_cb = 0;
-        let log_wdcr = 0;
-        let w0_cr = 1;
-        let w1_cr = 1;
-        let o0_cr = 0;
-        let o1_cr = 0;
+        let mut log_wdl = 0;
+        let mut w0_l = 1;
+        let mut w1_l = 1;
+        let mut o0_l = 0;
+        let mut o1_l = 0;
+        let mut log_wdcb = 0;
+        let mut w0_cb = 1;
+        let mut w1_cb = 1;
+        let mut o0_cb = 0;
+        let mut o1_cb = 0;
+        let mut log_wdcr = 0;
+        let mut w0_cr = 1;
+        let mut w1_cr = 1;
+        let mut o0_cr = 0;
+        let mut o1_cr = 0;
 
         if slice.pps.weighted_pred_flag && (slice.slice_type.is_predictive())
           || (slice.pps.weighted_bipred_idc > 0 && slice.slice_type.is_bidirectional())
         {
-          todo!("Derivation process for prediction weights");
+          self.prediction_weights(
+            slice,
+            dpb,
+            ref_idxl0 as usize,
+            ref_idxl1 as usize,
+            pred_flagl0,
+            pred_flagl1,
+            &mut log_wdl,
+            &mut w0_l,
+            &mut w1_l,
+            &mut o0_l,
+            &mut o1_l,
+            &mut log_wdcb,
+            &mut w0_cb,
+            &mut w1_cb,
+            &mut o0_cb,
+            &mut o1_cb,
+            &mut log_wdcr,
+            &mut w0_cr,
+            &mut w1_cr,
+            &mut o0_cr,
+            &mut o1_cr,
+          );
         }
 
         let x_al = x_m + x_p + x_s;
@@ -325,6 +347,157 @@ impl Frame {
       if *pred_flagl1 == 1 {
         mv_cl1[0] = mv_l1[0];
         mv_cl1[1] = mv_l1[1];
+      }
+    }
+  }
+
+  /// 8.4.3 Derivation process for prediction weights
+  pub fn prediction_weights(
+    &mut self,
+    slice: &mut Slice,
+    dpb: &DecodedPictureBuffer,
+    ref_idxl0: usize,
+    ref_idxl1: usize,
+    pred_flagl0: isize,
+    pred_flagl1: isize,
+    log_wdl: &mut isize,
+    w0_l: &mut isize,
+    w1_l: &mut isize,
+    o0_l: &mut isize,
+    o1_l: &mut isize,
+    log_wdcb: &mut isize,
+    w0_cb: &mut isize,
+    w1_cb: &mut isize,
+    o0_cb: &mut isize,
+    o1_cb: &mut isize,
+    log_wdcr: &mut isize,
+    w0_cr: &mut isize,
+    w1_cr: &mut isize,
+    o0_cr: &mut isize,
+    o1_cr: &mut isize,
+  ) {
+    let implicit_mode_flag;
+    let explicit_mode_flag;
+
+    if slice.pps.weighted_bipred_idc == 2
+      && slice.slice_type.is_bidirectional()
+      && pred_flagl0 == 1
+      && pred_flagl1 == 1
+    {
+      implicit_mode_flag = 1;
+      explicit_mode_flag = 0;
+    } else if (slice.pps.weighted_bipred_idc == 1
+      && slice.slice_type.is_bidirectional()
+      && (pred_flagl0 + pred_flagl1 == 1 || pred_flagl0 + pred_flagl1 == 2))
+      || (slice.pps.weighted_pred_flag
+        && (slice.slice_type.is_non_switching_p() || slice.slice_type.is_switching_p())
+        && pred_flagl0 == 1)
+    {
+      implicit_mode_flag = 0;
+      explicit_mode_flag = 1;
+    } else {
+      implicit_mode_flag = 0;
+      explicit_mode_flag = 0;
+    }
+
+    if implicit_mode_flag == 1 {
+      *log_wdl = 5;
+      *o0_l = 0;
+      *o1_l = 0;
+      if slice.chroma_array_type != 0 {
+        *log_wdcb = 5;
+        *o0_cb = 0;
+        *o1_cb = 0;
+
+        *log_wdcr = 5;
+        *o0_cr = 0;
+        *o1_cr = 0;
+      }
+      let pic0 = dpb.ref_pic_list0[ref_idxl0];
+      let pic1 = dpb.ref_pic_list1[ref_idxl1];
+
+      let curr_pic_order_cnt =
+        std::cmp::min(dpb.poc.top_field_order_cnt, dpb.poc.bottom_field_order_cnt);
+      let pic0_pic_order_cnt = std::cmp::min(pic0.top_field_order_cnt, pic0.bottom_field_order_cnt);
+      let pic1_pic_order_cnt = std::cmp::min(pic1.top_field_order_cnt, pic1.bottom_field_order_cnt);
+
+      let tb = clamp(curr_pic_order_cnt - pic0_pic_order_cnt, -128, 127);
+      let td = clamp(pic1_pic_order_cnt - pic0_pic_order_cnt, -128, 127);
+      let tx = (16384 + (td / 2).abs()) / td;
+      let dist_scale_factor = clamp((tb * tx + 32) >> 6, -1024, 1023);
+
+      if pic1_pic_order_cnt - pic0_pic_order_cnt == 0
+        || pic0.reference_marked_type.is_long_term_reference()
+        || pic1.reference_marked_type.is_long_term_reference()
+        || (dist_scale_factor >> 2) < -64
+        || (dist_scale_factor >> 2) > 128
+      {
+        *w0_l = 32;
+        *w1_l = 32;
+
+        if slice.chroma_array_type != 0 {
+          *w0_cb = 32;
+          *w1_cb = 32;
+          *w0_cr = 32;
+          *w1_cr = 32;
+        }
+      } else {
+        *w0_l = 64 - (dist_scale_factor >> 2);
+        *w1_l = dist_scale_factor >> 2;
+
+        if slice.chroma_array_type != 0 {
+          *w0_cb = 64 - (dist_scale_factor >> 2);
+          *w1_cb = dist_scale_factor >> 2;
+          *w0_cr = 64 - (dist_scale_factor >> 2);
+          *w1_cr = dist_scale_factor >> 2;
+        }
+      }
+    } else if explicit_mode_flag == 1 {
+      let ref_idx_l0_wp = ref_idxl0;
+      let ref_idx_l1_wp = ref_idxl1;
+      if let Some(pwt) = &slice.pred_weight_table {
+        *log_wdl = pwt.luma_log2_weight_denom;
+        *w0_l = pwt.l0[ref_idx_l0_wp].luma_weight;
+        *w1_l = pwt.l1[ref_idx_l1_wp].luma_weight;
+        *o0_l = pwt.l0[ref_idx_l0_wp].luma_offset * (1 << (slice.bit_depth_y - 8));
+        *o1_l = pwt.l1[ref_idx_l1_wp].luma_offset * (1 << (slice.bit_depth_y - 8));
+
+        if slice.chroma_array_type != 0 {
+          *log_wdcb = pwt.chroma_log2_weight_denom;
+          *w0_cb = pwt.l0[ref_idx_l0_wp].chroma_weight[0];
+          *w1_cb = pwt.l1[ref_idx_l1_wp].chroma_weight[0];
+          *o0_cb = pwt.l0[ref_idx_l0_wp].chroma_offset[0] * (1 << (slice.bit_depth_c - 8));
+          *o1_cb = pwt.l1[ref_idx_l1_wp].chroma_offset[0] * (1 << (slice.bit_depth_c - 8));
+
+          *log_wdcr = pwt.chroma_log2_weight_denom;
+          *w0_cr = pwt.l0[ref_idx_l0_wp].chroma_weight[1];
+          *w1_cr = pwt.l1[ref_idx_l1_wp].chroma_weight[1];
+          *o0_cr = pwt.l0[ref_idx_l0_wp].chroma_offset[1] * (1 << (slice.bit_depth_c - 8));
+          *o1_cr = pwt.l1[ref_idx_l1_wp].chroma_offset[1] * (1 << (slice.bit_depth_c - 8));
+        }
+      }
+    }
+
+    if explicit_mode_flag == 1 && pred_flagl0 == 1 && pred_flagl1 == 1 {
+      if !(-128 <= *w0_l + *w1_l && *w0_l + *w1_l <= (if *log_wdl == 7 { 127 } else { 128 })) {
+        panic!(
+          "w0_l + w1_l must be greater than or equal to -128, less than or equal to 127, or 128"
+        );
+      }
+
+      if slice.chroma_array_type != 0 {
+        if !(-128 <= *w0_cb + *w1_cb && *w0_cb + *w1_cb <= (if *log_wdcb == 7 { 127 } else { 128 }))
+        {
+          panic!(
+            "w0_l + w1_l must be greater than or equal to -128, less than or equal to 127, or 128"
+          );
+        }
+        if !(-128 <= *w0_cr + *w1_cr && *w0_cb + *w1_cr <= (if *log_wdcr == 7 { 127 } else { 128 }))
+        {
+          panic!(
+            "w0_l + w1_l must be greater than or equal to -128, less than or equal to 127, or 128"
+          );
+        }
       }
     }
   }

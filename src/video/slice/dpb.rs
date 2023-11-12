@@ -48,7 +48,7 @@ impl DecodedPictureBuffer {
   pub fn picture_numbers(&mut self, header: &SliceHeader) {
     for dpb in &mut self.buffer {
       if dpb.reference_marked_type.is_short_term_reference() {
-        if dpb.frame_num > header.frame_num as i16 {
+        if dpb.frame_num > header.frame_num as isize {
           dpb.frame_num_wrap -= dpb.max_frame_num;
         } else {
           dpb.frame_num_wrap = dpb.frame_num;
@@ -129,7 +129,7 @@ impl DecodedPictureBuffer {
   }
 
   /// 8.2.4.2.4 Initialization process for reference picture lists for B slices in fields
-  pub fn reference_picture_lists_for_b_slices_in_frames(&mut self, poc: i16) {
+  pub fn reference_picture_lists_for_b_slices_in_frames(&mut self, poc: isize) {
     let (mut short_term_left, mut short_term_right): (Vec<&_>, Vec<&_>) = self
       .buffer
       .iter()
@@ -260,7 +260,7 @@ impl DecodedPictureBuffer {
   pub fn modification_for_reference_picture_lists(&mut self, header: &SliceHeader) {
     if !header.ref_pic_list_modification_l0.is_empty() && !self.ref_pic_list0.is_empty() {
       let mut ref_idx_l0 = 0usize;
-      let mut pic_num_l0_pred = header.curr_pic_num;
+      let mut pic_num_l0_pred = header.curr_pic_num as isize;
       for ref_pic_list_mod in &*header.ref_pic_list_modification_l0 {
         if ref_pic_list_mod.modification_of_pic_nums_idc == 0
           || ref_pic_list_mod.modification_of_pic_nums_idc == 1
@@ -268,17 +268,17 @@ impl DecodedPictureBuffer {
           Self::modification_of_reference_picture_lists_for_short_term_reference_pictures(
             &mut ref_idx_l0,
             &mut pic_num_l0_pred,
-            ref_pic_list_mod.abs_diff_pic_num_minus1 as i16,
-            ref_pic_list_mod.modification_of_pic_nums_idc as i16,
-            header.num_ref_idx_l0_active_minus1 as i16,
+            ref_pic_list_mod.abs_diff_pic_num_minus1 as isize,
+            ref_pic_list_mod.modification_of_pic_nums_idc as isize,
+            header.num_ref_idx_l0_active_minus1 as isize,
             &mut self.ref_pic_list0,
             header,
           );
         } else if ref_pic_list_mod.modification_of_pic_nums_idc == 2 {
           Self::modification_of_reference_picture_lists_for_long_term_reference_pictures(
             &mut ref_idx_l0,
-            ref_pic_list_mod.long_term_pic_num as i16,
-            header.num_ref_idx_l0_active_minus1 as i16,
+            ref_pic_list_mod.long_term_pic_num as isize,
+            header.num_ref_idx_l0_active_minus1 as isize,
             &mut self.ref_pic_list0,
           );
         } else {
@@ -291,10 +291,10 @@ impl DecodedPictureBuffer {
   /// 8.2.4.3.1 Modification process of reference picture lists for short-term reference pictures
   pub fn modification_of_reference_picture_lists_for_short_term_reference_pictures(
     ref_idx_lx: &mut usize,
-    pic_num_lx_pred: &mut i16,
-    abs_diff_pic_num_minus1: i16,
-    modification_of_pic_nums_idc: i16,
-    num_ref_idx_lx_active_minus1: i16,
+    pic_num_lx_pred: &mut isize,
+    abs_diff_pic_num_minus1: isize,
+    modification_of_pic_nums_idc: isize,
+    num_ref_idx_lx_active_minus1: isize,
     ref_pic_listx: &mut Vec<Picture>,
     header: &SliceHeader,
   ) {
@@ -319,7 +319,7 @@ impl DecodedPictureBuffer {
       pic_num_lx_no_wrap
     };
 
-    let length = if (num_ref_idx_lx_active_minus1 + 1) < ref_pic_listx.len() as i16 {
+    let length = if (num_ref_idx_lx_active_minus1 + 1) < ref_pic_listx.len() as isize {
       num_ref_idx_lx_active_minus1 as usize + 1
     } else {
       ref_pic_listx.len()
@@ -366,8 +366,8 @@ impl DecodedPictureBuffer {
   /// 8.2.4.3.2 Modification process of reference picture lists for long-term reference pictures
   pub fn modification_of_reference_picture_lists_for_long_term_reference_pictures(
     ref_idx_lx: &mut usize,
-    long_term_pic_num: i16,
-    num_ref_idx_lx_active_minus1: i16,
+    long_term_pic_num: isize,
+    num_ref_idx_lx_active_minus1: isize,
     ref_pic_listx: &mut Vec<Picture>,
   ) {
     let length = if (num_ref_idx_lx_active_minus1 as usize + 1) < ref_pic_listx.len() {
@@ -456,7 +456,7 @@ impl DecodedPictureBuffer {
         Mmco::ForgetShort {
           difference_of_pic_nums_minus1,
         } => {
-          let pic_num_x = slice.curr_pic_num - (*difference_of_pic_nums_minus1 as i16 + 1);
+          let pic_num_x = slice.curr_pic_num - (*difference_of_pic_nums_minus1 as isize + 1);
           for j in 0..self.buffer.len() {
             if self.buffer[j]
               .reference_marked_type
@@ -472,7 +472,7 @@ impl DecodedPictureBuffer {
             if self.buffer[j]
               .reference_marked_type
               .is_long_term_reference()
-              && self.buffer[j].long_term_pic_num == *long_term_pic_num as i16
+              && self.buffer[j].long_term_pic_num == *long_term_pic_num as isize
             {
               self.buffer.remove(j);
             }
@@ -482,12 +482,12 @@ impl DecodedPictureBuffer {
           difference_of_pic_nums_minus1,
           long_term_frame_idx,
         } => {
-          let pic_num_x = slice.curr_pic_num - (*difference_of_pic_nums_minus1 as i16 + 1);
+          let pic_num_x = slice.curr_pic_num - (*difference_of_pic_nums_minus1 as isize + 1);
           for j in 0..self.buffer.len() {
             if self.buffer[j]
               .reference_marked_type
               .is_long_term_reference()
-              && self.buffer[j].long_term_frame_idx == *long_term_frame_idx as i16
+              && self.buffer[j].long_term_frame_idx == *long_term_frame_idx as isize
             {
               self.buffer.remove(j);
             }
@@ -507,7 +507,7 @@ impl DecodedPictureBuffer {
           max_long_term_frame_idx_plus1,
         } => {
           for j in 0..self.buffer.len() {
-            if (self.buffer[j].long_term_frame_idx > *max_long_term_frame_idx_plus1 as i16 - 1)
+            if (self.buffer[j].long_term_frame_idx > *max_long_term_frame_idx_plus1 as isize - 1)
               && self.buffer[j]
                 .reference_marked_type
                 .is_long_term_reference()
@@ -518,7 +518,7 @@ impl DecodedPictureBuffer {
           if *max_long_term_frame_idx_plus1 == 0 {
             pic.max_long_term_frame_idx = -1;
           } else {
-            pic.max_long_term_frame_idx = *max_long_term_frame_idx_plus1 as i16 - 1;
+            pic.max_long_term_frame_idx = *max_long_term_frame_idx_plus1 as isize - 1;
           }
         }
         Mmco::ForgetAll => {
@@ -530,7 +530,7 @@ impl DecodedPictureBuffer {
           long_term_frame_idx,
         } => {
           for j in 0..self.buffer.len() {
-            if self.buffer[j].long_term_frame_idx == *long_term_frame_idx as i16
+            if self.buffer[j].long_term_frame_idx == *long_term_frame_idx as isize
               && self.buffer[j]
                 .reference_marked_type
                 .is_long_term_reference()
@@ -540,7 +540,7 @@ impl DecodedPictureBuffer {
           }
 
           pic.reference_marked_type = PictureMarking::LongTermReference;
-          pic.long_term_frame_idx = *long_term_frame_idx as i16;
+          pic.long_term_frame_idx = *long_term_frame_idx as isize;
           pic.memory_management_control_operation_6_flag = true;
         }
       }
@@ -560,7 +560,7 @@ impl DecodedPictureBuffer {
       }
     }
 
-    if num_short_term + num_long_term == std::cmp::max(max_num_ref_frames as i16, 1i16)
+    if num_short_term + num_long_term == std::cmp::max(max_num_ref_frames as isize, 1isize)
       && num_short_term > 0
     {
       let mut frame_num_wrap = -1;
@@ -621,7 +621,7 @@ impl DecodedPictureBuffer {
       prev_pic_order_cnt_lsb = previous.pic_order_cnt_lsb;
     }
 
-    let pic_order_cnt_lsb = slice.pic_order_cnt_lsb.unwrap_or_default() as i16;
+    let pic_order_cnt_lsb = slice.pic_order_cnt_lsb.unwrap_or_default() as isize;
     if pic_order_cnt_lsb < prev_pic_order_cnt_lsb
       && ((prev_pic_order_cnt_lsb - pic_order_cnt_lsb) >= (slice.max_pic_order_cnt_lsb / 2))
     {
@@ -653,8 +653,8 @@ impl DecodedPictureBuffer {
 
     if slice.nal_unit_type.is_idr() {
       self.poc.frame_num_offset = 0;
-    } else if previous.frame_num > slice.frame_num as i16 {
-      self.poc.frame_num_offset = prev_frame_num_offset + slice.max_frame_num as i16;
+    } else if previous.frame_num > slice.frame_num as isize {
+      self.poc.frame_num_offset = prev_frame_num_offset + slice.max_frame_num as isize;
     } else {
       self.poc.frame_num_offset = prev_frame_num_offset;
     }
@@ -671,7 +671,7 @@ impl DecodedPictureBuffer {
     );
     let mut abs_frame_num;
     if *num_ref_frames_in_pic_order_cnt_cycle != 0 {
-      abs_frame_num = self.poc.frame_num_offset + slice.frame_num as i16;
+      abs_frame_num = self.poc.frame_num_offset + slice.frame_num as isize;
     } else {
       abs_frame_num = 0;
     }
@@ -682,9 +682,10 @@ impl DecodedPictureBuffer {
     let mut pic_order_cnt_cycle_cnt = 0;
     let mut frame_num_in_pic_order_cnt_cycle = 0;
     if abs_frame_num > 0 {
-      pic_order_cnt_cycle_cnt = (abs_frame_num - 1) / *num_ref_frames_in_pic_order_cnt_cycle as i16;
+      pic_order_cnt_cycle_cnt =
+        (abs_frame_num - 1) / *num_ref_frames_in_pic_order_cnt_cycle as isize;
       frame_num_in_pic_order_cnt_cycle =
-        (abs_frame_num - 1) % *num_ref_frames_in_pic_order_cnt_cycle as i16;
+        (abs_frame_num - 1) % *num_ref_frames_in_pic_order_cnt_cycle as isize;
     }
 
     let mut expected_pic_order_cnt;
@@ -731,8 +732,8 @@ impl DecodedPictureBuffer {
 
     if slice.nal_unit_type.is_idr() {
       self.poc.frame_num_offset = 0;
-    } else if previous.frame_num > slice.frame_num as i16 {
-      self.poc.frame_num_offset = prev_frame_num_offset + slice.max_frame_num as i16;
+    } else if previous.frame_num > slice.frame_num as isize {
+      self.poc.frame_num_offset = prev_frame_num_offset + slice.max_frame_num as isize;
     } else {
       self.poc.frame_num_offset = prev_frame_num_offset;
     }
@@ -741,9 +742,9 @@ impl DecodedPictureBuffer {
     if slice.nal_unit_type.is_idr() {
       temp_pic_order_cnt = 0;
     } else if slice.nal_idc == 0 {
-      temp_pic_order_cnt = 2 * (self.poc.frame_num_offset + slice.frame_num as i16) - 1;
+      temp_pic_order_cnt = 2 * (self.poc.frame_num_offset + slice.frame_num as isize) - 1;
     } else {
-      temp_pic_order_cnt = 2 * (self.poc.frame_num_offset + slice.frame_num as i16);
+      temp_pic_order_cnt = 2 * (self.poc.frame_num_offset + slice.frame_num as isize);
     }
 
     if !slice.field_pic_flag {
@@ -791,25 +792,25 @@ impl PictureMarking {
 
 #[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
 pub struct PictureOrderCount {
-  pub pic_order_cnt: i16,
-  pub pic_order_cnt_msb: i16,
-  pub pic_order_cnt_lsb: i16,
-  pub top_field_order_cnt: i16,
-  pub bottom_field_order_cnt: i16,
-  pub frame_num_offset: i16,
+  pub pic_order_cnt: isize,
+  pub pic_order_cnt_msb: isize,
+  pub pic_order_cnt_lsb: isize,
+  pub top_field_order_cnt: isize,
+  pub bottom_field_order_cnt: isize,
+  pub frame_num_offset: isize,
 }
 
 #[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
 pub struct Picture {
   pub poc: PictureOrderCount,
   pub reference_marked_type: PictureMarking,
-  pub frame_num: i16,
-  pub max_frame_num: i16,
-  pub long_term_frame_idx: i16,
-  pub max_long_term_frame_idx: i16,
-  pub pic_num: i16,
-  pub long_term_pic_num: i16,
-  pub frame_num_wrap: i16,
+  pub frame_num: isize,
+  pub max_frame_num: isize,
+  pub long_term_frame_idx: isize,
+  pub max_long_term_frame_idx: isize,
+  pub pic_num: isize,
+  pub long_term_pic_num: isize,
+  pub frame_num_wrap: isize,
   pub memory_management_control_operation_5_flag: bool,
   pub memory_management_control_operation_6_flag: bool,
 }
