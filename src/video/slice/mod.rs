@@ -239,6 +239,7 @@ impl<'a> Slice<'a> {
           if end_of_slice_flag != 0 {
             self.last_mb_in_slice = self.curr_mb_addr;
             self.stream.is_byte_aligned(0);
+            dpb.push(self);
             return Ok(());
           }
         }
@@ -312,7 +313,6 @@ impl<'a> Slice<'a> {
         // }
       }
     }
-    dpb.push(self);
     Ok(())
   }
 

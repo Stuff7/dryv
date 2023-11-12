@@ -2,15 +2,15 @@ use super::{
   header::{Mmco, SliceHeader},
   Slice,
 };
-use crate::video::atom::PicOrderCntTypeOne;
+use crate::{math::OffsetArray, video::atom::PicOrderCntTypeOne};
 use std::ops::{Deref, DerefMut};
 
 #[derive(Debug)]
 pub struct DecodedPictureBuffer {
   pub poc: PictureOrderCount,
   pub buffer: Vec<Picture>,
-  pub ref_pic_list0: Vec<Picture>,
-  pub ref_pic_list1: Vec<Picture>,
+  pub ref_pic_list0: Vec<usize>,
+  pub ref_pic_list1: Vec<usize>,
 }
 
 impl DecodedPictureBuffer {
@@ -32,6 +32,14 @@ impl DecodedPictureBuffer {
 
   pub fn previous(&self) -> &Picture {
     self.buffer.last().unwrap_or(&DEFAULT_PIC)
+  }
+
+  pub fn ref_pic_list0(&self, idx: usize) -> &Picture {
+    &self.buffer[self.ref_pic_list0[idx]]
+  }
+
+  pub fn ref_pic_list1(&self, idx: usize) -> &Picture {
+    &self.buffer[self.ref_pic_list1[idx]]
   }
 
   /// 8.2.4 Decoding process for reference picture lists construction
@@ -120,11 +128,15 @@ impl DecodedPictureBuffer {
     }
 
     for i in 0..short_term.len() {
-      self.ref_pic_list0.push(*short_term[i]);
+      self
+        .ref_pic_list0
+        .push(short_term[i].offset_array(&self.buffer));
     }
 
     for i in 0..long_term.len() {
-      self.ref_pic_list0.push(*long_term[i]);
+      self
+        .ref_pic_list0
+        .push(long_term[i].offset_array(&self.buffer));
     }
   }
 
@@ -172,15 +184,21 @@ impl DecodedPictureBuffer {
     }
 
     for i in 0..short_term_left.len() {
-      self.ref_pic_list0.push(*short_term_left[i]);
+      self
+        .ref_pic_list0
+        .push(short_term_left[i].offset_array(&self.buffer));
     }
 
     for i in 0..short_term_right.len() {
-      self.ref_pic_list0.push(*short_term_right[i]);
+      self
+        .ref_pic_list0
+        .push(short_term_right[i].offset_array(&self.buffer));
     }
 
     for i in 0..long_term.len() {
-      self.ref_pic_list0.push(*long_term[i]);
+      self
+        .ref_pic_list0
+        .push(long_term[i].offset_array(&self.buffer));
     }
 
     let (mut short_term_left, mut short_term_right): (Vec<&_>, Vec<&_>) = self
@@ -225,15 +243,21 @@ impl DecodedPictureBuffer {
     }
 
     for i in 0..short_term_left.len() {
-      self.ref_pic_list1.push(*short_term_left[i]);
+      self
+        .ref_pic_list1
+        .push(short_term_left[i].offset_array(&self.buffer));
     }
 
     for i in 0..short_term_right.len() {
-      self.ref_pic_list1.push(*short_term_right[i]);
+      self
+        .ref_pic_list1
+        .push(short_term_right[i].offset_array(&self.buffer));
     }
 
     for i in 0..long_term.len() {
-      self.ref_pic_list1.push(*long_term[i]);
+      self
+        .ref_pic_list1
+        .push(long_term[i].offset_array(&self.buffer));
     }
 
     let mut flag = false;
@@ -265,21 +289,19 @@ impl DecodedPictureBuffer {
         if ref_pic_list_mod.modification_of_pic_nums_idc == 0
           || ref_pic_list_mod.modification_of_pic_nums_idc == 1
         {
-          Self::modification_of_reference_picture_lists_for_short_term_reference_pictures(
+          self.modification_of_reference_picture_lists_for_short_term_reference_pictures(
             &mut ref_idx_l0,
             &mut pic_num_l0_pred,
             ref_pic_list_mod.abs_diff_pic_num_minus1 as isize,
             ref_pic_list_mod.modification_of_pic_nums_idc as isize,
             header.num_ref_idx_l0_active_minus1 as isize,
-            &mut self.ref_pic_list0,
             header,
           );
         } else if ref_pic_list_mod.modification_of_pic_nums_idc == 2 {
-          Self::modification_of_reference_picture_lists_for_long_term_reference_pictures(
+          self.modification_of_reference_picture_lists_for_long_term_reference_pictures(
             &mut ref_idx_l0,
             ref_pic_list_mod.long_term_pic_num as isize,
             header.num_ref_idx_l0_active_minus1 as isize,
-            &mut self.ref_pic_list0,
           );
         } else {
           break;
@@ -290,12 +312,12 @@ impl DecodedPictureBuffer {
 
   /// 8.2.4.3.1 Modification process of reference picture lists for short-term reference pictures
   pub fn modification_of_reference_picture_lists_for_short_term_reference_pictures(
+    &mut self,
     ref_idx_lx: &mut usize,
     pic_num_lx_pred: &mut isize,
     abs_diff_pic_num_minus1: isize,
     modification_of_pic_nums_idc: isize,
     num_ref_idx_lx_active_minus1: isize,
-    ref_pic_listx: &mut Vec<Picture>,
     header: &SliceHeader,
   ) {
     let pic_num_lx_no_wrap;
@@ -319,22 +341,23 @@ impl DecodedPictureBuffer {
       pic_num_lx_no_wrap
     };
 
-    let length = if (num_ref_idx_lx_active_minus1 + 1) < ref_pic_listx.len() as isize {
+    let length = if (num_ref_idx_lx_active_minus1 + 1) < self.ref_pic_list0.len() as isize {
       num_ref_idx_lx_active_minus1 as usize + 1
     } else {
-      ref_pic_listx.len()
+      self.ref_pic_list0.len()
     };
 
     let mut c_idx = length;
     while c_idx > *ref_idx_lx {
-      ref_pic_listx[c_idx] = ref_pic_listx[c_idx - 1];
+      self.ref_pic_list0[c_idx] = self.ref_pic_list0[c_idx - 1];
       c_idx -= 1;
     }
 
     let mut idx = 0;
     while idx < length {
-      if ref_pic_listx[idx].pic_num == pic_num_lx
-        && ref_pic_listx[idx]
+      if self.ref_pic_list0(idx).pic_num == pic_num_lx
+        && self
+          .ref_pic_list0(idx)
           .reference_marked_type
           .is_short_term_reference()
       {
@@ -342,74 +365,80 @@ impl DecodedPictureBuffer {
       }
       idx += 1;
     }
-    ref_pic_listx[*ref_idx_lx] = ref_pic_listx[idx];
+    self.ref_pic_list0[*ref_idx_lx] = self.ref_pic_list0[idx];
     *ref_idx_lx += 1;
     let mut n_idx = *ref_idx_lx;
     for c_idx in *ref_idx_lx..length {
-      let pic_num_f = if ref_pic_listx[c_idx]
+      let pic_num_f = if self
+        .ref_pic_list0(c_idx)
         .reference_marked_type
         .is_short_term_reference()
       {
-        ref_pic_listx[c_idx].pic_num
+        self.ref_pic_list0(c_idx).pic_num
       } else {
         header.max_pic_num
       };
       if pic_num_f != pic_num_lx {
-        ref_pic_listx[n_idx] = ref_pic_listx[c_idx];
+        self.ref_pic_list0[n_idx] = self.ref_pic_list0[c_idx];
         n_idx += 1;
       }
     }
 
-    ref_pic_listx.drain(num_ref_idx_lx_active_minus1 as usize + 1..);
+    self
+      .ref_pic_list0
+      .drain(num_ref_idx_lx_active_minus1 as usize + 1..);
   }
 
   /// 8.2.4.3.2 Modification process of reference picture lists for long-term reference pictures
   pub fn modification_of_reference_picture_lists_for_long_term_reference_pictures(
+    &mut self,
     ref_idx_lx: &mut usize,
     long_term_pic_num: isize,
     num_ref_idx_lx_active_minus1: isize,
-    ref_pic_listx: &mut Vec<Picture>,
   ) {
-    let length = if (num_ref_idx_lx_active_minus1 as usize + 1) < ref_pic_listx.len() {
+    let length = if (num_ref_idx_lx_active_minus1 as usize + 1) < self.ref_pic_list0.len() {
       num_ref_idx_lx_active_minus1 as usize + 1
     } else {
-      ref_pic_listx.len()
+      self.ref_pic_list0.len()
     };
     let mut c_idx = length;
     while c_idx > *ref_idx_lx {
-      ref_pic_listx[c_idx] = ref_pic_listx[c_idx - 1];
+      self.ref_pic_list0[c_idx] = self.ref_pic_list0[c_idx - 1];
       c_idx -= 1;
     }
 
     let mut idx = 0;
     while idx < length {
-      if ref_pic_listx[idx].long_term_pic_num == long_term_pic_num {
+      if self.ref_pic_list0(idx).long_term_pic_num == long_term_pic_num {
         break;
       }
       idx += 1;
     }
-    ref_pic_listx[*ref_idx_lx] = ref_pic_listx[idx];
+    self.ref_pic_list0[*ref_idx_lx] = self.ref_pic_list0[idx];
     *ref_idx_lx += 1;
 
     let mut n_idx = *ref_idx_lx;
 
     for c_idx in *ref_idx_lx..length {
-      let long_term_pic_num_f = if ref_pic_listx[c_idx]
+      let long_term_pic_num_f = if self
+        .ref_pic_list0(c_idx)
         .reference_marked_type
         .is_long_term_reference()
       {
-        ref_pic_listx[c_idx].long_term_pic_num
+        self.ref_pic_list0(c_idx).long_term_pic_num
       } else {
         0
       };
 
       if long_term_pic_num_f != long_term_pic_num {
-        ref_pic_listx[n_idx] = ref_pic_listx[c_idx];
+        self.ref_pic_list0[n_idx] = self.ref_pic_list0[c_idx];
         n_idx += 1;
       }
     }
 
-    ref_pic_listx.drain(num_ref_idx_lx_active_minus1 as usize + 1..);
+    self
+      .ref_pic_list0
+      .drain(num_ref_idx_lx_active_minus1 as usize + 1..);
   }
 
   /// 8.2.5 Decoded reference picture marking process
@@ -787,7 +816,7 @@ pub struct PictureOrderCount {
   pub frame_num_offset: isize,
 }
 
-#[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct Picture {
   pub poc: PictureOrderCount,
   pub reference_marked_type: PictureMarking,
@@ -846,3 +875,5 @@ impl Picture {
     }
   }
 }
+
+impl OffsetArray for Picture {}

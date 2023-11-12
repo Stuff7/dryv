@@ -82,7 +82,7 @@ impl Iterator for SampleIter {
         .next_stsc
         .as_ref()
         .is_some_and(|stsc| self.chunk_index >= stsc.first_chunk as usize - 1)
-        || self.next_stsc.is_none()
+        || (self.samples_in_chunk == 0 && self.next_stsc.is_none())
       {
         let stsc = self
           .next_stsc

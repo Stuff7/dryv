@@ -85,7 +85,7 @@ impl Decoder {
   }
 
   pub fn decode_sample(&mut self, stbl: &mut StblAtom) -> DecoderResult {
-    let samples = SampleIter::new(self, stbl)?.take(2).enumerate();
+    let samples = SampleIter::new(self, stbl)?.take(10).enumerate();
     let Some(CodecData::Avc1(avc1)) = stbl
       .stsd
       .decode(self)?
@@ -123,7 +123,7 @@ impl Decoder {
             let mut slice = Slice::new(nal.data, &nal, &mut avc1.avcc.sps, &mut avc1.avcc.pps);
             let mut frame = Frame::new(&slice);
             slice.data(&mut dpb, &mut frame)?;
-            log!(File@"{msg}{:#?}", slice);
+            log!(File@"{msg}PICTURE");
             use std::io::Write;
             let name = format!("temp/slice/{i}");
             let mut f = std::fs::File::create(name).expect("SLICE CREATION");
@@ -180,9 +180,6 @@ impl Decoder {
     let stbl = minf.stbl.decode(self)?;
     log!(File@"STBL Size: {}", stbl.atom.size);
     stbl.stsd.decode(self)?;
-    for stsd in &mut *stbl.stsd.decode(self)?.sample_description_table {
-      log!(File@"ROOT.TRAK.MDIA.MINF.STBL.STSD {:#?}", stsd);
-    }
     log!(File@"ROOT.TRAK.MDIA.MINF.STBL.STTS {} {:#?}",
       stbl.stts.number_of_entries,
       stbl.stts.time_to_sample_table(self)?.take(4).collect::<Vec<_>>()

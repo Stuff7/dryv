@@ -123,3 +123,14 @@ pub fn inverse_raster_scan(a: isize, b: isize, c: isize, d: isize, e: isize) -> 
     (a / (d / b)) * c
   }
 }
+
+pub trait OffsetArray: std::marker::Sized {
+  fn offset_array(&self, array: &[Self]) -> usize {
+    let index = unsafe { (self as *const Self).offset_from(array.as_ptr()) };
+    if index >= array.len() as isize {
+      panic!("Could not find offset for array");
+    } else {
+      index as usize
+    }
+  }
+}

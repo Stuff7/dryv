@@ -414,8 +414,8 @@ impl Frame {
         *o0_cr = 0;
         *o1_cr = 0;
       }
-      let pic0 = dpb.ref_pic_list0[ref_idxl0];
-      let pic1 = dpb.ref_pic_list1[ref_idxl1];
+      let pic0 = dpb.ref_pic_list0(ref_idxl0);
+      let pic1 = dpb.ref_pic_list1(ref_idxl1);
 
       let curr_pic_order_cnt =
         std::cmp::min(dpb.poc.top_field_order_cnt, dpb.poc.bottom_field_order_cnt);
@@ -540,7 +540,7 @@ impl Frame {
     mv_cl0: &[isize; 2],
     mv_cl1: &[isize; 2],
     ref_idxl0: usize,
-    refIdxL1: usize,
+    ref_idx_l1: usize,
     pred_flag_l0: isize,
     pred_flag_l1: isize,
     pred_part_l: &[[isize; 16]; 16],
@@ -561,7 +561,7 @@ impl Frame {
     }
 
     if pred_flag_l1 == 1 {
-      let ref_pic = dpb.ref_pic_list1[refIdxL1];
+      let ref_pic = dpb.ref_pic_list1[ref_idx_l1];
       todo!("Fractional sample interpolation process");
     }
 
