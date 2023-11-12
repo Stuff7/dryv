@@ -260,7 +260,7 @@ impl DecodedPictureBuffer {
   pub fn modification_for_reference_picture_lists(&mut self, header: &SliceHeader) {
     if !header.ref_pic_list_modification_l0.is_empty() && !self.ref_pic_list0.is_empty() {
       let mut ref_idx_l0 = 0usize;
-      let mut pic_num_l0_pred = header.curr_pic_num as isize;
+      let mut pic_num_l0_pred = header.curr_pic_num;
       for ref_pic_list_mod in &*header.ref_pic_list_modification_l0 {
         if ref_pic_list_mod.modification_of_pic_nums_idc == 0
           || ref_pic_list_mod.modification_of_pic_nums_idc == 1
@@ -556,7 +556,6 @@ impl DecodedPictureBuffer {
       match dpb.reference_marked_type {
         PictureMarking::ShortTermReference => num_short_term += 1,
         PictureMarking::LongTermReference => num_long_term += 1,
-        _ => (),
       }
     }
 
@@ -764,29 +763,17 @@ const DEFAULT_PIC: Picture = Picture::unknown();
 #[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
 pub enum PictureMarking {
   #[default]
-  Unknown,
-  UsedForReference,
   ShortTermReference,
   LongTermReference,
-  UnusedForReference,
 }
 
-#[allow(dead_code)]
 impl PictureMarking {
-  pub fn is_used_for_reference(&self) -> bool {
-    matches!(self, PictureMarking::UsedForReference)
-  }
-
   pub fn is_short_term_reference(&self) -> bool {
     matches!(self, PictureMarking::ShortTermReference)
   }
 
   pub fn is_long_term_reference(&self) -> bool {
     matches!(self, PictureMarking::LongTermReference)
-  }
-
-  pub fn is_unused_for_reference(&self) -> bool {
-    matches!(self, PictureMarking::UnusedForReference)
   }
 }
 
@@ -839,7 +826,7 @@ impl Picture {
         bottom_field_order_cnt: 0,
         frame_num_offset: 0,
       },
-      reference_marked_type: PictureMarking::Unknown,
+      reference_marked_type: PictureMarking::ShortTermReference,
       frame_num: 0,
       max_frame_num: 0,
       long_term_frame_idx: 0,

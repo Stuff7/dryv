@@ -1,9 +1,10 @@
+mod interpolation;
+
+use super::Frame;
 use crate::{
   math::{clamp, inverse_raster_scan},
   video::slice::{dpb::DecodedPictureBuffer, Slice},
 };
-
-use super::Frame;
 
 impl Frame {
   /// 8.4 Inter prediction process
@@ -500,5 +501,70 @@ impl Frame {
         }
       }
     }
+  }
+
+  /// 8.4.2 Decoding process for inter prediction samples
+  pub fn inter_prediction_samples(
+    &mut self,
+    slice: &mut Slice,
+    log_wdl: isize,
+    w0_l: isize,
+    w1_l: isize,
+    o0_l: isize,
+    o1_l: isize,
+    log_wdcb: isize,
+    w0_cb: isize,
+    w1_cb: isize,
+    o0_cb: isize,
+    o1_cb: isize,
+    log_wdcr: isize,
+    w0_cr: isize,
+    w1_cr: isize,
+    o0_cr: isize,
+    o1_cr: isize,
+    dpb: &DecodedPictureBuffer,
+    x_al: isize,
+    y_al: isize,
+    x_p: isize,
+    x_s: isize,
+    y_p: isize,
+    y_s: isize,
+    mb_part_idx: isize,
+    sub_mb_part_idx: isize,
+    part_width: usize,
+    part_height: usize,
+    part_width_c: usize,
+    part_height_c: usize,
+    mv_l0: &[isize; 2],
+    mv_l1: &[isize; 2],
+    mv_cl0: &[isize; 2],
+    mv_cl1: &[isize; 2],
+    ref_idxl0: usize,
+    refIdxL1: usize,
+    pred_flag_l0: isize,
+    pred_flag_l1: isize,
+    pred_part_l: &[[isize; 16]; 16],
+    pred_part_cb: &[[isize; 16]; 16],
+    pred_part_cr: &[[isize; 16]; 16],
+  ) {
+    let pred_part_l0l = vec![0; part_width * part_height];
+    let pred_part_l1l = vec![0; part_width * part_height];
+
+    let pred_part_l0cb = vec![0; part_width_c * part_height_c];
+    let pred_part_l1cb = vec![0; part_width_c * part_height_c];
+    let pred_part_l0cr = vec![0; part_width_c * part_height_c];
+    let pred_part_l1cr = vec![0; part_width_c * part_height_c];
+
+    if pred_flag_l0 == 1 {
+      let ref_pic = dpb.ref_pic_list0[ref_idxl0];
+      todo!("Fractional sample interpolation process");
+    }
+
+    if pred_flag_l1 == 1 {
+      let ref_pic = dpb.ref_pic_list1[refIdxL1];
+      todo!("Fractional sample interpolation process");
+    }
+
+    todo!("Weighted sample prediction process");
   }
 }
