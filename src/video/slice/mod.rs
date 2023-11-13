@@ -69,6 +69,8 @@ pub struct Slice<'a> {
 
   pub pic_height_in_samples_c: u16,
 
+  pub max_frame_num: isize,
+
   /// Quantization parameter for the slice.
   /// The quantization parameter affects the trade-off between compression and image quality.
   pub sliceqpy: isize,
@@ -144,6 +146,7 @@ impl<'a> Slice<'a> {
       pic_height_in_samples_l: pic_height_in_mbs * 16,
       pic_width_in_samples_c: pic_width_in_mbs * header.mb_width_c as u16,
       pic_height_in_samples_c: pic_height_in_mbs * header.mb_height_c as u16,
+      max_frame_num: 1 << (sps.log2_max_frame_num_minus4 + 4),
       sliceqpy: {
         sliceqpy = 26 + pps.pic_init_qp_minus26 as isize + header.slice_qp_delta as isize;
         sliceqpy
@@ -181,7 +184,8 @@ impl<'a> Slice<'a> {
     &mut self.macroblocks[self.curr_mb_addr as usize]
   }
 
-  pub fn data(&mut self, dpb: &mut DecodedPictureBuffer, frame: &mut Frame) -> CabacResult {
+  pub fn data(&mut self, dpb: &mut DecodedPictureBuffer) -> CabacResult {
+    let mut frame = Frame::new(self);
     self.prev_mb_addr = -1isize;
     self.curr_mb_addr = (self.first_mb_in_slice * (1 + self.mbaff_frame_flag as u16)) as isize;
     self.last_mb_in_slice = self.curr_mb_addr;
@@ -232,14 +236,14 @@ impl<'a> Slice<'a> {
             self.macroblocks[self.curr_mb_addr as usize].mb_field_decoding_flag =
               self.field_pic_flag;
           }
-          cabac.macroblock_layer(self, frame)?;
+          cabac.macroblock_layer(self, &mut frame)?;
         }
         if !self.mbaff_frame_flag || (self.curr_mb_addr & 1) != 0 {
           let end_of_slice_flag = cabac.terminate(self)?;
           if end_of_slice_flag != 0 {
             self.last_mb_in_slice = self.curr_mb_addr;
             self.stream.is_byte_aligned(0);
-            dpb.push(self);
+            dpb.push(frame, self);
             return Ok(());
           }
         }

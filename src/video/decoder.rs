@@ -121,8 +121,7 @@ impl Decoder {
           }
           NALUnitType::NonIDRPicture | NALUnitType::IDRPicture => {
             let mut slice = Slice::new(nal.data, &nal, &mut avc1.avcc.sps, &mut avc1.avcc.pps);
-            let mut frame = Frame::new(&slice);
-            slice.data(&mut dpb, &mut frame)?;
+            slice.data(&mut dpb)?;
             log!(File@"{msg}PICTURE");
             use std::io::Write;
             let name = format!("temp/slice/{i}");
@@ -139,7 +138,7 @@ impl Decoder {
             )
             .expect("SLICE SAVING");
             if i == 0 {
-              frame.write_to_yuv_file("temp/yuv_frame")?;
+              dpb.previous().frame.write_to_yuv_file("temp/yuv_frame")?;
             }
           }
           _ => log!(File@"{msg} [UNUSED]"),

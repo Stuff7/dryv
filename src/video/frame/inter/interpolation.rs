@@ -75,3 +75,14 @@ impl Frame {
     }
   }
 }
+
+pub fn get_luma_sample(
+  ref_pic: &Picture,
+  x_dzl: usize,
+  y_dzl: usize,
+  x_int_l: usize,
+  y_int_l: usize,
+) -> u8 {
+  ref_pic.frame.luma_data[clamp(x_int_l + x_dzl, 0, ref_pic.frame.width_l - 1)]
+    [clamp(y_int_l + y_dzl, 0, ref_pic.frame.height_l - 1)]
+}

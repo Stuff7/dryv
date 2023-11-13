@@ -2,7 +2,10 @@ use super::{
   header::{Mmco, SliceHeader},
   Slice,
 };
-use crate::{math::OffsetArray, video::atom::PicOrderCntTypeOne};
+use crate::{
+  math::OffsetArray,
+  video::{atom::PicOrderCntTypeOne, frame::Frame},
+};
 use std::ops::{Deref, DerefMut};
 
 #[derive(Debug)]
@@ -23,15 +26,15 @@ impl DecodedPictureBuffer {
     }
   }
 
-  pub fn push(&mut self, slice: &Slice) {
+  pub fn push(&mut self, frame: Frame, slice: &Slice) {
     if slice.nal_idc != 0 {
-      let pic = self.new_picture(slice);
+      let pic = self.new_picture(frame, slice);
       self.buffer.push(pic);
     }
   }
 
   pub fn previous(&self) -> &Picture {
-    self.buffer.last().unwrap_or(&DEFAULT_PIC)
+    self.buffer.last().expect("Previous pic not found")
   }
 
   pub fn ref_pic_list0(&self, idx: usize) -> &Picture {
@@ -347,6 +350,7 @@ impl DecodedPictureBuffer {
       self.ref_pic_list0.len()
     };
 
+    self.ref_pic_list0.push(0);
     let mut c_idx = length;
     while c_idx > *ref_idx_lx {
       self.ref_pic_list0[c_idx] = self.ref_pic_list0[c_idx - 1];
@@ -401,6 +405,8 @@ impl DecodedPictureBuffer {
     } else {
       self.ref_pic_list0.len()
     };
+
+    self.ref_pic_list0.push(0);
     let mut c_idx = length;
     while c_idx > *ref_idx_lx {
       self.ref_pic_list0[c_idx] = self.ref_pic_list0[c_idx - 1];
@@ -442,8 +448,8 @@ impl DecodedPictureBuffer {
   }
 
   /// 8.2.5 Decoded reference picture marking process
-  pub fn new_picture(&mut self, slice: &Slice) -> Picture {
-    let mut pic = Picture::from_poc(&self.poc);
+  pub fn new_picture(&mut self, frame: Frame, slice: &Slice) -> Picture {
+    let mut pic = Picture::from_poc(slice, frame, &self.poc);
     if slice.nal_unit_type.is_idr() {
       self.buffer.clear();
       self.ref_pic_list0.clear();
@@ -634,7 +640,7 @@ impl DecodedPictureBuffer {
 
   /// 8.2.1.1 Decoding process for picture order count type 0
   pub fn poc_type_0(&mut self, slice: &Slice) {
-    let previous = self.previous();
+    let Some(previous) = self.buffer.last() else {return};
     let prev_pic_order_cnt_msb;
     let prev_pic_order_cnt_lsb;
 
@@ -669,7 +675,7 @@ impl DecodedPictureBuffer {
 
   /// 8.2.1.2 Decoding process for picture order count type 1
   pub fn poc_type_1(&mut self, slice: &Slice) {
-    let previous = self.previous();
+    let Some(previous) = self.buffer.last() else {return};
     let mut prev_frame_num_offset = 0;
     if !slice.nal_unit_type.is_idr() {
       if previous.memory_management_control_operation_5_flag {
@@ -748,7 +754,7 @@ impl DecodedPictureBuffer {
 
   /// 8.2.1.3 Decoding process for picture order count type 2
   pub fn poc_type_2(&mut self, slice: &Slice) {
-    let previous = self.previous();
+    let Some(previous) = self.buffer.last() else {return};
     let mut prev_frame_num_offset = 0;
     if !slice.nal_unit_type.is_idr() {
       if previous.memory_management_control_operation_5_flag {
@@ -786,8 +792,6 @@ impl DecodedPictureBuffer {
   }
 }
 
-const DEFAULT_PIC: Picture = Picture::unknown();
-
 #[allow(dead_code)]
 #[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
 pub enum PictureMarking {
@@ -816,9 +820,10 @@ pub struct PictureOrderCount {
   pub frame_num_offset: isize,
 }
 
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct Picture {
   pub poc: PictureOrderCount,
+  pub frame: Frame,
   pub reference_marked_type: PictureMarking,
   pub frame_num: isize,
   pub max_frame_num: isize,
@@ -829,6 +834,24 @@ pub struct Picture {
   pub frame_num_wrap: isize,
   pub memory_management_control_operation_5_flag: bool,
   pub memory_management_control_operation_6_flag: bool,
+}
+
+impl PartialEq for Picture {
+  fn eq(&self, other: &Self) -> bool {
+    self.poc == other.poc
+      && self.reference_marked_type == other.reference_marked_type
+      && self.frame_num == other.frame_num
+      && self.max_frame_num == other.max_frame_num
+      && self.long_term_frame_idx == other.long_term_frame_idx
+      && self.max_long_term_frame_idx == other.max_long_term_frame_idx
+      && self.pic_num == other.pic_num
+      && self.long_term_pic_num == other.long_term_pic_num
+      && self.frame_num_wrap == other.frame_num_wrap
+      && self.memory_management_control_operation_5_flag
+        == other.memory_management_control_operation_5_flag
+      && self.memory_management_control_operation_6_flag
+        == other.memory_management_control_operation_6_flag
+  }
 }
 
 impl Deref for Picture {
@@ -845,19 +868,13 @@ impl DerefMut for Picture {
 }
 
 impl Picture {
-  pub const fn unknown() -> Self {
+  pub const fn from_poc(slice: &Slice, frame: Frame, poc: &PictureOrderCount) -> Self {
     Self {
-      poc: PictureOrderCount {
-        pic_order_cnt: 0,
-        pic_order_cnt_msb: 0,
-        pic_order_cnt_lsb: 0,
-        top_field_order_cnt: 0,
-        bottom_field_order_cnt: 0,
-        frame_num_offset: 0,
-      },
+      poc: *poc,
+      frame,
+      max_frame_num: slice.max_frame_num,
       reference_marked_type: PictureMarking::ShortTermReference,
       frame_num: 0,
-      max_frame_num: 0,
       long_term_frame_idx: 0,
       max_long_term_frame_idx: 0,
       pic_num: 0,
@@ -865,13 +882,6 @@ impl Picture {
       frame_num_wrap: 0,
       memory_management_control_operation_5_flag: false,
       memory_management_control_operation_6_flag: false,
-    }
-  }
-
-  pub const fn from_poc(poc: &PictureOrderCount) -> Self {
-    Self {
-      poc: *poc,
-      ..Self::unknown()
     }
   }
 }

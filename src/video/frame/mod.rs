@@ -6,6 +6,7 @@ pub mod trans_chroma;
 pub mod transform;
 
 use std::{
+  fmt::Debug,
   fs::File,
   io::{BufWriter, Write},
 };
@@ -13,7 +14,6 @@ use std::{
 use super::slice::Slice;
 use crate::math::inverse_raster_scan;
 
-#[derive(Debug)]
 pub struct Frame {
   pub luma_data: Box<[Box<[u8]>]>,
   pub chroma_cb_data: Box<[Box<[u8]>]>,
@@ -24,6 +24,17 @@ pub struct Frame {
   pub height_l: usize,
   pub width_c: usize,
   pub height_c: usize,
+}
+
+impl Debug for Frame {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.debug_struct("Frame")
+      .field("width_l", &self.width_l)
+      .field("height_l", &self.height_l)
+      .field("width_c", &self.width_c)
+      .field("height_c", &self.height_c)
+      .finish()
+  }
 }
 
 impl Frame {
