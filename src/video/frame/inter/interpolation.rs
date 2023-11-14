@@ -65,10 +65,14 @@ impl Frame {
           }
 
           if slice.chroma_array_type != 3 {
-            pred_part_lxcb[(y_c * part_width_c as isize + x_c) as usize] =
-              todo!("Chroma sample interpolation process");
-            pred_part_lxcr[(y_c * part_width_c as isize + x_c) as usize] =
-              todo!("Chroma sample interpolation process");
+            pred_part_lxcb[(y_c * part_width_c as isize + x_c) as usize] = self
+              .chroma_sample_interpolation(
+                slice, dpb, x_int_c, y_int_c, x_frac_c, y_frac_c, ref_pic, true,
+              );
+            pred_part_lxcr[(y_c * part_width_c as isize + x_c) as usize] = self
+              .chroma_sample_interpolation(
+                slice, dpb, x_int_c, y_int_c, x_frac_c, y_frac_c, ref_pic, false,
+              );
           } else {
             pred_part_lxcb[(y_c * part_width_c as isize + x_c) as usize] = self
               .luma_sample_interpolation(slice, dpb, x_int_c, y_int_c, x_frac_c, y_frac_c, ref_pic);
@@ -183,6 +187,49 @@ impl Frame {
     let pred_part_lxl = [[l_g, d, h, n], [a, e, i, p], [b, f, j, q], [c, g, k, r]];
 
     pred_part_lxl[x_frac_l as usize][y_frac_l as usize]
+  }
+
+  /// 8.4.2.2.2 Chroma sample interpolation process
+  pub fn chroma_sample_interpolation(
+    &mut self,
+    slice: &mut Slice,
+    dpb: &DecodedPictureBuffer,
+    x_int_c: isize,
+    y_int_c: isize,
+    x_frac_c: isize,
+    y_frac_c: isize,
+    ref_pic: &Picture,
+    is_chroma_cb: bool,
+  ) -> u8 {
+    let ref_pic_height_effective_c = slice.pic_height_in_samples_c as isize;
+
+    let x_ac = clamp(x_int_c, 0, ref_pic.frame.width_c as isize - 1);
+    let x_bc = clamp(x_int_c + 1, 0, ref_pic.frame.width_c as isize - 1);
+    let x_cc = clamp(x_int_c, 0, ref_pic.frame.width_c as isize - 1);
+    let x_dc = clamp(x_int_c + 1, 0, ref_pic.frame.width_c as isize - 1);
+
+    let y_ac = clamp(y_int_c, 0, ref_pic_height_effective_c - 1);
+    let y_bc = clamp(y_int_c, 0, ref_pic_height_effective_c - 1);
+    let y_cc = clamp(y_int_c + 1, 0, ref_pic_height_effective_c - 1);
+    let y_dc = clamp(y_int_c + 1, 0, ref_pic_height_effective_c - 1);
+
+    let buffer = if is_chroma_cb {
+      &ref_pic.frame.chroma_cb_data
+    } else {
+      &ref_pic.frame.chroma_cr_data
+    };
+
+    let a = buffer[x_ac as usize][y_ac as usize] as isize;
+    let b = buffer[x_bc as usize][y_bc as usize] as isize;
+    let c = buffer[x_cc as usize][y_cc as usize] as isize;
+    let d = buffer[x_dc as usize][y_dc as usize] as isize;
+
+    (((8 - x_frac_c) * (8 - y_frac_c) * a
+      + x_frac_c * (8 - y_frac_c) * b
+      + (8 - x_frac_c) * y_frac_c * c
+      + x_frac_c * y_frac_c * d
+      + 32)
+      >> 6) as u8
   }
 }
 
