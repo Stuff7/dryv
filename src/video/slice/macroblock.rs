@@ -729,7 +729,7 @@ impl MbType {
   }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum PartPredMode {
   Intra4x4,
   Intra8x8,
@@ -744,6 +744,10 @@ pub enum PartPredMode {
 impl PartPredMode {
   pub fn is_inter_frame(&self) -> bool {
     matches!(self, Self::PredL0 | Self::PredL1 | Self::BiPred)
+  }
+
+  pub fn is_inter_mode(&self) -> bool {
+    matches!(self, Self::Intra4x4 | Self::Intra8x8 | Self::Intra16x16)
   }
 
   pub fn is_predl0(&self) -> bool {
@@ -844,7 +848,7 @@ fn mb_type_inter(mb_type: u8) -> (i8, [PartPredMode; 2], u8, u8) {
   }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct SubMbType {
   pub code: u8,
   pub num_sub_mb_part: usize,
@@ -878,6 +882,10 @@ impl SubMbType {
       sub_mb_part_width,
       sub_mb_part_height,
     }
+  }
+
+  pub fn none() -> Self {
+    Self::new(u8::MAX)
   }
 
   pub const fn empty() -> Self {
@@ -921,6 +929,6 @@ fn sub_mb_type_fields(sub_mb_type: u8) -> (usize, PartPredMode, u8, u8) {
     SUB_MB_TYPE_B_L0_4X4 => (4, PartPredMode::PredL0, 4, 4),
     SUB_MB_TYPE_B_L1_4X4 => (4, PartPredMode::PredL1, 4, 4),
     SUB_MB_TYPE_B_BI_4X4 => (4, PartPredMode::BiPred, 4, 4),
-    n => panic!("Invalid sub_mb_type {n}"),
+    n => (usize::MAX, PartPredMode::NA, u8::MAX, u8::MAX),
   }
 }

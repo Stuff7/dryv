@@ -1,10 +1,11 @@
 mod interpolation;
+mod motion;
 mod weighted;
 
 use super::Frame;
 use crate::{
   math::{clamp, inverse_raster_scan},
-  video::slice::{dpb::DecodedPictureBuffer, Slice},
+  video::slice::{dpb::DecodedPictureBuffer, macroblock::SubMbType, Slice},
 };
 
 impl Frame {
@@ -106,8 +107,8 @@ impl Frame {
 
         let mut mv_cnt = 0;
 
-        let mv_l0 = [0; 2];
-        let mv_l1 = [0; 2];
+        let mut mv_l0 = [0; 2];
+        let mut mv_l1 = [0; 2];
         let mut mv_cl0 = [0; 2];
         let mut mv_cl1 = [0; 2];
         let mut ref_idxl0 = 0;
@@ -121,8 +122,8 @@ impl Frame {
           dpb,
           mb_part_idx,
           sub_mb_part_idx,
-          &mv_l0,
-          &mv_l1,
+          &mut mv_l0,
+          &mut mv_l1,
           &mut mv_cl0,
           &mut mv_cl1,
           &mut ref_idxl0,
@@ -285,8 +286,8 @@ impl Frame {
     dpb: &DecodedPictureBuffer,
     mb_part_idx: usize,
     sub_mb_part_idx: usize,
-    mv_l0: &[isize; 2],
-    mv_l1: &[isize; 2],
+    mv_l0: &mut [isize; 2],
+    mv_l1: &mut [isize; 2],
     mv_cl0: &mut [isize; 2],
     mv_cl1: &mut [isize; 2],
     ref_idxl0: &mut isize,
@@ -295,26 +296,34 @@ impl Frame {
     pred_flagl1: &mut isize,
     sub_mv_cnt: &mut isize,
   ) {
-    let mbaddr_a = -1;
-    let mbaddr_b = -1;
-    let mbaddr_c = -1;
+    let mut mv_l0_a = [0; 2];
+    let mut mv_l0_b = [0; 2];
+    let mut mv_l0_c = [0; 2];
+    let mut ref_idxl0_a = 0;
+    let mut ref_idxl0_b = 0;
+    let mut ref_idxl0_c = 0;
 
-    let mv_l0_a = [0; 2];
-    let mv_l0_b = [0; 2];
-    let mv_l0_c = [0; 2];
-    let ref_idxl0_a = 0;
-    let ref_idxl0_b = 0;
-    let ref_idxl0_c = 0;
-
-    let mut curr_sub_mb_type = -1;
+    let mut curr_sub_mb_type = SubMbType::none();
 
     if slice.mb().mb_type.is_p_skip() {
       *ref_idxl0 = 0;
 
-      todo!("Derivation process for motion data of neighbouring partitions");
+      let nb = self.motion_data_of_neighboring_partitions(
+        slice,
+        mb_part_idx,
+        sub_mb_part_idx,
+        curr_sub_mb_type,
+        false,
+        &mut mv_l0_a,
+        &mut mv_l0_b,
+        &mut mv_l0_c,
+        &mut ref_idxl0_a,
+        &mut ref_idxl0_b,
+        &mut ref_idxl0_c,
+      );
 
-      if mbaddr_a == -1
-        || mbaddr_b == -1
+      if nb.a.is_unavailable()
+        || nb.b.is_unavailable()
         || (ref_idxl0_a == 0 && mv_l0_a[0] == 0 && mv_l0_a[1] == 0)
         || (ref_idxl0_b == 0 && mv_l0_b[0] == 0 && mv_l0_b[1] == 0)
       {
@@ -361,9 +370,9 @@ impl Frame {
       *sub_mv_cnt = *pred_flagl0 + *pred_flagl1;
 
       if slice.mb().mb_type.is_b8x8() {
-        curr_sub_mb_type = *slice.mb().sub_mb_type[mb_part_idx] as isize;
+        curr_sub_mb_type = slice.mb().sub_mb_type[mb_part_idx];
       } else {
-        curr_sub_mb_type = -1;
+        curr_sub_mb_type = SubMbType::none();
       }
 
       if *pred_flagl0 == 1 {

@@ -2,6 +2,7 @@ pub mod consts;
 pub mod dpb;
 pub mod header;
 pub mod macroblock;
+pub mod neighbor;
 
 use self::dpb::DecodedPictureBuffer;
 
