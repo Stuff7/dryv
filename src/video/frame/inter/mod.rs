@@ -547,22 +547,56 @@ impl Frame {
     pred_part_cb: &[[isize; 16]; 16],
     pred_part_cr: &[[isize; 16]; 16],
   ) {
-    let pred_part_l0l = vec![0; part_width * part_height];
-    let pred_part_l1l = vec![0; part_width * part_height];
+    let mut pred_part_l0l = vec![0; part_width * part_height];
+    let mut pred_part_l1l = vec![0; part_width * part_height];
 
-    let pred_part_l0cb = vec![0; part_width_c * part_height_c];
-    let pred_part_l1cb = vec![0; part_width_c * part_height_c];
-    let pred_part_l0cr = vec![0; part_width_c * part_height_c];
-    let pred_part_l1cr = vec![0; part_width_c * part_height_c];
+    let mut pred_part_l0cb = vec![0; part_width_c * part_height_c];
+    let mut pred_part_l1cb = vec![0; part_width_c * part_height_c];
+    let mut pred_part_l0cr = vec![0; part_width_c * part_height_c];
+    let mut pred_part_l1cr = vec![0; part_width_c * part_height_c];
 
     if pred_flag_l0 == 1 {
-      let ref_pic = dpb.ref_pic_list0[ref_idxl0];
-      todo!("Fractional sample interpolation process");
+      let ref_pic = dpb.ref_pic_list0(ref_idxl0);
+      self.fractional_sample_interpolation(
+        slice,
+        dpb,
+        x_al,
+        y_al,
+        mb_part_idx,
+        sub_mb_part_idx,
+        part_width,
+        part_height,
+        part_width_c,
+        part_height_c,
+        mv_l0,
+        mv_cl0,
+        ref_pic,
+        &mut pred_part_l0l,
+        &mut pred_part_l0cb,
+        &mut pred_part_l0cr,
+      );
     }
 
     if pred_flag_l1 == 1 {
-      let ref_pic = dpb.ref_pic_list1[ref_idx_l1];
-      todo!("Fractional sample interpolation process");
+      let ref_pic = dpb.ref_pic_list1(ref_idx_l1);
+      self.fractional_sample_interpolation(
+        slice,
+        dpb,
+        x_al,
+        y_al,
+        mb_part_idx,
+        sub_mb_part_idx,
+        part_width,
+        part_height,
+        part_width_c,
+        part_height_c,
+        mv_l1,
+        mv_cl1,
+        ref_pic,
+        &mut pred_part_l1l,
+        &mut pred_part_l1cb,
+        &mut pred_part_l1cr,
+      );
     }
 
     todo!("Weighted sample prediction process");

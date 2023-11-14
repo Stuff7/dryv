@@ -9,7 +9,7 @@ use crate::{
 
 impl Frame {
   /// 8.4.2.2 Fractional sample interpolation process
-  pub fn fraction_sample_interpolation(
+  pub fn fractional_sample_interpolation(
     &mut self,
     slice: &mut Slice,
     dpb: &DecodedPictureBuffer,
