@@ -1,4 +1,7 @@
-use crate::video::slice::{macroblock::SubMbType, neighbor::MbNeighbors, Slice};
+use crate::{
+  math::median,
+  video::slice::{macroblock::SubMbType, neighbor::MbNeighbors, Slice},
+};
 
 use super::super::Frame;
 
@@ -6,7 +9,7 @@ impl Frame {
   /// 8.4.1.3.2 Derivation process for motion data of neighbouring partitions
   pub fn motion_data_of_neighboring_partitions<'a>(
     &mut self,
-    slice: &'a mut Slice,
+    slice: &'a Slice,
     mb_part_idx: usize,
     sub_mb_part_idx: usize,
     curr_sub_mb_type: SubMbType,
@@ -77,6 +80,91 @@ impl Frame {
       mv_lxc[0] = nb.c.mv_l0[nb.c.mb_part_idx as usize][nb.c.sub_mb_part_idx as usize][0];
       mv_lxc[1] = nb.c.mv_l0[nb.c.mb_part_idx as usize][nb.c.sub_mb_part_idx as usize][1];
       *ref_idx_lxc = nb.c.ref_idxl0[nb.c.mb_part_idx as usize];
+    }
+    nb
+  }
+
+  /// 8.4.1.3 Derivation process for luma motion vector prediction
+  pub fn luma_motion_vector_prediction<'a>(
+    &'a mut self,
+    slice: &'a Slice,
+    mb_part_idx: usize,
+    sub_mb_part_idx: usize,
+    curr_sub_mb_type: SubMbType,
+    list_suffix_flag: bool,
+    ref_idx_lx: isize,
+    mvp_lx: &mut [isize; 2],
+  ) -> MbNeighbors<'a> {
+    let mut mv_lxa = [0; 2];
+    let mut mv_lxb = [0; 2];
+    let mut mv_lxc = [0; 2];
+    let mut ref_idx_lxa = 0;
+    let mut ref_idx_lxb = 0;
+    let mut ref_idx_lxc = 0;
+
+    let mb_part_width = slice.mb().mb_part_width();
+    let mb_part_height = slice.mb().mb_part_height();
+
+    let nb = self.motion_data_of_neighboring_partitions(
+      slice,
+      mb_part_idx,
+      sub_mb_part_idx,
+      curr_sub_mb_type,
+      list_suffix_flag,
+      &mut mv_lxa,
+      &mut mv_lxb,
+      &mut mv_lxc,
+      &mut ref_idx_lxa,
+      &mut ref_idx_lxb,
+      &mut ref_idx_lxc,
+    );
+
+    if mb_part_width == 16 && mb_part_height == 8 && mb_part_idx == 0 && ref_idx_lxb == ref_idx_lx {
+      mvp_lx[0] = mv_lxb[0];
+      mvp_lx[1] = mv_lxb[1];
+    } else if (mb_part_width == 16
+      && mb_part_height == 8
+      && mb_part_idx == 1
+      && ref_idx_lxa == ref_idx_lx)
+      || (mb_part_width == 8
+        && mb_part_height == 16
+        && mb_part_idx == 0
+        && ref_idx_lxa == ref_idx_lx)
+    {
+      mvp_lx[0] = mv_lxa[0];
+      mvp_lx[1] = mv_lxa[1];
+    } else if mb_part_width == 8
+      && mb_part_height == 16
+      && mb_part_idx == 1
+      && ref_idx_lxc == ref_idx_lx
+    {
+      mvp_lx[0] = mv_lxc[0];
+      mvp_lx[1] = mv_lxc[1];
+    } else {
+      if nb.b.is_unavailable() && nb.c.is_unavailable() && nb.a.is_available() {
+        mv_lxb[0] = mv_lxa[0];
+        mv_lxb[1] = mv_lxa[1];
+        mv_lxc[0] = mv_lxa[0];
+        mv_lxc[1] = mv_lxa[1];
+        ref_idx_lxb = ref_idx_lxa;
+        ref_idx_lxc = ref_idx_lxa;
+      }
+
+      if ref_idx_lxa == ref_idx_lx && ref_idx_lxb != ref_idx_lx && ref_idx_lxc != ref_idx_lx {
+        mvp_lx[0] = mv_lxa[0];
+        mvp_lx[1] = mv_lxa[1];
+      } else if ref_idx_lxa != ref_idx_lx && ref_idx_lxb == ref_idx_lx && ref_idx_lxc != ref_idx_lx
+      {
+        mvp_lx[0] = mv_lxb[0];
+        mvp_lx[1] = mv_lxb[1];
+      } else if ref_idx_lxa != ref_idx_lx && ref_idx_lxb != ref_idx_lx && ref_idx_lxc == ref_idx_lx
+      {
+        mvp_lx[0] = mv_lxc[0];
+        mvp_lx[1] = mv_lxc[1];
+      } else {
+        mvp_lx[0] = median(mv_lxa[0], mv_lxb[0], mv_lxc[0]);
+        mvp_lx[1] = median(mv_lxa[1], mv_lxb[1], mv_lxc[1]);
+      }
     }
     nb
   }

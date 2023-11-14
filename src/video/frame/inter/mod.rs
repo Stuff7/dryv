@@ -330,7 +330,15 @@ impl Frame {
         mv_l0[0] = 0;
         mv_l0[1] = 0;
       } else {
-        todo!("Derivation_process_for_luma_motion_vector_prediction");
+        self.luma_motion_vector_prediction(
+          slice,
+          mb_part_idx,
+          sub_mb_part_idx,
+          curr_sub_mb_type,
+          false,
+          *ref_idxl0,
+          mv_l0,
+        );
       }
 
       *pred_flagl0 = 1;
@@ -346,8 +354,8 @@ impl Frame {
         "Derivation process for luma motion vectors for B Skip or B Direct 16x16 or B Direct 8x8"
       );
     } else {
-      let mvp_l0 = [0; 2];
-      let mvp_l1 = [0; 2];
+      let mut mvp_l0 = [0; 2];
+      let mut mvp_l1 = [0; 2];
       let mode = slice.mb().mb_type.inter_mode(mb_part_idx);
       let sub_mode = &slice.mb().sub_mb_type[mb_part_idx].sub_mb_part_pred_mode;
 
@@ -376,14 +384,30 @@ impl Frame {
       }
 
       if *pred_flagl0 == 1 {
-        todo!("Derivation process for luma motion vector prediction");
+        self.luma_motion_vector_prediction(
+          slice,
+          mb_part_idx,
+          sub_mb_part_idx,
+          curr_sub_mb_type,
+          false,
+          *ref_idxl0,
+          &mut mvp_l0,
+        );
 
         mv_l0[0] = mvp_l0[0] + slice.mb().mvd[0][mb_part_idx * sub_mb_part_idx][0];
         mv_l0[1] = mvp_l0[1] + slice.mb().mvd[0][mb_part_idx * sub_mb_part_idx][1];
       }
 
       if *pred_flagl1 == 1 {
-        todo!("Derivation process for luma motion vector prediction");
+        self.luma_motion_vector_prediction(
+          slice,
+          mb_part_idx,
+          sub_mb_part_idx,
+          curr_sub_mb_type,
+          true,
+          *ref_idxl1,
+          &mut mvp_l1,
+        );
 
         mv_l1[0] = mvp_l1[0] + slice.mb().mvd[1][mb_part_idx * sub_mb_part_idx][0];
         mv_l1[1] = mvp_l1[1] + slice.mb().mvd[1][mb_part_idx * sub_mb_part_idx][1];

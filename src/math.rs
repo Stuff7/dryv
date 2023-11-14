@@ -2,7 +2,7 @@ use crate::byte::TryFromSlice;
 use std::{
   array::TryFromSliceError,
   fmt,
-  ops::{Deref, Index, IndexMut},
+  ops::{Add, Deref, Index, IndexMut, Sub},
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -114,6 +114,10 @@ pub fn clamp<T: PartialOrd>(value: T, min: T, max: T) -> T {
   } else {
     value
   }
+}
+
+pub fn median<T: Ord + Add<Output = T> + Sub<Output = T> + Copy>(x: T, y: T, z: T) -> T {
+  x + y + z - std::cmp::min(x, std::cmp::min(y, z)) - std::cmp::max(x, std::cmp::max(y, z))
 }
 
 pub fn inverse_raster_scan(a: isize, b: isize, c: isize, d: isize, e: isize) -> isize {
