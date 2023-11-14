@@ -1,4 +1,5 @@
 mod interpolation;
+mod weighted;
 
 use super::Frame;
 use crate::{
@@ -56,8 +57,8 @@ impl Frame {
 
       let part_width;
       let part_height;
-      let part_width_c;
-      let part_height_c;
+      let mut part_width_c = 0;
+      let mut part_height_c = 0;
       let num_sub_mb_part;
 
       if !slice.mb().mb_type.is_p8x8()
@@ -180,7 +181,48 @@ impl Frame {
         let x_al = x_m + x_p + x_s;
         let y_al = y_m + y_p + y_s;
 
-        todo!("Decoding process for Inter prediction samples");
+        self.inter_prediction_samples(
+          slice,
+          log_wdl,
+          w0_l,
+          w1_l,
+          o0_l,
+          o1_l,
+          log_wdcb,
+          w0_cb,
+          w1_cb,
+          o0_cb,
+          o1_cb,
+          log_wdcr,
+          w0_cr,
+          w1_cr,
+          o0_cr,
+          o1_cr,
+          dpb,
+          x_al,
+          y_al,
+          x_p,
+          x_s,
+          y_p,
+          y_s,
+          mb_part_idx as isize,
+          sub_mb_part_idx as isize,
+          part_width as usize,
+          part_height as usize,
+          part_width_c as usize,
+          part_height_c as usize,
+          &mv_l0,
+          &mv_l1,
+          &mv_cl0,
+          &mv_cl1,
+          ref_idxl0 as usize,
+          ref_idxl1 as usize,
+          pred_flagl0,
+          pred_flagl1,
+          pred_part_l,
+          pred_part_cb,
+          pred_part_cr,
+        );
 
         slice.mb_mut().mv_l0[mb_part_idx][sub_mb_part_idx][0] = mv_l0[0];
         slice.mb_mut().mv_l0[mb_part_idx][sub_mb_part_idx][1] = mv_l0[1];
@@ -249,7 +291,7 @@ impl Frame {
     mv_cl1: &mut [isize; 2],
     ref_idxl0: &mut isize,
     ref_idxl1: &mut isize,
-    pred_flag_l0: &mut isize,
+    pred_flagl0: &mut isize,
     pred_flagl1: &mut isize,
     sub_mv_cnt: &mut isize,
   ) {
@@ -282,7 +324,7 @@ impl Frame {
         todo!("Derivation_process_for_luma_motion_vector_prediction");
       }
 
-      *pred_flag_l0 = 1;
+      *pred_flagl0 = 1;
       *pred_flagl1 = 0;
       mv_l1[0] = -1;
       mv_l1[1] = -1;
@@ -302,10 +344,10 @@ impl Frame {
 
       if mode.is_predl0() || sub_mode.is_predl0() {
         *ref_idxl0 = slice.mb().ref_idxl0[mb_part_idx];
-        *pred_flag_l0 = 1;
+        *pred_flagl0 = 1;
       } else {
         *ref_idxl0 = -1;
-        *pred_flag_l0 = 0;
+        *pred_flagl0 = 0;
       }
 
       if mode.is_predl1() || sub_mode.is_predl1() {
@@ -316,7 +358,7 @@ impl Frame {
         *pred_flagl1 = 0;
       }
 
-      *sub_mv_cnt = *pred_flag_l0 + *pred_flagl1;
+      *sub_mv_cnt = *pred_flagl0 + *pred_flagl1;
 
       if slice.mb().mb_type.is_b8x8() {
         curr_sub_mb_type = *slice.mb().sub_mb_type[mb_part_idx] as isize;
@@ -324,7 +366,7 @@ impl Frame {
         curr_sub_mb_type = -1;
       }
 
-      if *pred_flag_l0 == 1 {
+      if *pred_flagl0 == 1 {
         todo!("Derivation process for luma motion vector prediction");
 
         mv_l0[0] = mvp_l0[0] + slice.mb().mvd[0][mb_part_idx * sub_mb_part_idx][0];
@@ -340,7 +382,7 @@ impl Frame {
     }
 
     if slice.chroma_array_type != 0 {
-      if *pred_flag_l0 == 1 {
+      if *pred_flagl0 == 1 {
         mv_cl0[0] = mv_l0[0];
         mv_cl0[1] = mv_l0[1];
       }
@@ -540,12 +582,12 @@ impl Frame {
     mv_cl0: &[isize; 2],
     mv_cl1: &[isize; 2],
     ref_idxl0: usize,
-    ref_idx_l1: usize,
-    pred_flag_l0: isize,
-    pred_flag_l1: isize,
-    pred_part_l: &[[isize; 16]; 16],
-    pred_part_cb: &[[isize; 16]; 16],
-    pred_part_cr: &[[isize; 16]; 16],
+    ref_idxl1: usize,
+    pred_flagl0: isize,
+    pred_flagl1: isize,
+    pred_part_l: &mut [[u8; 16]; 16],
+    pred_part_cb: &mut [[u8; 16]; 16],
+    pred_part_cr: &mut [[u8; 16]; 16],
   ) {
     let mut pred_part_l0l = vec![0; part_width * part_height];
     let mut pred_part_l1l = vec![0; part_width * part_height];
@@ -555,7 +597,7 @@ impl Frame {
     let mut pred_part_l0cr = vec![0; part_width_c * part_height_c];
     let mut pred_part_l1cr = vec![0; part_width_c * part_height_c];
 
-    if pred_flag_l0 == 1 {
+    if pred_flagl0 == 1 {
       let ref_pic = dpb.ref_pic_list0(ref_idxl0);
       self.fractional_sample_interpolation(
         slice,
@@ -577,8 +619,8 @@ impl Frame {
       );
     }
 
-    if pred_flag_l1 == 1 {
-      let ref_pic = dpb.ref_pic_list1(ref_idx_l1);
+    if pred_flagl1 == 1 {
+      let ref_pic = dpb.ref_pic_list1(ref_idxl1);
       self.fractional_sample_interpolation(
         slice,
         dpb,
@@ -599,6 +641,42 @@ impl Frame {
       );
     }
 
-    todo!("Weighted sample prediction process");
+    self.weighted_sample_prediction(
+      slice,
+      log_wdl,
+      w0_l,
+      w1_l,
+      o0_l,
+      o1_l,
+      log_wdcb,
+      w0_cb,
+      w1_cb,
+      o0_cb,
+      o1_cb,
+      log_wdcr,
+      w0_cr,
+      w1_cr,
+      o0_cr,
+      o1_cr,
+      x_p,
+      x_s,
+      y_p,
+      y_s,
+      part_width as isize,
+      part_height as isize,
+      part_width_c as isize,
+      part_height_c as isize,
+      pred_flagl0,
+      pred_flagl1,
+      &pred_part_l0l,
+      &pred_part_l0cb,
+      &pred_part_l0cr,
+      &pred_part_l1l,
+      &pred_part_l1cb,
+      &pred_part_l1cr,
+      pred_part_l,
+      pred_part_cb,
+      pred_part_cr,
+    );
   }
 }
