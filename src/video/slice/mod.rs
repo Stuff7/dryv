@@ -61,15 +61,19 @@ pub struct Slice<'a> {
   /// The picture size represents the number of macroblocks within the picture.
   pub pic_size_in_mbs: u16,
 
-  pub pic_width_in_samples_l: u16,
+  pub pic_width_in_samples_l: usize,
 
-  pub pic_height_in_samples_l: u16,
+  pub pic_height_in_samples_l: usize,
 
-  pub pic_width_in_samples_c: u16,
+  pub pic_width_in_samples_c: usize,
 
-  pub pic_height_in_samples_c: u16,
+  pub pic_height_in_samples_c: usize,
 
   pub max_frame_num: isize,
+
+  pub mb_x: isize,
+
+  pub mb_y: isize,
 
   /// Quantization parameter for the slice.
   /// The quantization parameter affects the trade-off between compression and image quality.
@@ -142,11 +146,13 @@ impl<'a> Slice<'a> {
         pic_size_in_mbs = pic_width_in_mbs * pic_height_in_mbs;
         pic_size_in_mbs
       },
-      pic_width_in_samples_l: pic_width_in_mbs * 16,
-      pic_height_in_samples_l: pic_height_in_mbs * 16,
-      pic_width_in_samples_c: pic_width_in_mbs * header.mb_width_c as u16,
-      pic_height_in_samples_c: pic_height_in_mbs * header.mb_height_c as u16,
+      pic_width_in_samples_l: pic_width_in_mbs as usize * 16,
+      pic_height_in_samples_l: pic_height_in_mbs as usize * 16,
+      pic_width_in_samples_c: (pic_width_in_mbs * header.mb_width_c as u16) as usize,
+      pic_height_in_samples_c: (pic_height_in_mbs * header.mb_height_c as u16) as usize,
       max_frame_num: 1 << (sps.log2_max_frame_num_minus4 + 4),
+      mb_x: 0,
+      mb_y: 0,
       sliceqpy: {
         sliceqpy = 26 + pps.pic_init_qp_minus26 as isize + header.slice_qp_delta as isize;
         sliceqpy
@@ -201,6 +207,8 @@ impl<'a> Slice<'a> {
         dpb.reference_picture_lists_construction(self);
       }
       loop {
+        self.mb_x = self.curr_mb_addr % self.pic_width_in_mbs as isize;
+        self.mb_y = self.curr_mb_addr / self.pic_width_in_mbs as isize;
         let mut mb_skip_flag = 0u8;
         if !self.slice_type.is_intra() {
           let save = self.macroblocks[self.curr_mb_addr as usize].mb_field_decoding_flag;
