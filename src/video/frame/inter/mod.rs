@@ -545,7 +545,7 @@ impl Frame {
       if let Some(pwt) = &slice.pred_weight_table {
         *log_wdl = pwt.luma_log2_weight_denom;
         let l0 = pwt.l0.get(ref_idx_l0_wp).unwrap_or(&DEFAULT_PWT);
-        let l1 = pwt.l0.get(ref_idx_l1_wp).unwrap_or(&DEFAULT_PWT);
+        let l1 = pwt.l1.get(ref_idx_l1_wp).unwrap_or(&DEFAULT_PWT);
         *w0_l = l0.luma_weight;
         *w1_l = l1.luma_weight;
         *o0_l = l0.luma_offset * (1 << (slice.bit_depth_y - 8));
