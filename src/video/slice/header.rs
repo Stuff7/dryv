@@ -455,6 +455,13 @@ impl RefPicListMvcModification {
   }
 }
 
+pub const DEFAULT_PWT: PredWeightTableEntry = PredWeightTableEntry {
+  luma_weight: 0,
+  luma_offset: 0,
+  chroma_weight: [0; 2],
+  chroma_offset: [0; 2],
+};
+
 #[derive(Debug)]
 pub struct PredWeightTableEntry {
   pub luma_weight: isize,
