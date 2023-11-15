@@ -120,6 +120,14 @@ pub fn median<T: Ord + Add<Output = T> + Sub<Output = T> + Copy>(x: T, y: T, z: 
   x + y + z - std::cmp::min(x, std::cmp::min(y, z)) - std::cmp::max(x, std::cmp::max(y, z))
 }
 
+pub fn min_positive(x: isize, y: isize) -> isize {
+  if (x) >= 0 && (y) >= 0 {
+    std::cmp::min(x, y)
+  } else {
+    std::cmp::max(x, y)
+  }
+}
+
 pub fn inverse_raster_scan(a: isize, b: isize, c: isize, d: isize, e: isize) -> isize {
   if e == 0 {
     (a % (d / b)) * b

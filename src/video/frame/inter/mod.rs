@@ -350,8 +350,18 @@ impl Frame {
       || slice.mb().mb_type.is_b_direct_16x16()
       || slice.mb().sub_mb_type[mb_part_idx].is_b_direct8x8()
     {
-      todo!(
-        "Derivation process for luma motion vectors for B Skip or B Direct 16x16 or B Direct 8x8"
+      self.luma_motion_vectors_for_b_blocks(
+        slice,
+        dpb,
+        mb_part_idx,
+        sub_mb_part_idx,
+        ref_idxl0,
+        ref_idxl1,
+        mv_l0,
+        mv_l1,
+        pred_flagl0,
+        pred_flagl1,
+        sub_mv_cnt,
       );
     } else {
       let mut mvp_l0 = [0; 2];
