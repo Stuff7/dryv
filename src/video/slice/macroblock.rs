@@ -638,7 +638,7 @@ impl MbType {
   pub fn inter_mode(&self, idx: usize) -> &PartPredMode {
     match self {
       Self::Intra { part_pred_mode, .. } => part_pred_mode,
-      Self::Inter { part_pred_mode, .. } => &part_pred_mode[idx],
+      Self::Inter { part_pred_mode, .. } => &part_pred_mode[std::cmp::min(idx, 1)],
       _ => &PartPredMode::NA,
     }
   }

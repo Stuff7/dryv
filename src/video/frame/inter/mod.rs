@@ -151,8 +151,9 @@ impl Frame {
         let mut o0_cr = 0;
         let mut o1_cr = 0;
 
-        if slice.pps.weighted_pred_flag && (slice.slice_type.is_predictive())
-          || (slice.pps.weighted_bipred_idc > 0 && slice.slice_type.is_bidirectional())
+        if (ref_idxl0 > -1 && ref_idxl1 > -1)
+          && (slice.pps.weighted_pred_flag && (slice.slice_type.is_predictive())
+            || (slice.pps.weighted_bipred_idc > 0 && slice.slice_type.is_bidirectional()))
         {
           self.prediction_weights(
             slice,

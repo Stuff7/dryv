@@ -473,18 +473,15 @@ impl Frame {
       *ref_idx_col = -1;
     } else {
       let pred_flagl0_col = nb.mb.pred_flagl0[nb.mb_part_idx as usize];
-      let pred_flagl1_col = nb.mb.pred_flagl1[nb.mb_part_idx as usize];
 
       if pred_flagl0_col == 1 {
         mv_col[0] = nb.mb.mv_l0[nb.mb_part_idx as usize][nb.sub_mb_part_idx as usize][0];
         mv_col[1] = nb.mb.mv_l0[nb.mb_part_idx as usize][nb.sub_mb_part_idx as usize][1];
         *ref_idx_col = nb.mb.ref_idxl0[nb.mb_part_idx as usize];
-      } else if pred_flagl1_col == 1 {
+      } else {
         mv_col[0] = nb.mb.mv_l1[nb.mb_part_idx as usize][nb.sub_mb_part_idx as usize][0];
         mv_col[1] = nb.mb.mv_l1[nb.mb_part_idx as usize][nb.sub_mb_part_idx as usize][1];
         *ref_idx_col = nb.mb.ref_idxl1[nb.mb_part_idx as usize];
-      } else {
-        unreachable!()
       }
     }
     col_pic

@@ -151,10 +151,10 @@ impl Frame {
     let s1 = tap_filter(l_k, l_l, l_m, l_n, l_p, l_q);
     let m1 = tap_filter(l_b, l_d, l_h, l_n, l_s, l_u);
 
-    let b = clip_1y(slice, (b1 as usize + 16) >> 5);
-    let h = clip_1y(slice, (h1 as usize + 16) >> 5);
-    let s = clip_1y(slice, (s1 as usize + 16) >> 5);
-    let m = clip_1y(slice, (m1 as usize + 16) >> 5);
+    let b = clip_1y(slice, (b1 + 16) >> 5);
+    let h = clip_1y(slice, (h1 + 16) >> 5);
+    let s = clip_1y(slice, (s1 + 16) >> 5);
+    let m = clip_1y(slice, (m1 + 16) >> 5);
 
     // let aa = tap_filter(x11, x12, l_a, l_b, x13, x14);
     // let bb = tap_filter(x21, x22, l_c, l_d, x23, x24);
@@ -168,7 +168,7 @@ impl Frame {
 
     let j1 = tap_filter(cc, dd, h1, m1, ee, ff);
 
-    let j = clip_1y(slice, (j1 as usize + 512) >> 10);
+    let j = clip_1y(slice, (j1 + 512) >> 10);
 
     let a = (l_g + b + 1) >> 1;
     let c = (l_h + b + 1) >> 1;
@@ -186,7 +186,7 @@ impl Frame {
 
     let pred_part_lxl = [[l_g, d, h, n], [a, e, i, p], [b, f, j, q], [c, g, k, r]];
 
-    pred_part_lxl[x_frac_l as usize][y_frac_l as usize]
+    pred_part_lxl[x_frac_l as usize][y_frac_l as usize] as u8
   }
 
   /// 8.4.2.2.2 Chroma sample interpolation process
@@ -239,15 +239,15 @@ fn get_luma_sample(
   y_dzl: isize,
   x_int_l: isize,
   y_int_l: isize,
-) -> u8 {
+) -> isize {
   ref_pic.frame.luma_data[clamp(x_int_l + x_dzl, 0, ref_pic.frame.width_l as isize - 1) as usize]
-    [clamp(y_int_l + y_dzl, 0, ref_pic.frame.height_l as isize - 1) as usize]
+    [clamp(y_int_l + y_dzl, 0, ref_pic.frame.height_l as isize - 1) as usize] as isize
 }
 
-fn tap_filter(v1: u8, v2: u8, v3: u8, v4: u8, v5: u8, v6: u8) -> u8 {
+fn tap_filter(v1: isize, v2: isize, v3: isize, v4: isize, v5: isize, v6: isize) -> isize {
   v1 - 5 * v2 + 20 * v3 + 20 * v4 - 5 * v5 + v6
 }
 
-fn clip_1y(slice: &Slice, x: usize) -> u8 {
-  clamp(x, 0, ((1 << slice.bit_depth_y) - 1) as usize) as u8
+fn clip_1y(slice: &Slice, x: isize) -> isize {
+  clamp(x, 0, (1 << slice.bit_depth_y) - 1)
 }
