@@ -151,80 +151,81 @@ impl Frame {
         let mut o0_cr = 0;
         let mut o1_cr = 0;
 
-        if (ref_idxl0 > -1 && ref_idxl1 > -1)
-          && (slice.pps.weighted_pred_flag && (slice.slice_type.is_predictive())
-            || (slice.pps.weighted_bipred_idc > 0 && slice.slice_type.is_bidirectional()))
+        if slice.pps.weighted_pred_flag && (slice.slice_type.is_predictive())
+          || (slice.pps.weighted_bipred_idc > 0 && slice.slice_type.is_bidirectional())
         {
-          self.prediction_weights(
+          if ref_idxl0 > -1 && ref_idxl1 > -1 {
+            self.prediction_weights(
+              slice,
+              dpb,
+              ref_idxl0 as usize,
+              ref_idxl1 as usize,
+              pred_flagl0,
+              pred_flagl1,
+              &mut log_wdl,
+              &mut w0_l,
+              &mut w1_l,
+              &mut o0_l,
+              &mut o1_l,
+              &mut log_wdcb,
+              &mut w0_cb,
+              &mut w1_cb,
+              &mut o0_cb,
+              &mut o1_cb,
+              &mut log_wdcr,
+              &mut w0_cr,
+              &mut w1_cr,
+              &mut o0_cr,
+              &mut o1_cr,
+            );
+          }
+
+          let x_al = x_m + x_p + x_s;
+          let y_al = y_m + y_p + y_s;
+
+          self.inter_prediction_samples(
             slice,
+            log_wdl,
+            w0_l,
+            w1_l,
+            o0_l,
+            o1_l,
+            log_wdcb,
+            w0_cb,
+            w1_cb,
+            o0_cb,
+            o1_cb,
+            log_wdcr,
+            w0_cr,
+            w1_cr,
+            o0_cr,
+            o1_cr,
             dpb,
+            x_al,
+            y_al,
+            x_p,
+            x_s,
+            y_p,
+            y_s,
+            mb_part_idx as isize,
+            sub_mb_part_idx as isize,
+            part_width as usize,
+            part_height as usize,
+            part_width_c as usize,
+            part_height_c as usize,
+            &mv_l0,
+            &mv_l1,
+            &mv_cl0,
+            &mv_cl1,
             ref_idxl0 as usize,
             ref_idxl1 as usize,
             pred_flagl0,
             pred_flagl1,
-            &mut log_wdl,
-            &mut w0_l,
-            &mut w1_l,
-            &mut o0_l,
-            &mut o1_l,
-            &mut log_wdcb,
-            &mut w0_cb,
-            &mut w1_cb,
-            &mut o0_cb,
-            &mut o1_cb,
-            &mut log_wdcr,
-            &mut w0_cr,
-            &mut w1_cr,
-            &mut o0_cr,
-            &mut o1_cr,
+            pred_part_l,
+            pred_part_cb,
+            pred_part_cr,
           );
         }
-
-        let x_al = x_m + x_p + x_s;
-        let y_al = y_m + y_p + y_s;
-
-        self.inter_prediction_samples(
-          slice,
-          log_wdl,
-          w0_l,
-          w1_l,
-          o0_l,
-          o1_l,
-          log_wdcb,
-          w0_cb,
-          w1_cb,
-          o0_cb,
-          o1_cb,
-          log_wdcr,
-          w0_cr,
-          w1_cr,
-          o0_cr,
-          o1_cr,
-          dpb,
-          x_al,
-          y_al,
-          x_p,
-          x_s,
-          y_p,
-          y_s,
-          mb_part_idx as isize,
-          sub_mb_part_idx as isize,
-          part_width as usize,
-          part_height as usize,
-          part_width_c as usize,
-          part_height_c as usize,
-          &mv_l0,
-          &mv_l1,
-          &mv_cl0,
-          &mv_cl1,
-          ref_idxl0 as usize,
-          ref_idxl1 as usize,
-          pred_flagl0,
-          pred_flagl1,
-          pred_part_l,
-          pred_part_cb,
-          pred_part_cr,
-        );
 
         slice.mb_mut().mv_l0[mb_part_idx][sub_mb_part_idx][0] = mv_l0[0];
         slice.mb_mut().mv_l0[mb_part_idx][sub_mb_part_idx][1] = mv_l0[1];
