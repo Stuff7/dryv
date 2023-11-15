@@ -6,6 +6,7 @@ use super::{
   frame::Frame,
   slice::{
     consts::*,
+    dpb::DecodedPictureBuffer,
     header::SliceType,
     macroblock::{BlockSize, Macroblock, MacroblockError, MbPosition, MbType},
     Slice,
@@ -86,7 +87,12 @@ impl CabacContext {
     })
   }
 
-  pub fn macroblock_layer(&mut self, slice: &mut Slice, frame: &mut Frame) -> CabacResult {
+  pub fn macroblock_layer(
+    &mut self,
+    slice: &mut Slice,
+    frame: &mut Frame,
+    dpb: &DecodedPictureBuffer,
+  ) -> CabacResult {
     let transform_8x8_mode_flag = slice
       .pps
       .extra_rbsp_data
@@ -205,7 +211,7 @@ impl CabacContext {
       }
     }
 
-    frame.decode(slice);
+    frame.decode(slice, dpb);
     Ok(())
   }
 

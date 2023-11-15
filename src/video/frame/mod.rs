@@ -11,7 +11,7 @@ use std::{
   io::{BufWriter, Write},
 };
 
-use super::slice::Slice;
+use super::slice::{dpb::DecodedPictureBuffer, Slice};
 use crate::math::inverse_raster_scan;
 
 pub struct Frame {
@@ -81,7 +81,7 @@ impl Frame {
     Ok(())
   }
 
-  pub fn decode(&mut self, slice: &mut Slice) {
+  pub fn decode(&mut self, slice: &mut Slice, dpb: &DecodedPictureBuffer) {
     if slice.mb().mb_type.mode().is_intra_4x4() {
       self.transform_for_4x4_luma_residual_blocks(slice);
       self.transform_chroma_samples(slice, true);
@@ -97,7 +97,25 @@ impl Frame {
     } else if slice.mb().mb_type.is_pcm() {
       todo!("Sample construction process for I PCM macroblocks");
     } else {
-      // todo!("Inter prediction");
+      let mut pred_part_l = [[0; 16]; 16];
+      let mut pred_part_cb = [[0; 16]; 16];
+      let mut pred_part_cr = [[0; 16]; 16];
+
+      self.inter_prediction(
+        slice,
+        dpb,
+        &mut pred_part_l,
+        &mut pred_part_cb,
+        &mut pred_part_cr,
+      );
+
+      if slice.mb().transform_size_8x8_flag == 1 {
+        self.inter_transform_for_8x8_luma_residual_blocks(slice, &pred_part_l);
+      } else {
+        self.inter_transform_for_4x4_luma_residual_blocks(slice, &pred_part_l);
+      }
+      self.inter_transform_for_chroma_residual_blocks(slice, &pred_part_cb, true);
+      self.inter_transform_for_chroma_residual_blocks(slice, &pred_part_cr, false);
     }
   }
 

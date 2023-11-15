@@ -245,7 +245,7 @@ impl<'a> Slice<'a> {
             self.macroblocks[self.curr_mb_addr as usize].mb_field_decoding_flag =
               self.field_pic_flag;
           }
-          cabac.macroblock_layer(self, &mut frame)?;
+          cabac.macroblock_layer(self, &mut frame, dpb)?;
         }
         if !self.mbaff_frame_flag || (self.curr_mb_addr & 1) != 0 {
           let end_of_slice_flag = cabac.terminate(self)?;

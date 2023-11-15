@@ -5,7 +5,6 @@ use super::slice::dpb::DecodedPictureBuffer;
 use super::slice::*;
 use crate::byte::{BitStream, Str};
 use crate::log;
-use crate::video::frame::Frame;
 use std::fs::File;
 use std::io::{Read, Seek};
 use std::path::Path;
@@ -137,8 +136,11 @@ impl Decoder {
               .as_bytes(),
             )
             .expect("SLICE SAVING");
-            if i == 0 {
-              dpb.previous().frame.write_to_yuv_file("temp/yuv_frame")?;
+            if i < 3 {
+              dpb
+                .previous()
+                .frame
+                .write_to_yuv_file(&format!("temp/yuv_frame_{i}"))?;
             }
           }
           _ => log!(File@"{msg} [UNUSED]"),

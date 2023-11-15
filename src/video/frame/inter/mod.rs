@@ -1,5 +1,6 @@
 mod interpolation;
 mod motion;
+mod pred;
 mod weighted;
 
 use super::Frame;
@@ -17,7 +18,6 @@ impl Frame {
     pred_part_l: &mut [[u8; 16]; 16],
     pred_part_cb: &mut [[u8; 16]; 16],
     pred_part_cr: &mut [[u8; 16]; 16],
-    is_skip: bool,
   ) {
     let num_mb_part = if slice.mb().mb_type.is_b_skip() || slice.mb().mb_type.is_b_direct_16x16() {
       4
@@ -236,7 +236,7 @@ impl Frame {
         slice.mb_mut().pred_flagl0[mb_part_idx] = pred_flagl0;
         slice.mb_mut().pred_flagl1[mb_part_idx] = pred_flagl1;
 
-        if is_skip {
+        if slice.mb().is_skip() {
           for y in 0..part_height {
             for x in 0..part_width {
               let lx = (x_m + x_p + x_s + x) as usize;
