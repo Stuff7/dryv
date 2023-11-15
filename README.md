@@ -14,7 +14,7 @@ Dryv is a video decoder implemented entirely in Rust, free from third-party depe
 - [ ] **Frame cropping**
 - [ ] **Deblocking filter**
 - [ ] **Display matrix transformations**
-- [ ] **NAL SPS and PPS support**
+- [ ] **NAL SPS and PPS decoding**
 - [ ] **CAVLC decoding**
 - [ ] **Seeking**
 - [ ] **HEVC support**
