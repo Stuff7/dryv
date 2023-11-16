@@ -4,7 +4,7 @@ pub mod header;
 pub mod macroblock;
 pub mod neighbor;
 
-use self::dpb::DecodedPictureBuffer;
+use self::{dpb::DecodedPictureBuffer, macroblock::MbType};
 
 use super::{
   atom::SliceGroup,
@@ -223,6 +223,7 @@ impl<'a> Slice<'a> {
           };
           self.macroblocks[self.curr_mb_addr as usize].mb_field_decoding_flag = ival;
           mb_skip_flag = cabac.mb_skip_flag(self)?;
+          self.mb_mut().mb_skip_flag = mb_skip_flag != 0;
           self.macroblocks[self.curr_mb_addr as usize].mb_field_decoding_flag = save;
         }
         if mb_skip_flag != 0 {
@@ -245,8 +246,9 @@ impl<'a> Slice<'a> {
             self.macroblocks[self.curr_mb_addr as usize].mb_field_decoding_flag =
               self.field_pic_flag;
           }
-          cabac.macroblock_layer(self, &mut frame, dpb)?;
+          cabac.macroblock_layer(self)?;
         }
+        self.update_mb(&mut frame, dpb);
         if !self.mbaff_frame_flag || (self.curr_mb_addr & 1) != 0 {
           let end_of_slice_flag = cabac.terminate(self)?;
           if end_of_slice_flag != 0 {
@@ -327,6 +329,32 @@ impl<'a> Slice<'a> {
       }
     }
     Ok(())
+  }
+
+  pub fn update_mb(&mut self, frame: &mut Frame, dpb: &DecodedPictureBuffer) {
+    self.mb_mut().update_intra_pred_mode();
+    self.mb_mut().qpy = ((self.qpy_prev + self.mb().mb_qp_delta + 52 + 2 * self.qp_bd_offset_y)
+      % (52 + self.qp_bd_offset_y))
+      - self.qp_bd_offset_y;
+    self.qpy_prev = self.mb().qpy;
+    self.mb_mut().qp1y = self.mb().qpy + self.qp_bd_offset_y;
+    self.mb_mut().transform_bypass_mode_flag =
+      self.sps.qpprime_y_zero_transform_bypass_flag && self.mb().qpy == 0;
+    let coded_block_pattern = self.mb().coded_block_pattern;
+    if let MbType::Intra {
+      code,
+      coded_block_pattern_chroma,
+      coded_block_pattern_luma,
+      ..
+    } = &mut self.mb_mut().mb_type
+    {
+      if *code == MB_TYPE_I_NXN {
+        *coded_block_pattern_luma = coded_block_pattern % 16;
+        *coded_block_pattern_chroma = coded_block_pattern / 16;
+      }
+    }
+
+    frame.decode(self, dpb);
   }
 
   pub fn next_mb_addr(&self, mut mbaddr: isize) -> isize {

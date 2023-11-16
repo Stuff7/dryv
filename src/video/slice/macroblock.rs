@@ -75,6 +75,8 @@ pub struct Macroblock {
 
   pub pred_flagl1: [isize; 4],
 
+  pub mb_skip_flag: bool,
+
   pub transform_bypass_flag: bool,
   /// PCM (Pulse Code Modulation) samples for luma (Y) component.
   /// PCM samples provide raw pixel values for luma.
@@ -200,6 +202,7 @@ impl Macroblock {
       ref_idxl1: [0; 4],
       pred_flagl0: [0; 4],
       pred_flagl1: [0; 4],
+      mb_skip_flag: false,
       transform_bypass_mode_flag: false,
       transform_bypass_flag: false,
       pcm_sample_luma: [0; 256],
@@ -323,6 +326,7 @@ impl std::fmt::Debug for Macroblock {
       )
       .field("intra_chroma_pred_mode", &self.intra_chroma_pred_mode)
       .field("mb_qp_delta", &self.mb_qp_delta)
+      .field("mb_skip_flag", &self.mb_skip_flag)
       .field("qpy", &self.qpy)
       .field("qp1y", &self.qp1y)
       .field("qp1c", &self.qp1c)
