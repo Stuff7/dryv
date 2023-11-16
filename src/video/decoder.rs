@@ -84,7 +84,7 @@ impl Decoder {
   }
 
   pub fn decode_sample(&mut self, stbl: &mut StblAtom) -> DecoderResult {
-    let samples = SampleIter::new(self, stbl)?.take(10).enumerate();
+    let samples = SampleIter::new(self, stbl)?.take(3).enumerate();
     let Some(CodecData::Avc1(avc1)) = stbl
       .stsd
       .decode(self)?

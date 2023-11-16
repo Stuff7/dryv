@@ -1,4 +1,5 @@
 use crate::{
+  log,
   math::{clamp, inverse_raster_scan},
   video::{
     frame::{inverse_scanner4x4, inverse_scanner_8x8, BlockType},

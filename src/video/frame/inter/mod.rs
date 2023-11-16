@@ -394,6 +394,7 @@ impl Frame {
         curr_sub_mb_type = SubMbType::none();
       }
 
+      let partitions = 16 / slice.mb().mb_type.num_mb_part();
       if *pred_flagl0 == 1 {
         self.luma_motion_vector_prediction(
           slice,
@@ -405,8 +406,8 @@ impl Frame {
           &mut mvp_l0,
         );
 
-        mv_l0[0] = mvp_l0[0] + slice.mb().mvd[0][mb_part_idx * sub_mb_part_idx][0];
-        mv_l0[1] = mvp_l0[1] + slice.mb().mvd[0][mb_part_idx * sub_mb_part_idx][1];
+        mv_l0[0] = mvp_l0[0] + slice.mb().mvd[0][mb_part_idx * partitions + sub_mb_part_idx][0];
+        mv_l0[1] = mvp_l0[1] + slice.mb().mvd[0][mb_part_idx * partitions + sub_mb_part_idx][1];
       }
 
       if *pred_flagl1 == 1 {
@@ -420,8 +421,8 @@ impl Frame {
           &mut mvp_l1,
         );
 
-        mv_l1[0] = mvp_l1[0] + slice.mb().mvd[1][mb_part_idx * sub_mb_part_idx][0];
-        mv_l1[1] = mvp_l1[1] + slice.mb().mvd[1][mb_part_idx * sub_mb_part_idx][1];
+        mv_l1[0] = mvp_l1[0] + slice.mb().mvd[1][mb_part_idx * partitions + sub_mb_part_idx][0];
+        mv_l1[1] = mvp_l1[1] + slice.mb().mvd[1][mb_part_idx * partitions + sub_mb_part_idx][1];
       }
     }
 

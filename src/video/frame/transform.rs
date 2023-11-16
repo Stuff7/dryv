@@ -216,6 +216,9 @@ pub fn get_qpc(slice: &Slice, qpy: isize, is_chroma_cb: bool) -> isize {
 }
 
 pub fn chroma_quantization_parameters(slice: &mut Slice, is_chroma_cb: bool) {
+  if slice.mb().is_skip() {
+    return;
+  }
   slice.mb_mut().qpc = get_qpc(slice, slice.mb().qpy, is_chroma_cb);
   slice.mb_mut().qp1c = slice.mb().qpc + slice.qp_bd_offset_c;
 

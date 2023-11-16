@@ -1,12 +1,13 @@
 use crate::{
   byte::BitStream,
+  display::DisplayArray,
   video::{
     atom::{PictureParameterSet, SequenceParameterSet, SliceGroup},
     sample::{NALUnit, NALUnitType},
   },
 };
+use std::fmt::Debug;
 
-#[derive(Debug)]
 pub struct SliceHeader {
   /// The index of the first macroblock in the slice.
   pub first_mb_in_slice: u16,
@@ -647,5 +648,92 @@ impl DeblockingFilterControlSlice {
       alpha_c0_offset_div2: data.signed_exponential_golomb(),
       beta_offset_div2: data.signed_exponential_golomb(),
     })
+  }
+}
+
+impl Debug for SliceHeader {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    let mut f = f.debug_struct("SliceHeader");
+    f.field("first_mb_in_slice", &self.first_mb_in_slice)
+      .field("slice_type", &self.slice_type)
+      .field("pps_id", &self.pps_id)
+      .field("color_plane_id", &self.color_plane_id)
+      .field("frame_num", &self.frame_num)
+      .field("field_pic_flag", &self.field_pic_flag)
+      .field("bottom_field_flag", &self.bottom_field_flag)
+      .field("idr_pic_id", &self.idr_pic_id)
+      .field("pic_order_cnt_lsb", &self.pic_order_cnt_lsb)
+      .field(
+        "delta_pic_order_cnt_bottom",
+        &self.delta_pic_order_cnt_bottom,
+      )
+      .field("delta_pic_order_cnt", &self.delta_pic_order_cnt)
+      .field("redundant_pic_cnt", &self.redundant_pic_cnt)
+      .field(
+        "direct_spatial_mv_pred_flag",
+        &self.direct_spatial_mv_pred_flag,
+      )
+      .field(
+        "num_ref_idx_active_override_flag",
+        &self.num_ref_idx_active_override_flag,
+      )
+      .field(
+        "num_ref_idx_l0_active_minus1",
+        &self.num_ref_idx_l0_active_minus1,
+      )
+      .field(
+        "num_ref_idx_l1_active_minus1",
+        &self.num_ref_idx_l1_active_minus1,
+      )
+      .field(
+        "ref_pic_list_mvc_modification",
+        &self.ref_pic_list_mvc_modification,
+      )
+      .field(
+        "ref_pic_list_modification_l0",
+        &self.ref_pic_list_modification_l0,
+      )
+      .field(
+        "ref_pic_list_modification_l1",
+        &self.ref_pic_list_modification_l1,
+      )
+      .field("chroma_array_type", &self.chroma_array_type)
+      .field("pred_weight_table", &self.pred_weight_table)
+      .field("dec_ref_pic_marking", &self.dec_ref_pic_marking)
+      .field("cabac_init_idc", &self.cabac_init_idc)
+      .field("slice_qp_delta", &self.slice_qp_delta)
+      .field("sp_for_switch_flag", &self.sp_for_switch_flag)
+      .field("slice_qs_delta", &self.slice_qs_delta)
+      .field("deblocking_filter_control", &self.deblocking_filter_control)
+      .field("slice_group_change_cycle", &self.slice_group_change_cycle)
+      .field("max_pic_order_cnt_lsb", &self.max_pic_order_cnt_lsb)
+      .field("max_frame_num", &self.max_frame_num)
+      .field("curr_pic_num", &self.curr_pic_num)
+      .field("max_pic_num", &self.max_pic_num)
+      .field("sub_width_c", &self.sub_width_c)
+      .field("sub_height_c", &self.sub_height_c)
+      .field("mb_width_c", &self.mb_width_c)
+      .field("mb_height_c", &self.mb_height_c);
+
+    for (i, list) in self.scaling_list4x4.iter().enumerate() {
+      for (j, list) in list.chunks_exact(4).enumerate() {
+        f.field(
+          &format!("scaling_list4x4[{}][{}]", i, j),
+          &DisplayArray(list),
+        );
+      }
+    }
+    for (i, list) in self.scaling_list8x8.iter().enumerate() {
+      for (j, list) in list.chunks_exact(8).enumerate() {
+        f.field(
+          &format!("scaling_list8x8[{}][{}]", i, j),
+          &DisplayArray(list),
+        );
+      }
+    }
+    f.field("qp_bd_offset_c", &self.qp_bd_offset_c)
+      .field("bit_depth_y", &self.bit_depth_y)
+      .field("bit_depth_c", &self.bit_depth_c)
+      .finish()
   }
 }

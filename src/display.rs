@@ -50,9 +50,9 @@ impl Deref for Duration {
   }
 }
 
-pub struct DisplayArray<'a, T: Display, const N: usize>(pub &'a [T; N]);
+pub struct DisplayArray<'a, T: Display>(pub &'a [T]);
 
-impl<'a, T: Display, const N: usize> Debug for DisplayArray<'a, T, N> {
+impl<'a, T: Display> Debug for DisplayArray<'a, T> {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     for n in self.0 {
       write!(f, "{} ", n)?;
