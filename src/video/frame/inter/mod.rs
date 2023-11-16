@@ -394,7 +394,11 @@ impl Frame {
         curr_sub_mb_type = SubMbType::none();
       }
 
-      let partitions = 16 / slice.mb().mb_type.num_mb_part();
+      let partitions = if slice.mb().mb_part_width() == slice.mb().mb_part_height() {
+        slice.mb().num_mb_part()
+      } else {
+        slice.mb().mb_part_width() as usize / slice.mb().mb_type.num_mb_part()
+      };
       if *pred_flagl0 == 1 {
         self.luma_motion_vector_prediction(
           slice,
