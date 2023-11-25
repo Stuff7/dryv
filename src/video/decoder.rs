@@ -90,9 +90,10 @@ impl Decoder {
       .decode(self)?
       .sample_description_table
       .get_mut(0)
-      .map(|d| &mut d.data) else {
-        return Err(DecoderError::MissingConfig)
-      };
+      .map(|d| &mut d.data)
+    else {
+      return Err(DecoderError::MissingConfig);
+    };
     let nal_length_size = avc1.avcc.nal_length_size_minus_one as usize + 1;
     let mut dpb = DecodedPictureBuffer::new();
 
@@ -202,7 +203,6 @@ impl Decoder {
       );
     }
     if let Some(stss) = &mut stbl.stss {
-      let stss = stss;
       log!(File@"ROOT.TRAK.MDIA.MINF.STBL.STSS {} {:#?}",
         stss.number_of_entries,
         stss.sync_sample_table(self)?.take(4).collect::<Vec<_>>()
