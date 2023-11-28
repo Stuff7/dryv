@@ -18,6 +18,8 @@ use decoder::{Decoder, DecoderError};
 use std::{fmt, path::Path, str::FromStr};
 use thiserror::Error;
 
+use self::atom::RootAtom;
+
 #[derive(Debug, Error)]
 pub enum VideoError {
   #[error("Could not decode video\n{0}")]
@@ -41,6 +43,7 @@ pub struct Video {
   pub matrix: Matrix3x3,
   pub video_codec: VideoCodec,
   decoder: Decoder,
+  root: RootAtom,
 }
 
 impl Video {
@@ -101,12 +104,12 @@ impl Video {
       matrix: matrix.unwrap_or_default(),
       video_codec: video_codec.ok_or(VideoError::VideoCodec)?,
       decoder,
+      root,
     })
   }
 
   pub fn frames(&mut self, count: usize) -> VideoResult {
-    let mut root = self.decoder.decode_root()?;
-    let stbl = root.video_stbl(&mut self.decoder)?.ok_or(VideoError::VideoTrack)?;
+    let stbl = self.root.video_stbl(&mut self.decoder)?.ok_or(VideoError::VideoTrack)?;
     self.decoder.decode_sample(stbl, count)?;
     Ok(())
   }
