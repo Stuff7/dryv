@@ -74,7 +74,7 @@ impl MbType {
       Self::Intra {
         intra_pred_mode, ..
       } => *intra_pred_mode,
-      _ => 255,
+      _ => 0,
     }
   }
 

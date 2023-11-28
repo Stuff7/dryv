@@ -42,7 +42,7 @@ impl SubMbType {
 
   pub const fn empty() -> Self {
     Self {
-      code: u8::MAX,
+      code: 0,
       num_sub_mb_part: 0,
       sub_mb_part_pred_mode: PartPredMode::Intra4x4,
       sub_mb_part_width: 0,
