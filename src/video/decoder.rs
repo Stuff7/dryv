@@ -84,7 +84,7 @@ impl Decoder {
   }
 
   pub fn decode_sample(&mut self, stbl: &mut StblAtom) -> DecoderResult {
-    let samples = SampleIter::new(self, stbl)?.take(3).enumerate();
+    let samples = SampleIter::new(self, stbl)?.take(10).enumerate();
     let Some(CodecData::Avc1(avc1)) = stbl
       .stsd
       .decode(self)?
@@ -137,11 +137,11 @@ impl Decoder {
               .as_bytes(),
             )
             .expect("SLICE SAVING");
-            if i < 3 {
+            if i < 10 {
               dpb
                 .previous()
                 .frame
-                .write_to_yuv_file(&format!("temp/yuv_frame_{i}"))?;
+                .write_to_yuv_file(&format!("temp/frame/{i}"))?;
             }
           }
           _ => log!(File@"{msg} [UNUSED]"),
