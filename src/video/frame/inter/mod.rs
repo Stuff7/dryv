@@ -5,7 +5,6 @@ mod weighted;
 
 use super::Frame;
 use crate::{
-  log,
   math::{clamp, inverse_raster_scan},
   video::slice::{dpb::DecodedPictureBuffer, header::DEFAULT_PWT, macroblock::SubMbType, Slice},
 };
@@ -26,36 +25,12 @@ impl Frame {
       slice.mb().mb_type.num_mb_part()
     };
 
-    let x_m = inverse_raster_scan(
-      slice.curr_mb_addr,
-      16,
-      16,
-      slice.pic_width_in_samples_l as isize,
-      0,
-    );
-    let y_m = inverse_raster_scan(
-      slice.curr_mb_addr,
-      16,
-      16,
-      slice.pic_width_in_samples_l as isize,
-      1,
-    );
+    let x_m = inverse_raster_scan(slice.curr_mb_addr, 16, 16, slice.pic_width_in_samples_l as isize, 0);
+    let y_m = inverse_raster_scan(slice.curr_mb_addr, 16, 16, slice.pic_width_in_samples_l as isize, 1);
 
     for mb_part_idx in 0..num_mb_part {
-      let x_p = inverse_raster_scan(
-        mb_part_idx as isize,
-        slice.mb().mb_part_width(),
-        slice.mb().mb_part_height(),
-        16,
-        0,
-      );
-      let y_p = inverse_raster_scan(
-        mb_part_idx as isize,
-        slice.mb().mb_part_width(),
-        slice.mb().mb_part_height(),
-        16,
-        1,
-      );
+      let x_p = inverse_raster_scan(mb_part_idx as isize, slice.mb().mb_part_width(), slice.mb().mb_part_height(), 16, 0);
+      let y_p = inverse_raster_scan(mb_part_idx as isize, slice.mb().mb_part_width(), slice.mb().mb_part_height(), 16, 1);
 
       let part_width;
       let part_height;
@@ -95,10 +70,7 @@ impl Frame {
       for sub_mb_part_idx in 0..num_sub_mb_part {
         let x_s;
         let y_s;
-        if slice.mb().mb_type.is_p8x8()
-          || slice.mb().mb_type.is_p_8x8ref0()
-          || slice.mb().mb_type.is_b8x8()
-        {
+        if slice.mb().mb_type.is_p8x8() || slice.mb().mb_type.is_p_8x8ref0() || slice.mb().mb_type.is_b8x8() {
           x_s = inverse_raster_scan(sub_mb_part_idx as isize, part_width, part_height, 8, 0);
           y_s = inverse_raster_scan(sub_mb_part_idx as isize, part_width, part_height, 8, 1);
         } else {
@@ -251,24 +223,14 @@ impl Frame {
           if slice.chroma_array_type != 0 {
             for y in 0..part_height_c {
               for x in 0..part_width_c {
-                let dx =
-                  (x_m / slice.sub_width_c + x_p / slice.sub_width_c + x_s / slice.sub_width_c + x)
-                    as usize;
-                let dy = (y_m / slice.sub_height_c
-                  + y_p / slice.sub_height_c
-                  + y_s / slice.sub_height_c
-                  + y) as usize;
+                let dx = (x_m / slice.sub_width_c + x_p / slice.sub_width_c + x_s / slice.sub_width_c + x) as usize;
+                let dy = (y_m / slice.sub_height_c + y_p / slice.sub_height_c + y_s / slice.sub_height_c + y) as usize;
                 let px = (x_p / slice.sub_width_c + x_s / slice.sub_width_c + x) as usize;
                 let py = (y_p / slice.sub_height_c + y_s / slice.sub_height_c + y) as usize;
                 self.chroma_cb_data[dx][dy] = pred_part_cb[px][py];
 
-                let dx =
-                  (x_m / slice.sub_width_c + x_p / slice.sub_width_c + x_s / slice.sub_width_c + x)
-                    as usize;
-                let dy = (y_m / slice.sub_height_c
-                  + y_p / slice.sub_height_c
-                  + y_s / slice.sub_height_c
-                  + y) as usize;
+                let dx = (x_m / slice.sub_width_c + x_p / slice.sub_width_c + x_s / slice.sub_width_c + x) as usize;
+                let dy = (y_m / slice.sub_height_c + y_p / slice.sub_height_c + y_s / slice.sub_height_c + y) as usize;
                 let px = (x_p / slice.sub_width_c + x_s / slice.sub_width_c + x) as usize;
                 let py = (y_p / slice.sub_height_c + y_s / slice.sub_height_c + y) as usize;
                 self.chroma_cr_data[dx][dy] = pred_part_cr[px][py];
@@ -331,15 +293,7 @@ impl Frame {
         mv_l0[0] = 0;
         mv_l0[1] = 0;
       } else {
-        self.luma_motion_vector_prediction(
-          slice,
-          mb_part_idx,
-          sub_mb_part_idx,
-          curr_sub_mb_type,
-          false,
-          *ref_idxl0,
-          mv_l0,
-        );
+        self.luma_motion_vector_prediction(slice, mb_part_idx, sub_mb_part_idx, curr_sub_mb_type, false, *ref_idxl0, mv_l0);
       }
 
       *pred_flagl0 = 1;
@@ -347,10 +301,7 @@ impl Frame {
       mv_l1[0] = -1;
       mv_l1[1] = -1;
       *sub_mv_cnt = 1;
-    } else if slice.mb().mb_type.is_b_skip()
-      || slice.mb().mb_type.is_b_direct_16x16()
-      || slice.mb().sub_mb_type[mb_part_idx].is_b_direct8x8()
-    {
+    } else if slice.mb().mb_type.is_b_skip() || slice.mb().mb_type.is_b_direct_16x16() || slice.mb().sub_mb_type[mb_part_idx].is_b_direct8x8() {
       self.luma_motion_vectors_for_b_blocks(
         slice,
         dpb,
@@ -400,30 +351,14 @@ impl Frame {
         slice.mb().mb_part_width() as usize / slice.mb().mb_type.num_mb_part()
       };
       if *pred_flagl0 == 1 {
-        self.luma_motion_vector_prediction(
-          slice,
-          mb_part_idx,
-          sub_mb_part_idx,
-          curr_sub_mb_type,
-          false,
-          *ref_idxl0,
-          &mut mvp_l0,
-        );
+        self.luma_motion_vector_prediction(slice, mb_part_idx, sub_mb_part_idx, curr_sub_mb_type, false, *ref_idxl0, &mut mvp_l0);
 
         mv_l0[0] = mvp_l0[0] + slice.mb().mvd[0][mb_part_idx * partitions + sub_mb_part_idx][0];
         mv_l0[1] = mvp_l0[1] + slice.mb().mvd[0][mb_part_idx * partitions + sub_mb_part_idx][1];
       }
 
       if *pred_flagl1 == 1 {
-        self.luma_motion_vector_prediction(
-          slice,
-          mb_part_idx,
-          sub_mb_part_idx,
-          curr_sub_mb_type,
-          true,
-          *ref_idxl1,
-          &mut mvp_l1,
-        );
+        self.luma_motion_vector_prediction(slice, mb_part_idx, sub_mb_part_idx, curr_sub_mb_type, true, *ref_idxl1, &mut mvp_l1);
 
         mv_l1[0] = mvp_l1[0] + slice.mb().mvd[1][mb_part_idx * partitions + sub_mb_part_idx][0];
         mv_l1[1] = mvp_l1[1] + slice.mb().mvd[1][mb_part_idx * partitions + sub_mb_part_idx][1];
@@ -471,19 +406,13 @@ impl Frame {
     let implicit_mode_flag;
     let explicit_mode_flag;
 
-    if slice.pps.weighted_bipred_idc == 2
-      && slice.slice_type.is_bidirectional()
-      && pred_flagl0 == 1
-      && pred_flagl1 == 1
-    {
+    if slice.pps.weighted_bipred_idc == 2 && slice.slice_type.is_bidirectional() && pred_flagl0 == 1 && pred_flagl1 == 1 {
       implicit_mode_flag = 1;
       explicit_mode_flag = 0;
     } else if (slice.pps.weighted_bipred_idc == 1
       && slice.slice_type.is_bidirectional()
       && (pred_flagl0 + pred_flagl1 == 1 || pred_flagl0 + pred_flagl1 == 2))
-      || (slice.pps.weighted_pred_flag
-        && (slice.slice_type.is_non_switching_p() || slice.slice_type.is_switching_p())
-        && pred_flagl0 == 1)
+      || (slice.pps.weighted_pred_flag && (slice.slice_type.is_non_switching_p() || slice.slice_type.is_switching_p()) && pred_flagl0 == 1)
     {
       implicit_mode_flag = 0;
       explicit_mode_flag = 1;
@@ -508,8 +437,7 @@ impl Frame {
       let pic0 = dpb.ref_pic_list0(ref_idxl0);
       let pic1 = dpb.ref_pic_list1(ref_idxl1);
 
-      let curr_pic_order_cnt =
-        std::cmp::min(dpb.poc.top_field_order_cnt, dpb.poc.bottom_field_order_cnt);
+      let curr_pic_order_cnt = std::cmp::min(dpb.poc.top_field_order_cnt, dpb.poc.bottom_field_order_cnt);
       let pic0_pic_order_cnt = std::cmp::min(pic0.top_field_order_cnt, pic0.bottom_field_order_cnt);
       let pic1_pic_order_cnt = std::cmp::min(pic1.top_field_order_cnt, pic1.bottom_field_order_cnt);
 
@@ -574,23 +502,15 @@ impl Frame {
 
     if explicit_mode_flag == 1 && pred_flagl0 == 1 && pred_flagl1 == 1 {
       if !(-128 <= *w0_l + *w1_l && *w0_l + *w1_l <= (if *log_wdl == 7 { 127 } else { 128 })) {
-        panic!(
-          "w0_l + w1_l must be greater than or equal to -128, less than or equal to 127, or 128"
-        );
+        panic!("w0_l + w1_l must be greater than or equal to -128, less than or equal to 127, or 128");
       }
 
       if slice.chroma_array_type != 0 {
-        if !(-128 <= *w0_cb + *w1_cb && *w0_cb + *w1_cb <= (if *log_wdcb == 7 { 127 } else { 128 }))
-        {
-          panic!(
-            "w0_l + w1_l must be greater than or equal to -128, less than or equal to 127, or 128"
-          );
+        if !(-128 <= *w0_cb + *w1_cb && *w0_cb + *w1_cb <= (if *log_wdcb == 7 { 127 } else { 128 })) {
+          panic!("w0_l + w1_l must be greater than or equal to -128, less than or equal to 127, or 128");
         }
-        if !(-128 <= *w0_cr + *w1_cr && *w0_cb + *w1_cr <= (if *log_wdcr == 7 { 127 } else { 128 }))
-        {
-          panic!(
-            "w0_l + w1_l must be greater than or equal to -128, less than or equal to 127, or 128"
-          );
+        if !(-128 <= *w0_cr + *w1_cr && *w0_cb + *w1_cr <= (if *log_wdcr == 7 { 127 } else { 128 })) {
+          panic!("w0_l + w1_l must be greater than or equal to -128, less than or equal to 127, or 128");
         }
       }
     }

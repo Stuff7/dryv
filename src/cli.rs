@@ -11,6 +11,7 @@ pub struct CLIArgs {
   pub height: i32,
   pub seek_position: SeekPosition,
   pub width: i32,
+  pub frame_count: usize,
   pub end: SeekPosition,
   pub step: SeekPosition,
 }
@@ -25,6 +26,7 @@ impl CLIArgs {
       height: Self::find_arg(&args, "-h"),
       seek_position: Self::find_arg(&args, "-s"),
       width: Self::find_arg(&args, "-w"),
+      frame_count: Self::find_arg(&args, "-c"),
       end: match Self::find_arg(&args, "-e") {
         SeekPosition::TimeBase(0) => SeekPosition::Percentage(1.),
         n => n,

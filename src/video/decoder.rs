@@ -72,26 +72,14 @@ impl Decoder {
 
   pub fn decode_root(&mut self) -> DecoderResult<RootAtom> {
     let root = RootAtom::new(&mut self.file, self.size)?;
-    self.brand = DecoderBrand::try_from(root.ftyp.major_brand).or_else(|e| {
-      root
-        .ftyp
-        .compatible_brands
-        .iter()
-        .find_map(|b| DecoderBrand::try_from(*b).ok())
-        .ok_or(e)
-    })?;
+    self.brand = DecoderBrand::try_from(root.ftyp.major_brand)
+      .or_else(|e| root.ftyp.compatible_brands.iter().find_map(|b| DecoderBrand::try_from(*b).ok()).ok_or(e))?;
     Ok(root)
   }
 
-  pub fn decode_sample(&mut self, stbl: &mut StblAtom) -> DecoderResult {
-    let samples = SampleIter::new(self, stbl)?.take(6).enumerate();
-    let Some(CodecData::Avc1(avc1)) = stbl
-      .stsd
-      .decode(self)?
-      .sample_description_table
-      .get_mut(0)
-      .map(|d| &mut d.data)
-    else {
+  pub fn decode_sample(&mut self, stbl: &mut StblAtom, count: usize) -> DecoderResult {
+    let samples = SampleIter::new(self, stbl)?.take(count).enumerate();
+    let Some(CodecData::Avc1(avc1)) = stbl.stsd.decode(self)?.sample_description_table.get_mut(0).map(|d| &mut d.data) else {
       return Err(DecoderError::MissingConfig);
     };
     let nal_length_size = avc1.avcc.nal_length_size_minus_one as usize + 1;
@@ -101,19 +89,12 @@ impl Decoder {
       log!(File@"{:-^100}", format!("SAMPLE #{} ({} bytes)", i + 1, sample.len()));
       for nal in sample.units(nal_length_size) {
         let nal = nal?;
-        let msg = format!(
-          "[{:?} idc={}] ({} bytes) => ",
-          nal.unit_type, nal.idc, nal.size
-        );
+        let msg = format!("[{:?} idc={}] ({} bytes) => ", nal.unit_type, nal.idc, nal.size);
         match nal.unit_type {
           NALUnitType::Sei => {
             let mut bit_data = BitStream::new(nal.data);
             let sei_msg = SeiMessage::decode(nal.size, &mut bit_data);
-            if let SeiPayload::UserDataUnregistered {
-              uuid_iso_iec_11578,
-              data,
-            } = sei_msg.payload
-            {
+            if let SeiPayload::UserDataUnregistered { uuid_iso_iec_11578, data } = sei_msg.payload {
               log!(File@"{msg}SEI: (\"{:016x}\", \"{}\")", uuid_iso_iec_11578, String::from_utf8_lossy(&data));
             } else {
               log!(File@"{msg}{sei_msg:?}");
@@ -135,10 +116,7 @@ impl Decoder {
                 .expect("MACROBLOCK SAVING");
             }
             if i < 10 {
-              dpb
-                .previous()
-                .frame
-                .write_to_yuv_file(&format!("temp/frame/{i}"))?;
+              dpb.previous().frame.write_to_yuv_file(&format!("temp/frame/{i}"))?;
             }
           }
           _ => log!(File@"{msg} [UNUSED]"),
@@ -148,10 +126,7 @@ impl Decoder {
     Ok(())
   }
 
-  pub fn decode_udta_meta<'a>(
-    &mut self,
-    root: &'a mut RootAtom,
-  ) -> DecoderResult<Vec<&'a mut MetaAtom>> {
+  pub fn decode_udta_meta<'a>(&mut self, root: &'a mut RootAtom) -> DecoderResult<Vec<&'a mut MetaAtom>> {
     log!(File@"{:-^100}", "meta");
     let decoder = self;
     root

@@ -48,6 +48,22 @@ impl RootAtom {
       rest: rest.into_boxed_slice(),
     })
   }
+
+  pub fn video_stbl(&mut self, decoder: &mut Decoder) -> AtomResult<Option<&mut StblAtom>> {
+    for trak in &mut *self.moov.trak {
+      let trak = trak.decode(decoder)?;
+      let mdia = trak.mdia.decode(decoder)?;
+      let hdlr = mdia.hdlr.decode(decoder)?;
+      if let Some(edts) = &mut trak.edts {
+        edts.decode(decoder)?;
+      }
+
+      if *hdlr.component_subtype == *b"vide" {
+        return Ok(Some(mdia.minf.decode(decoder)?.stbl.decode(decoder)?));
+      }
+    }
+    Ok(None)
+  }
 }
 
 #[derive(Debug, Default)]
@@ -65,10 +81,7 @@ impl FtypAtom {
       atom,
       major_brand: data.next_into()?,
       minor_version: data.next_into()?,
-      compatible_brands: data
-        .chunks_exact(4)
-        .map(Str::<4>::try_from)
-        .collect::<Result<_, _>>()?,
+      compatible_brands: data.chunks_exact(4).map(Str::<4>::try_from).collect::<Result<_, _>>()?,
     })
   }
 }

@@ -26,6 +26,8 @@ pub enum VideoError {
   AtomDecoding(#[from] AtomError),
   #[error("Could not find video codec")]
   VideoCodec,
+  #[error("No video track found")]
+  VideoTrack,
 }
 
 pub type VideoResult<T = ()> = Result<T, VideoError>;
@@ -38,6 +40,7 @@ pub struct Video {
   pub width: f32,
   pub matrix: Matrix3x3,
   pub video_codec: VideoCodec,
+  decoder: Decoder,
 }
 
 impl Video {
@@ -71,9 +74,7 @@ impl Video {
         log!(File@"ROOT.TRAK.MDIA.MDHD {:#?}", mdhd);
 
         timescale = mdhd.timescale;
-        duration = Some(Duration::from_secs_f32(
-          mdhd.duration as f32 / timescale as f32,
-        ));
+        duration = Some(Duration::from_secs_f32(mdhd.duration as f32 / timescale as f32));
         width = tkhd.width;
         height = tkhd.height;
         matrix = Some(tkhd.matrix);
@@ -87,7 +88,6 @@ impl Video {
           .map(|sample| VideoCodec::from(sample.data_format));
 
         let stbl = mdia.minf.decode(&mut decoder)?.stbl.decode(&mut decoder)?;
-        decoder.decode_sample(stbl)?;
       }
 
       log!(File@"TRAK.MDIA.MDHD {:#?}", mdia.mdhd);
@@ -100,7 +100,15 @@ impl Video {
       height,
       matrix: matrix.unwrap_or_default(),
       video_codec: video_codec.ok_or(VideoError::VideoCodec)?,
+      decoder,
     })
+  }
+
+  pub fn frames(&mut self, count: usize) -> VideoResult {
+    let mut root = self.decoder.decode_root()?;
+    let stbl = root.video_stbl(&mut self.decoder)?.ok_or(VideoError::VideoTrack)?;
+    self.decoder.decode_sample(stbl, count)?;
+    Ok(())
   }
 }
 

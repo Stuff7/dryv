@@ -39,10 +39,11 @@ fn main() {
   LOG_FILE_PTR.store(&mut log_file as *mut _, Ordering::SeqCst);
 
   let start_time = Instant::now();
-  let video = unwrap!(
+  let mut video = unwrap!(
     Ok Video::open(&args.filepath),
     Err "Could not open video"
   );
+  unwrap!(Ok video.frames(args.frame_count), Err "Video");
   let end_time = Instant::now();
   if args.debug {
     println!("{video}");
