@@ -411,6 +411,6 @@ pub const fn name_sub_mb_type(sub_mb_type: u8) -> &'static str {
     SUB_MB_TYPE_B_L0_4X4 => "B_L0_4X4",
     SUB_MB_TYPE_B_L1_4X4 => "B_L1_4X4",
     SUB_MB_TYPE_B_BI_4X4 => "B_BI_4X4",
-    _ => "INVALID SUB MB TYPE",
+    _ => "NA",
   }
 }

@@ -55,7 +55,27 @@ pub struct DisplayArray<'a, T: Display>(pub &'a [T]);
 impl<'a, T: Display> Debug for DisplayArray<'a, T> {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     for n in self.0 {
-      write!(f, "{} ", n)?;
+      write!(f, " {}", n)?;
+    }
+    Ok(())
+  }
+}
+
+pub struct DisplayArray3D<'a, T: Display, const D1: usize, const D2: usize>(
+  pub &'a [[[T; D2]; D1]],
+);
+
+impl<'a, T: Display, const D1: usize, const D2: usize> Debug for DisplayArray3D<'a, T, D1, D2> {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    for (i, x) in self.0.iter().enumerate() {
+      write!(f, "[{i}]")?;
+      for (j, y) in x.iter().enumerate() {
+        write!(f, "[{j}]:")?;
+        for z in y.iter() {
+          write!(f, " {}", z)?;
+        }
+      }
+      writeln!(f)?;
     }
     Ok(())
   }

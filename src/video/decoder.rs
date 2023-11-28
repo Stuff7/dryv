@@ -84,7 +84,7 @@ impl Decoder {
   }
 
   pub fn decode_sample(&mut self, stbl: &mut StblAtom) -> DecoderResult {
-    let samples = SampleIter::new(self, stbl)?.take(10).enumerate();
+    let samples = SampleIter::new(self, stbl)?.take(6).enumerate();
     let Some(CodecData::Avc1(avc1)) = stbl
       .stsd
       .decode(self)?
@@ -126,17 +126,14 @@ impl Decoder {
             use std::io::Write;
             let name = format!("temp/slice/{i}");
             let mut f = std::fs::File::create(name).expect("SLICE CREATION");
-            f.write_all(
-              format!(
-                "{:#?}\n{:#?}\n{:#?}\n{:#?}",
-                dpb,
-                nal,
-                slice,
-                &slice.macroblocks[..10]
-              )
-              .as_bytes(),
-            )
-            .expect("SLICE SAVING");
+            f.write_all(format!("{:#?}\n{:#?}\n{:#?}", dpb, nal, slice,).as_bytes())
+              .expect("SLICE SAVING");
+            for j in 0..10 {
+              let name = format!("temp/mb/{i}-{j}");
+              let mut f = std::fs::File::create(name).expect("MACROBLOCK CREATION");
+              f.write_all(format!("- MACROBLOCK {j} -\n\n{}", slice.macroblocks[j]).as_bytes())
+                .expect("MACROBLOCK SAVING");
+            }
             if i < 10 {
               dpb
                 .previous()
