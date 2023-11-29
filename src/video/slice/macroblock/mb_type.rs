@@ -25,6 +25,7 @@ pub enum MbType {
     part_pred_mode: [PartPredMode; 2],
     part_width: u8,
     part_height: u8,
+    partitions: usize,
   },
 }
 
@@ -45,8 +46,7 @@ impl MbType {
   pub fn new(mb_type: u8, transform_size_8x8_flag: bool) -> Self {
     match mb_type.cmp(&MB_TYPE_I_PCM) {
       Ordering::Less => {
-        let (part_pred_mode, intra_pred_mode, coded_block_pattern_chroma, coded_block_pattern_luma) =
-          mb_type_intra(mb_type, transform_size_8x8_flag);
+        let (part_pred_mode, intra_pred_mode, coded_block_pattern_chroma, coded_block_pattern_luma) = mb_type_intra(mb_type, transform_size_8x8_flag);
         MbType::Intra {
           code: mb_type,
           intra_pred_mode,
@@ -58,12 +58,18 @@ impl MbType {
       Ordering::Equal => MbType::Pcm,
       Ordering::Greater => {
         let (num_mb_part, part_pred_mode, part_width, part_height) = mb_type_inter(mb_type);
+        let partitions = if part_width == part_height {
+          num_mb_part as usize
+        } else {
+          part_width as usize / num_mb_part as usize
+        };
         MbType::Inter {
           code: mb_type,
           num_mb_part,
           part_pred_mode,
           part_width,
           part_height,
+          partitions,
         }
       }
     }
@@ -71,9 +77,7 @@ impl MbType {
 
   pub fn intra16x16_pred_mode(&self) -> u8 {
     match self {
-      Self::Intra {
-        intra_pred_mode, ..
-      } => *intra_pred_mode,
+      Self::Intra { intra_pred_mode, .. } => *intra_pred_mode,
       _ => 0,
     }
   }
@@ -101,11 +105,17 @@ impl MbType {
     }
   }
 
+  pub fn partitions(&self) -> usize {
+    match self {
+      Self::Inter { partitions, .. } => *partitions,
+      _ => 0,
+    }
+  }
+
   pub fn coded_block_pattern_luma(&self) -> usize {
     match self {
       Self::Intra {
-        coded_block_pattern_luma,
-        ..
+        coded_block_pattern_luma, ..
       } => *coded_block_pattern_luma as usize,
       _ => usize::MAX,
     }
@@ -114,8 +124,7 @@ impl MbType {
   pub fn coded_block_pattern_chroma(&self) -> usize {
     match self {
       Self::Intra {
-        coded_block_pattern_chroma,
-        ..
+        coded_block_pattern_chroma, ..
       } => *coded_block_pattern_chroma as usize,
       _ => usize::MAX,
     }

@@ -61,22 +61,17 @@ impl<'a, T: Display> Debug for DisplayArray<'a, T> {
   }
 }
 
-pub struct DisplayArray3D<'a, T: Display, const D1: usize, const D2: usize>(
-  pub &'a [[[T; D2]; D1]],
-);
-
-impl<'a, T: Display, const D1: usize, const D2: usize> Debug for DisplayArray3D<'a, T, D1, D2> {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    for (i, x) in self.0.iter().enumerate() {
-      write!(f, "[{i}]")?;
-      for (j, y) in x.iter().enumerate() {
-        write!(f, "[{j}]:")?;
-        for z in y.iter() {
-          write!(f, " {}", z)?;
-        }
+pub fn display_array3d<T: Display, const D1: usize, const D2: usize>(name: &str, arr: &[[[T; D2]; D1]]) -> String {
+  let mut s = String::new();
+  for (i, x) in arr.iter().enumerate() {
+    for (j, y) in x.iter().enumerate() {
+      s += &format!("{name}[{i}][{j}]:");
+      for z in y.iter() {
+        s += &format!(" {}", z);
       }
-      writeln!(f)?;
+      s += "\n";
     }
-    Ok(())
+    s += "\n";
   }
+  s
 }

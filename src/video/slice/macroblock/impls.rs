@@ -1,6 +1,10 @@
 use super::*;
 
 impl Macroblock {
+  pub fn mvd_lx(&self, x: usize, mb_part_idx: usize, sub_mb_part_idx: usize, y: usize) -> isize {
+    self.mvd[x][mb_part_idx * self.mb_type.partitions() + sub_mb_part_idx][y]
+  }
+
   pub fn set_mb_type(&mut self, mb_type: u8) {
     self.mb_type = MbType::new(mb_type, self.transform_size_8x8_flag != 0);
   }
@@ -70,12 +74,7 @@ impl Macroblock {
       prev_intra8x8_pred_mode_flag: [0; 4],
       rem_intra8x8_pred_mode: [0; 4],
       intra_chroma_pred_mode: 0,
-      sub_mb_type: [
-        SubMbType::empty(),
-        SubMbType::empty(),
-        SubMbType::empty(),
-        SubMbType::empty(),
-      ],
+      sub_mb_type: [SubMbType::empty(), SubMbType::empty(), SubMbType::empty(), SubMbType::empty()],
       ref_idx: [[0; 4]; 2],
       mvd: [[[0; 2]; 16]; 2],
       block_luma_dc: [[0; 16]; 3],
@@ -93,11 +92,7 @@ impl Macroblock {
     Self {
       mb_type: MbType::Unavailable,
       coded_block_pattern: 0x0F,
-      coded_block_flag: [
-        [coded_block_flag; 17],
-        [coded_block_flag; 17],
-        [coded_block_flag; 17],
-      ],
+      coded_block_flag: [[coded_block_flag; 17], [coded_block_flag; 17], [coded_block_flag; 17]],
       ..Self::empty()
     }
   }
@@ -119,11 +114,7 @@ impl Macroblock {
     }
   }
 
-  pub fn offset<'a>(
-    &'a self,
-    macroblocks: &'a [Macroblock],
-    offset: isize,
-  ) -> MacroblockResult<&'a Self> {
+  pub fn offset<'a>(&'a self, macroblocks: &'a [Macroblock], offset: isize) -> MacroblockResult<&'a Self> {
     let index = unsafe { (self as *const Macroblock).offset_from(macroblocks.as_ptr()) } + offset;
     if index > macroblocks.len() as isize || index < 0 {
       return Err(MacroblockError::MacroblockBounds(index, macroblocks.len()));
@@ -132,11 +123,7 @@ impl Macroblock {
   }
 
   #[allow(unused)]
-  pub fn offset_mut<'a>(
-    &'a self,
-    macroblocks: &'a mut [Macroblock],
-    offset: isize,
-  ) -> MacroblockResult<&'a mut Self> {
+  pub fn offset_mut<'a>(&'a self, macroblocks: &'a mut [Macroblock], offset: isize) -> MacroblockResult<&'a mut Self> {
     let index = unsafe { (self as *const Macroblock).offset_from(macroblocks.as_ptr()) } + offset;
     if index > macroblocks.len() as isize || index < 0 {
       return Err(MacroblockError::MacroblockBounds(index, macroblocks.len()));

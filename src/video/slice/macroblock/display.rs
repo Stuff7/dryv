@@ -1,5 +1,5 @@
 use super::*;
-use crate::display::DisplayArray;
+use crate::display::{display_array3d, DisplayArray};
 
 impl Display for Macroblock {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -40,27 +40,23 @@ impl Display for Macroblock {
     f.write_str(&format!("intra_chroma_pred_mode: {}\n", self.intra_chroma_pred_mode,))?;
     f.write_str(&format!("TransformBypassModeFlag: {}\n", self.transform_bypass_mode_flag as u8,))?;
     f.write_str(&format!("Intra16x16PredMode: {}\n", self.mb_type.intra16x16_pred_mode()))?;
-    // f.write_str(&format!("FilterOffsetA: {}\n", self.FilterOffsetA))?;
-    // f.write_str(&format!("FilterOffsetB: {}\n", self.FilterOffsetB))?;
     f.write_str(&format!("mb_skip_flag: {}\n\n", self.mb_skip_flag as u8))?;
-    // f.write_str(&format!(
-    //   "coded_block_flag_DC_pattern: {}\n",
-    //   self.coded_block_flag.iter().all(|n| n[16] != 0) as u8,
-    // ))?;
 
-    for i in 0..4 {
-      for j in 0..4 {
-        f.write_str(&format!("mvd_l0[{i}][{j}]:{:?}\n", DisplayArray(&self.mvd[0][4 * i + j])))?;
-      }
-      f.write_str("\n")?;
-    }
-
-    for i in 0..4 {
-      for j in 0..4 {
-        f.write_str(&format!("mvd_l1[{i}][{j}]:{:?}\n", DisplayArray(&self.mvd[1][4 * i + j])))?;
-      }
-      f.write_str("\n")?;
-    }
+    // for i in 0..4 {
+    //   for j in 0..4 {
+    //     f.write_str(&format!("mvd_l0[{i}][{j}]:{:?}\n", DisplayArray(&self.mvd[0][4 * i + j])))?;
+    //   }
+    //   f.write_str("\n")?;
+    // }
+    //
+    // for i in 0..4 {
+    //   for j in 0..4 {
+    //     f.write_str(&format!("mvd_l1[{i}][{j}]:{:?}\n", DisplayArray(&self.mvd[1][4 * i + j])))?;
+    //   }
+    //   f.write_str("\n")?;
+    // }
+    f.write_str(&display_array3d("mv_l0", &self.mv_l0))?;
+    f.write_str(&display_array3d("mv_l1", &self.mv_l1))?;
 
     match self.mb_type.mode() {
       PartPredMode::Intra4x4 => {

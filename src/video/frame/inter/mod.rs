@@ -78,8 +78,6 @@ impl Frame {
           y_s = inverse_raster_scan(sub_mb_part_idx as isize, 4, 4, 8, 1);
         }
 
-        let mut mv_cnt = 0;
-
         let mut mv_l0 = [0; 2];
         let mut mv_l1 = [0; 2];
         let mut mv_cl0 = [0; 2];
@@ -105,8 +103,6 @@ impl Frame {
           &mut pred_flagl1,
           &mut sub_mv_cnt,
         );
-
-        mv_cnt += sub_mv_cnt;
 
         let mut log_wdl = 0;
         let mut w0_l = 1;
@@ -345,23 +341,18 @@ impl Frame {
         curr_sub_mb_type = SubMbType::none();
       }
 
-      let partitions = if slice.mb().mb_part_width() == slice.mb().mb_part_height() {
-        slice.mb().num_mb_part()
-      } else {
-        slice.mb().mb_part_width() as usize / slice.mb().mb_type.num_mb_part()
-      };
       if *pred_flagl0 == 1 {
         self.luma_motion_vector_prediction(slice, mb_part_idx, sub_mb_part_idx, curr_sub_mb_type, false, *ref_idxl0, &mut mvp_l0);
 
-        mv_l0[0] = mvp_l0[0] + slice.mb().mvd[0][mb_part_idx * partitions + sub_mb_part_idx][0];
-        mv_l0[1] = mvp_l0[1] + slice.mb().mvd[0][mb_part_idx * partitions + sub_mb_part_idx][1];
+        mv_l0[0] = mvp_l0[0] + slice.mb().mvd_lx(0, mb_part_idx, sub_mb_part_idx, 0);
+        mv_l0[1] = mvp_l0[1] + slice.mb().mvd_lx(0, mb_part_idx, sub_mb_part_idx, 1);
       }
 
       if *pred_flagl1 == 1 {
         self.luma_motion_vector_prediction(slice, mb_part_idx, sub_mb_part_idx, curr_sub_mb_type, true, *ref_idxl1, &mut mvp_l1);
 
-        mv_l1[0] = mvp_l1[0] + slice.mb().mvd[1][mb_part_idx * partitions + sub_mb_part_idx][0];
-        mv_l1[1] = mvp_l1[1] + slice.mb().mvd[1][mb_part_idx * partitions + sub_mb_part_idx][1];
+        mv_l1[0] = mvp_l1[0] + slice.mb().mvd_lx(1, mb_part_idx, sub_mb_part_idx, 0);
+        mv_l1[1] = mvp_l1[1] + slice.mb().mvd_lx(1, mb_part_idx, sub_mb_part_idx, 1);
       }
     }
 
