@@ -82,7 +82,7 @@ pub fn mb_type_intra(mb_type: u8, transform_size_8x8_flag: bool) -> (PartPredMod
 
 /// Table 7-13 - Macroblock type values 0 to 4 for P and SP slices
 /// Table 7-14 - Macroblock type values 0 to 22 for B slices
-/// Returns (NumMbPart, [MbPartPredMode; 1], MbPartWidth, MbPartHeight)
+/// Returns (NumMbPart, [MbPartPredMode; 2], MbPartWidth, MbPartHeight)
 pub fn mb_type_inter(mb_type: u8) -> (i8, [PartPredMode; 2], u8, u8) {
   match mb_type {
     MB_TYPE_P_L0_16X16 => (1, [PartPredMode::PredL0, PartPredMode::NA], 16, 16),

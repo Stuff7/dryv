@@ -4,12 +4,12 @@ use crate::display::{display_array3d, DisplayArray};
 impl Display for Macroblock {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     f.write_str(&format!("mb_type: {}\n", self.mb_type.name()))?;
-    f.write_str(&format!("mode: {:?}\n", self.mb_type.mode()))?;
-    f.write_str(&format!("NumMbPart: {}\n", self.mb_type.num_mb_part()))?;
+    f.write_str(&format!("mode: {:?} | {:?}\n", self.mb_type.mode(), self.mb_type.inter_mode(1)))?;
+    f.write_str(&format!("NumMbPart: {}\n", self.mb_type.num_mb_part() as u8))?;
     f.write_str(&format!("MbPartWidth: {}\n", self.mb_type.mb_part_width()))?;
     f.write_str(&format!("MbPartHeight: {}\n\n", self.mb_type.mb_part_height()))?;
 
-    if self.mb_type.is_inter() {
+    if self.mb_type.is_inter() && self.mb_type.is_submb() {
       for (i, sub_mb_type) in self.sub_mb_type.iter().enumerate() {
         f.write_str(&format!("# sub_mb_type[{i}] {}\n", sub_mb_type.name()))?;
         f.write_str(&format!("NumSubMbPart: {}\n", sub_mb_type.num_sub_mb_part))?;
