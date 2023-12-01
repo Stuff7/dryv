@@ -38,12 +38,7 @@ impl Debug for Frame {
 }
 
 impl Frame {
-  pub fn new(slice: &Slice) -> Self {
-    let width_l = slice.pic_width_in_samples_l as usize;
-    let height_l = slice.pic_height_in_samples_l as usize;
-    let width_c = slice.pic_width_in_samples_c as usize;
-    let height_c = slice.pic_height_in_samples_c as usize;
-
+  pub fn new(width_l: usize, height_l: usize, width_c: usize, height_c: usize) -> Self {
     Self {
       luma_data: vec![vec![0; height_l].into(); width_l].into(),
       chroma_cr_data: vec![vec![0; height_c].into(); width_c].into(),
@@ -101,13 +96,7 @@ impl Frame {
       let mut pred_part_cb = [[0; 16]; 16];
       let mut pred_part_cr = [[0; 16]; 16];
 
-      self.inter_prediction(
-        slice,
-        dpb,
-        &mut pred_part_l,
-        &mut pred_part_cb,
-        &mut pred_part_cr,
-      );
+      self.inter_prediction(slice, dpb, &mut pred_part_l, &mut pred_part_cb, &mut pred_part_cr);
 
       if slice.mb().transform_size_8x8_flag == 1 {
         self.inter_transform_for_8x8_luma_residual_blocks(slice, &pred_part_l);
@@ -120,29 +109,9 @@ impl Frame {
   }
 
   /// 8.5.14 Picture construction process prior to deblocking filter process
-  pub fn picture_construction(
-    &mut self,
-    slice: &Slice,
-    u: &[isize],
-    blk_type: BlockType,
-    blk_idx: usize,
-    is_luma: bool,
-    is_chroma_cb: bool,
-  ) {
-    let x_p = inverse_raster_scan(
-      slice.curr_mb_addr,
-      16,
-      16,
-      slice.pic_width_in_samples_l as isize,
-      0,
-    );
-    let y_p = inverse_raster_scan(
-      slice.curr_mb_addr,
-      16,
-      16,
-      slice.pic_width_in_samples_l as isize,
-      1,
-    );
+  pub fn picture_construction(&mut self, slice: &Slice, u: &[isize], blk_type: BlockType, blk_idx: usize, is_luma: bool, is_chroma_cb: bool) {
+    let x_p = inverse_raster_scan(slice.curr_mb_addr, 16, 16, slice.pic_width_in_samples_l as isize, 0);
+    let y_p = inverse_raster_scan(slice.curr_mb_addr, 16, 16, slice.pic_width_in_samples_l as isize, 1);
 
     let mut x_o = 0;
     let mut y_o = 0;
@@ -153,10 +122,8 @@ impl Frame {
         y_o = 0;
         n_e = 16;
       } else if blk_type.is_4x4() {
-        x_o = inverse_raster_scan(blk_idx as isize / 4, 8, 8, 16, 0)
-          + inverse_raster_scan(blk_idx as isize % 4, 4, 4, 8, 0);
-        y_o = inverse_raster_scan(blk_idx as isize / 4, 8, 8, 16, 1)
-          + inverse_raster_scan(blk_idx as isize % 4, 4, 4, 8, 1);
+        x_o = inverse_raster_scan(blk_idx as isize / 4, 8, 8, 16, 0) + inverse_raster_scan(blk_idx as isize % 4, 4, 4, 8, 0);
+        y_o = inverse_raster_scan(blk_idx as isize / 4, 8, 8, 16, 1) + inverse_raster_scan(blk_idx as isize % 4, 4, 4, 8, 1);
         n_e = 4;
       } else {
         x_o = inverse_raster_scan(blk_idx as isize, 8, 8, 16, 0);
@@ -186,8 +153,7 @@ impl Frame {
         for i in 0..mb_width_c {
           for j in 0..mb_height_c {
             chroma_data[(x_p / slice.sub_width_c as isize + x_o + j as isize) as usize]
-              [(y_p / slice.sub_height_c as isize + y_o + i as isize) as usize] =
-              u[i * mb_width_c + j] as u8;
+              [(y_p / slice.sub_height_c as isize + y_o + i as isize) as usize] = u[i * mb_width_c + j] as u8;
           }
         }
       }

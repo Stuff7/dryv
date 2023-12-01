@@ -107,7 +107,7 @@ impl Macroblock {
 
   pub fn index(&self, macroblocks: &[Macroblock]) -> isize {
     let index = unsafe { (self as *const Macroblock).offset_from(macroblocks.as_ptr()) };
-    if index >= macroblocks.len() as isize {
+    if index < 0 || index >= macroblocks.len() as isize {
       -1
     } else {
       index

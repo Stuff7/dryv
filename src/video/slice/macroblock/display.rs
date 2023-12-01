@@ -1,5 +1,5 @@
 use super::*;
-use crate::display::{display_array3d, DisplayArray};
+use crate::display::{display_array1d, display_array3d, DisplayArray};
 
 impl Display for Macroblock {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -55,6 +55,9 @@ impl Display for Macroblock {
     //   }
     //   f.write_str("\n")?;
     // }
+    f.write_str(&display_array1d("refIdxL0", &self.ref_idxl0))?;
+    f.write_str(&display_array1d("refIdxL1", &self.ref_idxl1))?;
+
     f.write_str(&display_array3d("mv_l0", &self.mv_l0))?;
     f.write_str(&display_array3d("mv_l1", &self.mv_l1))?;
 

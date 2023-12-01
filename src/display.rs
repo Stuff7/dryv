@@ -61,6 +61,15 @@ impl<'a, T: Display> Debug for DisplayArray<'a, T> {
   }
 }
 
+pub fn display_array1d<T: Display>(name: &str, arr: &[T]) -> String {
+  let mut s = format!("{name}:");
+  for x in arr {
+    s += &format!(" {x}");
+  }
+  s += "\n";
+  s
+}
+
 pub fn display_array3d<T: Display, const D1: usize, const D2: usize>(name: &str, arr: &[[[T; D2]; D1]]) -> String {
   let mut s = String::new();
   for (i, x) in arr.iter().enumerate() {
