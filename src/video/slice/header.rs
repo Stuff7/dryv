@@ -8,7 +8,7 @@ use crate::{
 };
 use std::fmt::Debug;
 
-pub struct SliceHeader {
+pub struct SliceHeader<'a> {
   /// The index of the first macroblock in the slice.
   pub first_mb_in_slice: u16,
 
@@ -131,9 +131,9 @@ pub struct SliceHeader {
 
   pub mb_height_c: u8,
 
-  pub scaling_list4x4: [[isize; 16]; 6],
+  pub scaling_list4x4: &'a [[isize; 16]; 6],
 
-  pub scaling_list8x8: Box<[[isize; 64]]>,
+  pub scaling_list8x8: &'a [[isize; 64]],
 
   pub qp_bd_offset_c: isize,
 
@@ -162,8 +162,8 @@ pub struct SliceHeader {
   pub pic_height_in_samples_c: usize,
 }
 
-impl SliceHeader {
-  pub fn new(data: &mut BitStream, nal: &NALUnit, sps: &mut SequenceParameterSet, pps: &mut PictureParameterSet) -> Self {
+impl<'a> SliceHeader<'a> {
+  pub fn new(data: &mut BitStream, nal: &NALUnit, sps: &'a SequenceParameterSet, pps: &'a PictureParameterSet) -> Self {
     let mut field_pic_flag = false;
     let slice_type;
     let num_ref_idx_active_override_flag;
@@ -332,13 +332,15 @@ impl SliceHeader {
     }
   }
 
-  fn scaling_lists(sps: &mut SequenceParameterSet, pps: &mut PictureParameterSet) -> ([[isize; 16]; 6], Box<[[isize; 64]]>) {
-    if let Some(scaling_list) = sps.seq_scaling_matrix.take() {
-      (scaling_list.l4x4, scaling_list.l8x8)
-    } else if let Some(scaling_list) = pps.extra_rbsp_data.as_mut().and_then(|pps| pps.pic_scaling_matrix.take()) {
-      (scaling_list.l4x4, scaling_list.l8x8)
+  fn scaling_lists<'b>(sps: &'b SequenceParameterSet, pps: &'b PictureParameterSet) -> (&'b [[isize; 16]; 6], &'b [[isize; 64]]) {
+    if let Some(scaling_list) = &sps.seq_scaling_matrix {
+      (&scaling_list.l4x4, &scaling_list.l8x8)
+    } else if let Some(scaling_list) = pps.extra_rbsp_data.as_ref().and_then(|pps| pps.pic_scaling_matrix.as_ref()) {
+      (&scaling_list.l4x4, &scaling_list.l8x8)
     } else {
-      ([[16; 16]; 6], [[16; 64]; 6].into())
+      const L4X4: [[isize; 16]; 6] = [[16; 16]; 6];
+      const L8X8: [[isize; 64]; 6] = [[16; 64]; 6];
+      (&L4X4, &L8X8)
     }
   }
 }
@@ -637,7 +639,7 @@ impl DeblockingFilterControlSlice {
   }
 }
 
-impl Debug for SliceHeader {
+impl<'a> Debug for SliceHeader<'a> {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     let mut f = f.debug_struct("SliceHeader");
     f.field("first_mb_in_slice", &self.first_mb_in_slice)

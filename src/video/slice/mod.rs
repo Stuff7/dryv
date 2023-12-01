@@ -26,7 +26,7 @@ use std::ops::Deref;
 /// Represents a slice in an H.264 video frame.
 pub struct Slice<'a> {
   /// The header information for the slice, including slice type and other metadata.
-  pub header: SliceHeader,
+  pub header: SliceHeader<'a>,
 
   /// Reference to the Sequence Parameter Set (SPS) associated with the video stream.
   /// SPS contains essential information about the video sequence, such as frame dimensions and color space.
@@ -101,7 +101,7 @@ pub struct Slice<'a> {
 }
 
 impl<'a> Slice<'a> {
-  pub fn new(num: usize, data: &'a [u8], nal: &NALUnit, sps: &'a mut SequenceParameterSet, pps: &'a mut PictureParameterSet) -> Self {
+  pub fn new(num: usize, data: &'a [u8], nal: &NALUnit, sps: &'a SequenceParameterSet, pps: &'a PictureParameterSet) -> Self {
     let sliceqpy;
     let mut stream = BitStream::new(data);
     let header = SliceHeader::new(&mut stream, nal, sps, pps);
@@ -621,7 +621,7 @@ impl<'a> Slice<'a> {
 }
 
 impl<'a> Deref for Slice<'a> {
-  type Target = SliceHeader;
+  type Target = SliceHeader<'a>;
   fn deref(&self) -> &Self::Target {
     &self.header
   }

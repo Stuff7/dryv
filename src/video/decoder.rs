@@ -101,7 +101,7 @@ impl Decoder {
             }
           }
           NALUnitType::NonIDRPicture | NALUnitType::IDRPicture => {
-            let mut slice = Slice::new(i, nal.data, &nal, &mut avc1.avcc.sps, &mut avc1.avcc.pps);
+            let mut slice = Slice::new(i, nal.data, &nal, &avc1.avcc.sps, &avc1.avcc.pps);
             slice.data(&mut dpb)?;
             log!(File@"{msg}PICTURE");
             use std::io::Write;
