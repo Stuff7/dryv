@@ -140,15 +140,30 @@ pub struct SliceHeader {
   pub bit_depth_y: isize,
 
   pub bit_depth_c: isize,
+
+  /// Width of the picture in macroblocks (MBs).
+  /// The picture width is measured in the number of macroblocks it contains.
+  pub pic_width_in_mbs: u16,
+
+  /// Height of the picture in macroblocks (MBs).
+  /// The picture height is measured in the number of macroblocks it contains.
+  pub pic_height_in_mbs: u16,
+
+  /// Total size of the picture in macroblocks (MBs).
+  /// The picture size represents the number of macroblocks within the picture.
+  pub pic_size_in_mbs: u16,
+
+  pub pic_width_in_samples_l: usize,
+
+  pub pic_height_in_samples_l: usize,
+
+  pub pic_width_in_samples_c: usize,
+
+  pub pic_height_in_samples_c: usize,
 }
 
 impl SliceHeader {
-  pub fn new(
-    data: &mut BitStream,
-    nal: &NALUnit,
-    sps: &mut SequenceParameterSet,
-    pps: &mut PictureParameterSet,
-  ) -> Self {
+  pub fn new(data: &mut BitStream, nal: &NALUnit, sps: &mut SequenceParameterSet, pps: &mut PictureParameterSet) -> Self {
     let mut field_pic_flag = false;
     let slice_type;
     let num_ref_idx_active_override_flag;
@@ -182,6 +197,9 @@ impl SliceHeader {
       (16 / sub_width_c as u8, 16 / sub_height_c as u8)
     };
     let (scaling_list4x4, scaling_list8x8) = Self::scaling_lists(sps, pps);
+    let pic_width_in_mbs;
+    let mut pic_height_in_mbs;
+    let pic_size_in_mbs;
 
     Self {
       first_mb_in_slice: data.exponential_golomb(),
@@ -201,9 +219,7 @@ impl SliceHeader {
       },
       bottom_field_flag: field_pic_flag && data.bit_flag(),
       idr_pic_id: nal.unit_type.is_idr().then(|| data.exponential_golomb()),
-      pic_order_cnt_lsb: sps
-        .log2_max_pic_order_cnt_lsb_minus4
-        .map(|size| data.bits_into(size as usize + 4)),
+      pic_order_cnt_lsb: sps.log2_max_pic_order_cnt_lsb_minus4.map(|size| data.bits_into(size as usize + 4)),
       delta_pic_order_cnt_bottom: (sps.log2_max_pic_order_cnt_lsb_minus4.is_some()
         && pps.bottom_field_pic_order_in_frame_present_flag
         && !field_pic_flag)
@@ -216,13 +232,10 @@ impl SliceHeader {
         .map(|a| {
           (
             a,
-            (pps.bottom_field_pic_order_in_frame_present_flag && !field_pic_flag)
-              .then(|| data.signed_exponential_golomb()),
+            (pps.bottom_field_pic_order_in_frame_present_flag && !field_pic_flag).then(|| data.signed_exponential_golomb()),
           )
         }),
-      redundant_pic_cnt: pps
-        .redundant_pic_cnt_present_flag
-        .then(|| data.exponential_golomb()),
+      redundant_pic_cnt: pps.redundant_pic_cnt_present_flag.then(|| data.exponential_golomb()),
       direct_spatial_mv_pred_flag: slice_type.is_bidirectional() && data.bit_flag(),
       num_ref_idx_active_override_flag: {
         num_ref_idx_active_override_flag = !slice_type.is_intra() && data.bit_flag();
@@ -235,23 +248,14 @@ impl SliceHeader {
         num_ref_idx_l0_active_minus1
       },
       num_ref_idx_l1_active_minus1: {
-        num_ref_idx_l1_active_minus1 = (num_ref_idx_active_override_flag
-          && slice_type.is_bidirectional())
-        .then(|| data.exponential_golomb())
-        .unwrap_or(pps.num_ref_idx_l1_default_active_minus1);
+        num_ref_idx_l1_active_minus1 = (num_ref_idx_active_override_flag && slice_type.is_bidirectional())
+          .then(|| data.exponential_golomb())
+          .unwrap_or(pps.num_ref_idx_l1_default_active_minus1);
         num_ref_idx_l1_active_minus1
       },
       ref_pic_list_mvc_modification: RefPicListMvcModification::new(data, &nal.unit_type),
-      ref_pic_list_modification_l0: RefPicListModification::new_list(
-        data,
-        &nal.unit_type,
-        !slice_type.is_intra(),
-      ),
-      ref_pic_list_modification_l1: RefPicListModification::new_list(
-        data,
-        &nal.unit_type,
-        slice_type.is_bidirectional(),
-      ),
+      ref_pic_list_modification_l0: RefPicListModification::new_list(data, &nal.unit_type, !slice_type.is_intra()),
+      ref_pic_list_modification_l1: RefPicListModification::new_list(data, &nal.unit_type, slice_type.is_bidirectional()),
       chroma_array_type,
       pred_weight_table: PredWeightTable::new(
         data,
@@ -263,32 +267,23 @@ impl SliceHeader {
         pps.weighted_bipred_idc,
       ),
       dec_ref_pic_marking: DecRefPicMarking::new(data, nal),
-      cabac_init_idc: (pps.entropy_coding_mode_flag && !slice_type.is_intra())
-        .then(|| data.exponential_golomb()),
+      cabac_init_idc: (pps.entropy_coding_mode_flag && !slice_type.is_intra()).then(|| data.exponential_golomb()),
       slice_qp_delta: data.signed_exponential_golomb(),
       sp_for_switch_flag: matches!(slice_type, SliceType::SP) && data.bit_flag(),
-      slice_qs_delta: slice_type
-        .is_switching()
-        .then(|| data.signed_exponential_golomb()),
-      deblocking_filter_control: DeblockingFilterControl::new(
-        data,
-        pps.deblocking_filter_control_present_flag,
-      ),
+      slice_qs_delta: slice_type.is_switching().then(|| data.signed_exponential_golomb()),
+      deblocking_filter_control: DeblockingFilterControl::new(data, pps.deblocking_filter_control_present_flag),
       slice_group_change_cycle: pps.slice_group.as_ref().and_then(|group| {
-        let SliceGroup::Change { change_rate_minus1, .. } = group else {return None};
+        let SliceGroup::Change { change_rate_minus1, .. } = group else {
+          return None;
+        };
         let pic_width_in_mbs = sps.pic_width_in_mbs_minus1 + 1;
         let pic_height_in_map_units = sps.pic_height_in_map_units_minus1 + 1;
         let pic_size_in_map_units = pic_width_in_mbs * pic_height_in_map_units;
         let change_rate = change_rate_minus1 + 1;
-        let size = (pic_size_in_map_units as f32 / change_rate as f32 + 1.)
-          .log2()
-          .ceil();
+        let size = (pic_size_in_map_units as f32 / change_rate as f32 + 1.).log2().ceil();
         Some(data.bits_into(size as usize))
       }),
-      max_pic_order_cnt_lsb: sps
-        .log2_max_pic_order_cnt_lsb_minus4
-        .map(|x| 1 << (x + 4))
-        .unwrap_or_default() as isize,
+      max_pic_order_cnt_lsb: sps.log2_max_pic_order_cnt_lsb_minus4.map(|x| 1 << (x + 4)).unwrap_or_default() as isize,
       max_frame_num: {
         max_frame_num = 1 << (sps.log2_max_frame_num_minus4 as i16 + 4);
         max_frame_num
@@ -312,20 +307,35 @@ impl SliceHeader {
       qp_bd_offset_c: sps.bit_depth_chroma_minus8 as isize * 6,
       bit_depth_y: sps.bit_depth_luma_minus8 as isize + 8,
       bit_depth_c: sps.bit_depth_chroma_minus8 as isize + 8,
+      pic_width_in_mbs: {
+        pic_width_in_mbs = sps.pic_width_in_mbs_minus1 + 1;
+        pic_width_in_mbs
+      },
+      pic_height_in_mbs: {
+        pic_height_in_mbs = sps.pic_height_in_map_units_minus1 + 1;
+        if !sps.frame_mbs_only_flag {
+          pic_height_in_mbs *= 2;
+        }
+        if field_pic_flag {
+          pic_height_in_mbs /= 2;
+        }
+        pic_height_in_mbs
+      },
+      pic_size_in_mbs: {
+        pic_size_in_mbs = pic_width_in_mbs * pic_height_in_mbs;
+        pic_size_in_mbs
+      },
+      pic_width_in_samples_l: pic_width_in_mbs as usize * 16,
+      pic_height_in_samples_l: pic_height_in_mbs as usize * 16,
+      pic_width_in_samples_c: (pic_width_in_mbs * mb_width_c as u16) as usize,
+      pic_height_in_samples_c: (pic_height_in_mbs * mb_height_c as u16) as usize,
     }
   }
 
-  fn scaling_lists(
-    sps: &mut SequenceParameterSet,
-    pps: &mut PictureParameterSet,
-  ) -> ([[isize; 16]; 6], Box<[[isize; 64]]>) {
+  fn scaling_lists(sps: &mut SequenceParameterSet, pps: &mut PictureParameterSet) -> ([[isize; 16]; 6], Box<[[isize; 64]]>) {
     if let Some(scaling_list) = sps.seq_scaling_matrix.take() {
       (scaling_list.l4x4, scaling_list.l8x8)
-    } else if let Some(scaling_list) = pps
-      .extra_rbsp_data
-      .as_mut()
-      .and_then(|pps| pps.pic_scaling_matrix.take())
-    {
+    } else if let Some(scaling_list) = pps.extra_rbsp_data.as_mut().and_then(|pps| pps.pic_scaling_matrix.take()) {
       (scaling_list.l4x4, scaling_list.l8x8)
     } else {
       ([[16; 16]; 6], [[16; 64]; 6].into())
@@ -413,12 +423,7 @@ pub struct RefPicListModification {
 
 impl RefPicListModification {
   pub fn new_list(data: &mut BitStream, nal_type: &NALUnitType, condition: bool) -> Box<[Self]> {
-    match !matches!(
-      nal_type,
-      NALUnitType::CodedSliceExtension | NALUnitType::DepthOrTextureViewComponent
-    ) && condition
-      && data.bit_flag()
-    {
+    match !matches!(nal_type, NALUnitType::CodedSliceExtension | NALUnitType::DepthOrTextureViewComponent) && condition && data.bit_flag() {
       true => std::iter::from_fn(|| {
         let modification_of_pic_nums_idc = data.exponential_golomb();
         match modification_of_pic_nums_idc {
@@ -448,11 +453,7 @@ pub struct RefPicListMvcModification;
 
 impl RefPicListMvcModification {
   pub fn new(_: &mut BitStream, nal_type: &NALUnitType) -> Option<Self> {
-    matches!(
-      nal_type,
-      NALUnitType::CodedSliceExtension | NALUnitType::DepthOrTextureViewComponent
-    )
-    .then(|| todo!("RefPicListMvcModification"))
+    matches!(nal_type, NALUnitType::CodedSliceExtension | NALUnitType::DepthOrTextureViewComponent).then(|| todo!("RefPicListMvcModification"))
   }
 }
 
@@ -472,16 +473,9 @@ pub struct PredWeightTableEntry {
 }
 
 impl PredWeightTableEntry {
-  fn new(
-    stream: &mut BitStream,
-    luma_log2_weight_denom: isize,
-    chroma_log2_weight_denom: isize,
-  ) -> Self {
+  fn new(stream: &mut BitStream, luma_log2_weight_denom: isize, chroma_log2_weight_denom: isize) -> Self {
     let (luma_weight, luma_offset) = match stream.bit_flag() {
-      true => (
-        stream.signed_exponential_golomb(),
-        stream.signed_exponential_golomb(),
-      ),
+      true => (stream.signed_exponential_golomb(), stream.signed_exponential_golomb()),
       false => (1 << luma_log2_weight_denom, 0),
     };
     let (chroma_weight, chroma_offset) = match stream.bit_flag() {
@@ -518,26 +512,18 @@ impl PredWeightTable {
     slice_type: &SliceType,
     weighted_bipred_idc: u8,
   ) -> Option<Self> {
-    ((weighted_pred_flag && slice_type.is_predictive())
-      || (weighted_bipred_idc == 1 && slice_type.is_bidirectional()))
-    .then(|| {
+    ((weighted_pred_flag && slice_type.is_predictive()) || (weighted_bipred_idc == 1 && slice_type.is_bidirectional())).then(|| {
       let luma_log2_weight_denom = stream.exponential_golomb();
-      let chroma_log2_weight_denom = (chroma_array_type != 0)
-        .then(|| stream.exponential_golomb())
-        .unwrap_or_default();
+      let chroma_log2_weight_denom = (chroma_array_type != 0).then(|| stream.exponential_golomb()).unwrap_or_default();
       Self {
         luma_log2_weight_denom,
         chroma_log2_weight_denom,
         l0: (0..=num_ref_idx_l0_active_minus1)
-          .map(|_| {
-            PredWeightTableEntry::new(stream, luma_log2_weight_denom, chroma_log2_weight_denom)
-          })
+          .map(|_| PredWeightTableEntry::new(stream, luma_log2_weight_denom, chroma_log2_weight_denom))
           .collect(),
         l1: if !slice_type.is_predictive() {
           (0..=num_ref_idx_l1_active_minus1)
-            .map(|_| {
-              PredWeightTableEntry::new(stream, luma_log2_weight_denom, chroma_log2_weight_denom)
-            })
+            .map(|_| PredWeightTableEntry::new(stream, luma_log2_weight_denom, chroma_log2_weight_denom))
             .collect()
         } else {
           [].into()
@@ -663,40 +649,16 @@ impl Debug for SliceHeader {
       .field("bottom_field_flag", &self.bottom_field_flag)
       .field("idr_pic_id", &self.idr_pic_id)
       .field("pic_order_cnt_lsb", &self.pic_order_cnt_lsb)
-      .field(
-        "delta_pic_order_cnt_bottom",
-        &self.delta_pic_order_cnt_bottom,
-      )
+      .field("delta_pic_order_cnt_bottom", &self.delta_pic_order_cnt_bottom)
       .field("delta_pic_order_cnt", &self.delta_pic_order_cnt)
       .field("redundant_pic_cnt", &self.redundant_pic_cnt)
-      .field(
-        "direct_spatial_mv_pred_flag",
-        &self.direct_spatial_mv_pred_flag,
-      )
-      .field(
-        "num_ref_idx_active_override_flag",
-        &self.num_ref_idx_active_override_flag,
-      )
-      .field(
-        "num_ref_idx_l0_active_minus1",
-        &self.num_ref_idx_l0_active_minus1,
-      )
-      .field(
-        "num_ref_idx_l1_active_minus1",
-        &self.num_ref_idx_l1_active_minus1,
-      )
-      .field(
-        "ref_pic_list_mvc_modification",
-        &self.ref_pic_list_mvc_modification,
-      )
-      .field(
-        "ref_pic_list_modification_l0",
-        &self.ref_pic_list_modification_l0,
-      )
-      .field(
-        "ref_pic_list_modification_l1",
-        &self.ref_pic_list_modification_l1,
-      )
+      .field("direct_spatial_mv_pred_flag", &self.direct_spatial_mv_pred_flag)
+      .field("num_ref_idx_active_override_flag", &self.num_ref_idx_active_override_flag)
+      .field("num_ref_idx_l0_active_minus1", &self.num_ref_idx_l0_active_minus1)
+      .field("num_ref_idx_l1_active_minus1", &self.num_ref_idx_l1_active_minus1)
+      .field("ref_pic_list_mvc_modification", &self.ref_pic_list_mvc_modification)
+      .field("ref_pic_list_modification_l0", &self.ref_pic_list_modification_l0)
+      .field("ref_pic_list_modification_l1", &self.ref_pic_list_modification_l1)
       .field("chroma_array_type", &self.chroma_array_type)
       .field("pred_weight_table", &self.pred_weight_table)
       .field("dec_ref_pic_marking", &self.dec_ref_pic_marking)
@@ -717,18 +679,12 @@ impl Debug for SliceHeader {
 
     for (i, list) in self.scaling_list4x4.iter().enumerate() {
       for (j, list) in list.chunks_exact(4).enumerate() {
-        f.field(
-          &format!("scaling_list4x4[{}][{}]", i, j),
-          &DisplayArray(list),
-        );
+        f.field(&format!("scaling_list4x4[{}][{}]", i, j), &DisplayArray(list));
       }
     }
     for (i, list) in self.scaling_list8x8.iter().enumerate() {
       for (j, list) in list.chunks_exact(8).enumerate() {
-        f.field(
-          &format!("scaling_list8x8[{}][{}]", i, j),
-          &DisplayArray(list),
-        );
+        f.field(&format!("scaling_list8x8[{}][{}]", i, j), &DisplayArray(list));
       }
     }
     f.field("qp_bd_offset_c", &self.qp_bd_offset_c)

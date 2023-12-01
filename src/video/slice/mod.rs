@@ -50,26 +50,6 @@ pub struct Slice<'a> {
   /// CABAC is a video coding method that adapts probability models for binary decisions.
   pub cabac_init_mode: usize,
 
-  /// Width of the picture in macroblocks (MBs).
-  /// The picture width is measured in the number of macroblocks it contains.
-  pub pic_width_in_mbs: u16,
-
-  /// Height of the picture in macroblocks (MBs).
-  /// The picture height is measured in the number of macroblocks it contains.
-  pub pic_height_in_mbs: u16,
-
-  /// Total size of the picture in macroblocks (MBs).
-  /// The picture size represents the number of macroblocks within the picture.
-  pub pic_size_in_mbs: u16,
-
-  pub pic_width_in_samples_l: usize,
-
-  pub pic_height_in_samples_l: usize,
-
-  pub pic_width_in_samples_c: usize,
-
-  pub pic_height_in_samples_c: usize,
-
   pub max_frame_num: isize,
 
   pub mb_x: isize,
@@ -122,36 +102,11 @@ pub struct Slice<'a> {
 
 impl<'a> Slice<'a> {
   pub fn new(num: usize, data: &'a [u8], nal: &NALUnit, sps: &'a mut SequenceParameterSet, pps: &'a mut PictureParameterSet) -> Self {
-    let pic_width_in_mbs;
-    let mut pic_height_in_mbs;
-    let pic_size_in_mbs;
     let sliceqpy;
     let mut stream = BitStream::new(data);
     let header = SliceHeader::new(&mut stream, nal, sps, pps);
     Self {
       cabac_init_mode: header.cabac_init_idc.map(|idc| idc + 1).unwrap_or(0) as usize,
-      pic_width_in_mbs: {
-        pic_width_in_mbs = sps.pic_width_in_mbs_minus1 + 1;
-        pic_width_in_mbs
-      },
-      pic_height_in_mbs: {
-        pic_height_in_mbs = sps.pic_height_in_map_units_minus1 + 1;
-        if !sps.frame_mbs_only_flag {
-          pic_height_in_mbs *= 2;
-        }
-        if header.field_pic_flag {
-          pic_height_in_mbs /= 2;
-        }
-        pic_height_in_mbs
-      },
-      pic_size_in_mbs: {
-        pic_size_in_mbs = pic_width_in_mbs * pic_height_in_mbs;
-        pic_size_in_mbs
-      },
-      pic_width_in_samples_l: pic_width_in_mbs as usize * 16,
-      pic_height_in_samples_l: pic_height_in_mbs as usize * 16,
-      pic_width_in_samples_c: (pic_width_in_mbs * header.mb_width_c as u16) as usize,
-      pic_height_in_samples_c: (pic_height_in_mbs * header.mb_height_c as u16) as usize,
       max_frame_num: 1 << (sps.log2_max_frame_num_minus4 + 4),
       mb_x: 0,
       mb_y: 0,
@@ -177,8 +132,7 @@ impl<'a> Slice<'a> {
       qpy_prev: sliceqpy,
       qsy: 26 + pps.pic_init_qs_minus26 as isize + header.slice_qs_delta.unwrap_or_default() as isize,
       last_mb_in_slice: 0,
-      sgmap: SliceGroup::init_sgmap(header.slice_group_change_cycle.unwrap_or_default(), pic_width_in_mbs, sps, pps),
-      header,
+      sgmap: SliceGroup::init_sgmap(header.slice_group_change_cycle.unwrap_or_default(), header.pic_width_in_mbs, sps, pps),
       sps,
       pps,
       nal_unit_type: nal.unit_type,
@@ -186,7 +140,8 @@ impl<'a> Slice<'a> {
       stream,
       prev_mb_addr: 0,
       curr_mb_addr: 0,
-      macroblocks: (0..pic_size_in_mbs).map(|_| Macroblock::empty()).collect(),
+      macroblocks: (0..header.pic_size_in_mbs).map(|_| Macroblock::empty()).collect(),
+      header,
     }
   }
 
@@ -199,7 +154,12 @@ impl<'a> Slice<'a> {
   }
 
   pub fn data(&mut self, dpb: &mut DecodedPictureBuffer) -> CabacResult {
-    let mut frame = Frame::new(self);
+    let mut frame = Frame::new(
+      self.pic_width_in_samples_l,
+      self.pic_height_in_samples_l,
+      self.pic_width_in_samples_c,
+      self.pic_height_in_samples_c,
+    );
     self.prev_mb_addr = -1isize;
     self.curr_mb_addr = (self.first_mb_in_slice * (1 + self.mbaff_frame_flag as u16)) as isize;
     self.last_mb_in_slice = self.curr_mb_addr;
