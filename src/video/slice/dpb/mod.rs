@@ -27,6 +27,7 @@ use crate::{
 
 #[derive(Debug)]
 pub struct DecodedPictureBuffer {
+  pub previous: PreviousPicture,
   pub top_field_order_cnt: isize,
   pub bottom_field_order_cnt: isize,
   pub pic_order_cnt: isize,
@@ -38,6 +39,7 @@ pub struct DecodedPictureBuffer {
 impl DecodedPictureBuffer {
   pub fn new() -> Self {
     Self {
+      previous: PreviousPicture::default(),
       top_field_order_cnt: 0,
       bottom_field_order_cnt: 0,
       pic_order_cnt: 0,
@@ -53,6 +55,7 @@ impl DecodedPictureBuffer {
     self.init_pic(&mut pic);
     let mut slice = Slice::new(num, stream, &pic.header, nal, sps, pps, &mut pic.macroblocks);
     slice.data(self, &mut pic.frame)?;
+    self.previous.copy_pic(&pic);
     if pic.nal_idc != 0 {
       self.buffer.push(pic);
     }
@@ -96,10 +99,6 @@ impl DecodedPictureBuffer {
     self.top_field_order_cnt = pic.top_field_order_cnt;
     self.bottom_field_order_cnt = pic.bottom_field_order_cnt;
     self.pic_order_cnt = pic.pic_order_cnt;
-  }
-
-  pub fn previous(&self) -> &Picture {
-    self.buffer.last().expect("Previous pic not found")
   }
 
   pub fn ref_pic_list0(&self, idx: usize) -> &Picture {
@@ -227,5 +226,26 @@ impl DecodedPictureBuffer {
         self.buffer.remove(idx as usize);
       }
     }
+  }
+}
+
+#[derive(Debug, Default)]
+pub struct PreviousPicture {
+  pub memory_management_control_operation_5_flag: bool,
+  pub top_field_order_cnt: isize,
+  pub pic_order_cnt_msb: isize,
+  pub header_pic_order_cnt_lsb: isize,
+  pub frame_num_offset: isize,
+  pub header_frame_num: isize,
+}
+
+impl PreviousPicture {
+  pub fn copy_pic(&mut self, pic: &Picture) {
+    self.memory_management_control_operation_5_flag = pic.memory_management_control_operation_5_flag;
+    self.top_field_order_cnt = pic.top_field_order_cnt;
+    self.pic_order_cnt_msb = pic.pic_order_cnt_msb;
+    self.header_pic_order_cnt_lsb = pic.header.pic_order_cnt_lsb.unwrap_or_default() as isize;
+    self.frame_num_offset = pic.frame_num_offset;
+    self.header_frame_num = pic.header.frame_num as isize;
   }
 }

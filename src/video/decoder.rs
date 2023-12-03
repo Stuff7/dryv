@@ -101,7 +101,7 @@ impl Decoder {
           }
           NALUnitType::NonIDRPicture | NALUnitType::IDRPicture => {
             dpb.push(i, nal.data, &nal, &avc1.avcc.sps, &avc1.avcc.pps)?;
-            let pic = dpb.previous();
+            let pic = dpb.buffer.last().expect("No pic found");
             log!(File@"{msg}PICTURE");
             use std::io::Write;
             let name = format!("temp/slice/{i}");

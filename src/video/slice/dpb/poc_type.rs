@@ -24,16 +24,12 @@ impl DecodedPictureBuffer {
     if pic.nal_unit_type.is_idr() {
       prev_pic_order_cnt_msb = 0;
       prev_pic_order_cnt_lsb = 0;
-    } else if let Some(previous) = self.buffer.last() {
-      if previous.memory_management_control_operation_5_flag {
-        prev_pic_order_cnt_msb = 0;
-        prev_pic_order_cnt_lsb = previous.top_field_order_cnt;
-      } else {
-        prev_pic_order_cnt_msb = previous.pic_order_cnt_msb;
-        prev_pic_order_cnt_lsb = previous.header.pic_order_cnt_lsb.unwrap_or_default() as isize;
-      }
+    } else if self.previous.memory_management_control_operation_5_flag {
+      prev_pic_order_cnt_msb = 0;
+      prev_pic_order_cnt_lsb = self.previous.top_field_order_cnt;
     } else {
-      unreachable!();
+      prev_pic_order_cnt_msb = self.previous.pic_order_cnt_msb;
+      prev_pic_order_cnt_lsb = self.previous.header_pic_order_cnt_lsb;
     }
 
     let h_pic_order_cnt_lsb = pic.header.pic_order_cnt_lsb.unwrap_or_default() as isize;
@@ -53,30 +49,18 @@ impl DecodedPictureBuffer {
 
   /// 8.2.1.2 Decoding process for picture order count type 1
   pub fn poc_type_1(&mut self, pic: &mut Picture) {
-    let frame_num_offset;
-    let memory_management_control_operation_5_flag;
-    let frame_num;
-    if let Some(previous) = self.buffer.last() {
-      frame_num_offset = previous.frame_num_offset;
-      memory_management_control_operation_5_flag = previous.memory_management_control_operation_5_flag;
-      frame_num = previous.header.frame_num;
-    } else {
-      frame_num_offset = 0;
-      memory_management_control_operation_5_flag = false;
-      frame_num = 0;
-    }
     let mut prev_frame_num_offset = 0;
     if !pic.nal_unit_type.is_idr() {
-      if memory_management_control_operation_5_flag {
+      if self.previous.memory_management_control_operation_5_flag {
         prev_frame_num_offset = 0;
       } else {
-        prev_frame_num_offset = frame_num_offset;
+        prev_frame_num_offset = self.previous.frame_num_offset;
       }
     }
 
     if pic.nal_unit_type.is_idr() {
       pic.frame_num_offset = 0;
-    } else if frame_num > pic.header.frame_num {
+    } else if self.previous.header_frame_num > pic.header.frame_num as isize {
       pic.frame_num_offset = prev_frame_num_offset + pic.header.max_frame_num;
     } else {
       pic.frame_num_offset = prev_frame_num_offset;
@@ -140,30 +124,18 @@ impl DecodedPictureBuffer {
 
   /// 8.2.1.3 Decoding process for picture order count type 2
   pub fn poc_type_2(&mut self, pic: &mut Picture) {
-    let frame_num_offset;
-    let memory_management_control_operation_5_flag;
-    let frame_num;
-    if let Some(previous) = self.buffer.last() {
-      frame_num_offset = previous.frame_num_offset;
-      memory_management_control_operation_5_flag = previous.memory_management_control_operation_5_flag;
-      frame_num = previous.header.frame_num;
-    } else {
-      frame_num_offset = 0;
-      memory_management_control_operation_5_flag = false;
-      frame_num = 0;
-    }
     let mut prev_frame_num_offset = 0;
     if !pic.nal_unit_type.is_idr() {
-      if memory_management_control_operation_5_flag {
+      if self.previous.memory_management_control_operation_5_flag {
         prev_frame_num_offset = 0;
       } else {
-        prev_frame_num_offset = frame_num_offset;
+        prev_frame_num_offset = self.previous.frame_num_offset;
       }
     }
 
     if pic.nal_unit_type.is_idr() {
       pic.frame_num_offset = 0;
-    } else if frame_num > pic.header.frame_num {
+    } else if self.previous.header_frame_num > pic.header.frame_num as isize {
       pic.frame_num_offset = prev_frame_num_offset + pic.header.max_frame_num;
     } else {
       pic.frame_num_offset = prev_frame_num_offset;
