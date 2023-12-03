@@ -4,7 +4,10 @@ pub mod header;
 pub mod macroblock;
 pub mod neighbor;
 
-use self::{dpb::DecodedPictureBuffer, macroblock::MbType};
+use self::{
+  dpb::{DecodedPictureBuffer, Picture},
+  macroblock::MbType,
+};
 
 use super::{
   atom::SliceGroup,
@@ -26,7 +29,7 @@ use std::ops::Deref;
 /// Represents a slice in an H.264 video frame.
 pub struct Slice<'a> {
   /// The header information for the slice, including slice type and other metadata.
-  pub header: SliceHeader<'a>,
+  pub header: &'a SliceHeader,
 
   /// Reference to the Sequence Parameter Set (SPS) associated with the video stream.
   /// SPS contains essential information about the video sequence, such as frame dimensions and color space.
@@ -49,8 +52,6 @@ pub struct Slice<'a> {
   /// The Context-Adaptive Binary Arithmetic Coding (CABAC) initialization mode.
   /// CABAC is a video coding method that adapts probability models for binary decisions.
   pub cabac_init_mode: usize,
-
-  pub max_frame_num: isize,
 
   pub mb_x: isize,
 
@@ -97,17 +98,22 @@ pub struct Slice<'a> {
 
   /// Collection of macroblocks contained within the slice.
   /// Macroblocks represent the fundamental coding units within a video frame.
-  pub macroblocks: Box<[Macroblock]>,
+  pub macroblocks: &'a mut [Macroblock],
 }
 
 impl<'a> Slice<'a> {
-  pub fn new(num: usize, data: &'a [u8], nal: &NALUnit, sps: &'a SequenceParameterSet, pps: &'a PictureParameterSet) -> Self {
+  pub fn new(
+    num: usize,
+    stream: BitStream<'a>,
+    header: &'a SliceHeader,
+    nal: &NALUnit,
+    sps: &'a SequenceParameterSet,
+    pps: &'a PictureParameterSet,
+    macroblocks: &'a mut [Macroblock],
+  ) -> Self {
     let sliceqpy;
-    let mut stream = BitStream::new(data);
-    let header = SliceHeader::new(&mut stream, nal, sps, pps);
     Self {
       cabac_init_mode: header.cabac_init_idc.map(|idc| idc + 1).unwrap_or(0) as usize,
-      max_frame_num: 1 << (sps.log2_max_frame_num_minus4 + 4),
       mb_x: 0,
       mb_y: 0,
       num,
@@ -140,7 +146,7 @@ impl<'a> Slice<'a> {
       stream,
       prev_mb_addr: 0,
       curr_mb_addr: 0,
-      macroblocks: (0..header.pic_size_in_mbs).map(|_| Macroblock::empty()).collect(),
+      macroblocks,
       header,
     }
   }
@@ -153,13 +159,7 @@ impl<'a> Slice<'a> {
     &mut self.macroblocks[self.curr_mb_addr as usize]
   }
 
-  pub fn data(&mut self, dpb: &mut DecodedPictureBuffer) -> CabacResult {
-    let mut frame = Frame::new(
-      self.pic_width_in_samples_l,
-      self.pic_height_in_samples_l,
-      self.pic_width_in_samples_c,
-      self.pic_height_in_samples_c,
-    );
+  pub fn data(&mut self, dpb: &mut DecodedPictureBuffer, frame: &mut Frame) -> CabacResult {
     self.prev_mb_addr = -1isize;
     self.curr_mb_addr = (self.first_mb_in_slice * (1 + self.mbaff_frame_flag as u16)) as isize;
     self.last_mb_in_slice = self.curr_mb_addr;
@@ -170,10 +170,6 @@ impl<'a> Slice<'a> {
     };
     if self.pps.entropy_coding_mode_flag {
       let mut cabac = CabacContext::new(self)?;
-      dpb.decode_pic_order_cnt_type(self);
-      if self.slice_type.is_predictive() || self.slice_type.is_bidirectional() {
-        dpb.reference_picture_lists_construction(self);
-      }
       loop {
         self.mb_x = self.curr_mb_addr % self.pic_width_in_mbs as isize;
         self.mb_y = self.curr_mb_addr / self.pic_width_in_mbs as isize;
@@ -209,13 +205,12 @@ impl<'a> Slice<'a> {
           }
           cabac.macroblock_layer(self)?;
         }
-        self.update_mb(&mut frame, dpb);
+        self.update_mb(frame, dpb);
         if !self.mbaff_frame_flag || (self.curr_mb_addr & 1) != 0 {
           let end_of_slice_flag = cabac.terminate(self)?;
           if end_of_slice_flag != 0 {
             self.last_mb_in_slice = self.curr_mb_addr;
             self.stream.is_byte_aligned(0);
-            dpb.push(frame, self);
             return Ok(());
           }
         }
@@ -621,7 +616,7 @@ impl<'a> Slice<'a> {
 }
 
 impl<'a> Deref for Slice<'a> {
-  type Target = SliceHeader<'a>;
+  type Target = SliceHeader;
   fn deref(&self) -> &Self::Target {
     &self.header
   }

@@ -96,8 +96,7 @@ impl SequenceParameterSet {
         pic_order_cnt_type = data.exponential_golomb();
         pic_order_cnt_type
       },
-      log2_max_pic_order_cnt_lsb_minus4: (pic_order_cnt_type == 0)
-        .then(|| data.exponential_golomb()),
+      log2_max_pic_order_cnt_lsb_minus4: (pic_order_cnt_type == 0).then(|| data.exponential_golomb()),
       pic_order_cnt_type_one: PicOrderCntTypeOne::new(data, pic_order_cnt_type),
       max_num_ref_frames: data.exponential_golomb(),
       gaps_in_frame_num_value_allowed_flag: data.bit_flag(),
@@ -121,7 +120,7 @@ impl SequenceParameterSet {
   }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PicOrderCntTypeOne {
   pub delta_pic_order_always_zero_flag: bool,
   pub offset_for_non_ref_pic: isize,
@@ -158,22 +157,16 @@ impl PicOrderCntTypeOne {
   }
 }
 
-const DEFAULT_4X4_INTRA: [isize; 16] = [
-  6, 13, 13, 20, 20, 20, 28, 28, 28, 28, 32, 32, 32, 37, 37, 42,
-];
-const DEFAULT_4X4_INTER: [isize; 16] = [
-  10, 14, 14, 20, 20, 20, 24, 24, 24, 24, 27, 27, 27, 30, 30, 34,
-];
+const DEFAULT_4X4_INTRA: [isize; 16] = [6, 13, 13, 20, 20, 20, 28, 28, 28, 28, 32, 32, 32, 37, 37, 42];
+const DEFAULT_4X4_INTER: [isize; 16] = [10, 14, 14, 20, 20, 20, 24, 24, 24, 24, 27, 27, 27, 30, 30, 34];
 
 const DEFAULT_8X8_INTRA: [isize; 64] = [
-  6, 10, 10, 13, 11, 13, 16, 16, 16, 16, 18, 18, 18, 18, 18, 23, 23, 23, 23, 23, 23, 25, 25, 25,
-  25, 25, 25, 25, 27, 27, 27, 27, 27, 27, 27, 27, 29, 29, 29, 29, 29, 29, 29, 31, 31, 31, 31, 31,
-  31, 33, 33, 33, 33, 33, 36, 36, 36, 36, 38, 38, 38, 40, 40, 42,
+  6, 10, 10, 13, 11, 13, 16, 16, 16, 16, 18, 18, 18, 18, 18, 23, 23, 23, 23, 23, 23, 25, 25, 25, 25, 25, 25, 25, 27, 27, 27, 27, 27, 27, 27, 27, 29,
+  29, 29, 29, 29, 29, 29, 31, 31, 31, 31, 31, 31, 33, 33, 33, 33, 33, 36, 36, 36, 36, 38, 38, 38, 40, 40, 42,
 ];
 const DEFAULT_8X8_INTER: [isize; 64] = [
-  9, 13, 13, 15, 13, 15, 17, 17, 17, 17, 19, 19, 19, 19, 19, 21, 21, 21, 21, 21, 21, 22, 22, 22,
-  22, 22, 22, 22, 24, 24, 24, 24, 24, 24, 24, 24, 25, 25, 25, 25, 25, 25, 25, 27, 27, 27, 27, 27,
-  27, 28, 28, 28, 28, 28, 30, 30, 30, 30, 32, 32, 32, 33, 33, 35,
+  9, 13, 13, 15, 13, 15, 17, 17, 17, 17, 19, 19, 19, 19, 19, 21, 21, 21, 21, 21, 21, 22, 22, 22, 22, 22, 22, 22, 24, 24, 24, 24, 24, 24, 24, 24, 25,
+  25, 25, 25, 25, 25, 25, 27, 27, 27, 27, 27, 27, 28, 28, 28, 28, 28, 30, 30, 30, 30, 32, 32, 32, 33, 33, 35,
 ];
 
 pub fn scaling_list<const S: usize>(bits: &mut BitStream, data: &mut [isize; S]) -> bool {
@@ -186,11 +179,7 @@ pub fn scaling_list<const S: usize>(bits: &mut BitStream, data: &mut [isize; S])
       next_scale = (last_scale + delta_scale + 256) % 256;
       use_default_scaling_matrix_flag = i == 0 && next_scale == 0;
     }
-    *scale = if next_scale == 0 {
-      last_scale
-    } else {
-      next_scale
-    };
+    *scale = if next_scale == 0 { last_scale } else { next_scale };
     last_scale = *scale;
   }
 

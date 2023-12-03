@@ -8,7 +8,7 @@ use crate::{
 };
 use std::fmt::Debug;
 
-pub struct SliceHeader<'a> {
+pub struct SliceHeader {
   /// The index of the first macroblock in the slice.
   pub first_mb_in_slice: u16,
 
@@ -117,7 +117,7 @@ pub struct SliceHeader<'a> {
 
   pub max_pic_order_cnt_lsb: isize,
 
-  pub max_frame_num: u16,
+  pub max_frame_num: isize,
 
   pub curr_pic_num: isize,
 
@@ -131,9 +131,9 @@ pub struct SliceHeader<'a> {
 
   pub mb_height_c: u8,
 
-  pub scaling_list4x4: &'a [[isize; 16]; 6],
+  pub scaling_list4x4: [[isize; 16]; 6],
 
-  pub scaling_list8x8: &'a [[isize; 64]],
+  pub scaling_list8x8: Box<[[isize; 64]]>,
 
   pub qp_bd_offset_c: isize,
 
@@ -162,8 +162,8 @@ pub struct SliceHeader<'a> {
   pub pic_height_in_samples_c: usize,
 }
 
-impl<'a> SliceHeader<'a> {
-  pub fn new(data: &mut BitStream, nal: &NALUnit, sps: &'a SequenceParameterSet, pps: &'a PictureParameterSet) -> Self {
+impl SliceHeader {
+  pub fn new(data: &mut BitStream, nal: &NALUnit, sps: &SequenceParameterSet, pps: &PictureParameterSet) -> Self {
     let mut field_pic_flag = false;
     let slice_type;
     let num_ref_idx_active_override_flag;
@@ -293,17 +293,13 @@ impl<'a> SliceHeader<'a> {
       } else {
         2 * frame_num as isize + 1
       },
-      max_pic_num: if !field_pic_flag {
-        max_frame_num as isize
-      } else {
-        2 * max_frame_num as isize
-      },
+      max_pic_num: if !field_pic_flag { max_frame_num } else { 2 * max_frame_num },
       sub_width_c,
       sub_height_c,
       mb_width_c,
       mb_height_c,
-      scaling_list4x4,
-      scaling_list8x8,
+      scaling_list4x4: *scaling_list4x4,
+      scaling_list8x8: scaling_list8x8.into(),
       qp_bd_offset_c: sps.bit_depth_chroma_minus8 as isize * 6,
       bit_depth_y: sps.bit_depth_luma_minus8 as isize + 8,
       bit_depth_c: sps.bit_depth_chroma_minus8 as isize + 8,
@@ -416,7 +412,7 @@ impl SliceType {
   }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct RefPicListModification {
   pub modification_of_pic_nums_idc: u16,
   pub abs_diff_pic_num_minus1: u16,
@@ -535,7 +531,7 @@ impl PredWeightTable {
   }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DecRefPicMarking {
   pub no_output_of_prior_pics_flag: bool,
   pub long_term_reference_flag: bool,
@@ -543,7 +539,7 @@ pub struct DecRefPicMarking {
   pub mmcos: Box<[Mmco]>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum Mmco {
   ForgetShort {
     difference_of_pic_nums_minus1: u16,
@@ -639,7 +635,7 @@ impl DeblockingFilterControlSlice {
   }
 }
 
-impl<'a> Debug for SliceHeader<'a> {
+impl Debug for SliceHeader {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     let mut f = f.debug_struct("SliceHeader");
     f.field("first_mb_in_slice", &self.first_mb_in_slice)

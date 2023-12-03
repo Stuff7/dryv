@@ -428,7 +428,7 @@ impl Frame {
       let pic0 = dpb.ref_pic_list0(ref_idxl0);
       let pic1 = dpb.ref_pic_list1(ref_idxl1);
 
-      let curr_pic_order_cnt = std::cmp::min(dpb.poc.top_field_order_cnt, dpb.poc.bottom_field_order_cnt);
+      let curr_pic_order_cnt = std::cmp::min(dpb.top_field_order_cnt, dpb.bottom_field_order_cnt);
       let pic0_pic_order_cnt = std::cmp::min(pic0.top_field_order_cnt, pic0.bottom_field_order_cnt);
       let pic1_pic_order_cnt = std::cmp::min(pic1.top_field_order_cnt, pic1.bottom_field_order_cnt);
 

@@ -2,7 +2,6 @@ use super::atom::*;
 use super::cabac::CabacError;
 use super::sample::*;
 use super::slice::dpb::DecodedPictureBuffer;
-use super::slice::*;
 use crate::byte::{BitStream, Str};
 use crate::log;
 use std::fs::File;
@@ -101,22 +100,21 @@ impl Decoder {
             }
           }
           NALUnitType::NonIDRPicture | NALUnitType::IDRPicture => {
-            let mut slice = Slice::new(i, nal.data, &nal, &avc1.avcc.sps, &avc1.avcc.pps);
-            slice.data(&mut dpb)?;
+            dpb.push(i, nal.data, &nal, &avc1.avcc.sps, &avc1.avcc.pps)?;
+            let pic = dpb.previous();
             log!(File@"{msg}PICTURE");
             use std::io::Write;
             let name = format!("temp/slice/{i}");
             let mut f = std::fs::File::create(name).expect("SLICE CREATION");
-            f.write_all(format!("{:#?}\n{:#?}\n{:#?}", dpb, nal, slice,).as_bytes())
-              .expect("SLICE SAVING");
+            f.write_all(format!("{}\n", dpb).as_bytes()).expect("SLICE SAVING");
             for j in 0..10 {
               let name = format!("temp/mb/{i}-{j}");
               let mut f = std::fs::File::create(name).expect("MACROBLOCK CREATION");
-              f.write_all(format!("- MACROBLOCK {j} -\n\n{}", slice.macroblocks[j]).as_bytes())
+              f.write_all(format!("- MACROBLOCK {j} -\n\n{}", pic.macroblocks[j]).as_bytes())
                 .expect("MACROBLOCK SAVING");
             }
             if i < 10 {
-              dpb.previous().frame.write_to_yuv_file(&format!("temp/frame/{i}"))?;
+              pic.frame.write_to_yuv_file(&format!("temp/frame/{i}"))?;
             }
           }
           _ => log!(File@"{msg} [UNUSED]"),

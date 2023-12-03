@@ -1,4 +1,5 @@
 use crate::{
+  log,
   math::{clamp, inverse_raster_scan, median, min_positive},
   video::slice::{
     dpb::{DecodedPictureBuffer, Picture},
@@ -127,22 +128,12 @@ impl Frame {
     if mb_part_width == 16 && mb_part_height == 8 && mb_part_idx == 0 && ref_idx_lxb == ref_idx_lx {
       mvp_lx[0] = mv_lxb[0];
       mvp_lx[1] = mv_lxb[1];
-    } else if (mb_part_width == 16
-      && mb_part_height == 8
-      && mb_part_idx == 1
-      && ref_idx_lxa == ref_idx_lx)
-      || (mb_part_width == 8
-        && mb_part_height == 16
-        && mb_part_idx == 0
-        && ref_idx_lxa == ref_idx_lx)
+    } else if (mb_part_width == 16 && mb_part_height == 8 && mb_part_idx == 1 && ref_idx_lxa == ref_idx_lx)
+      || (mb_part_width == 8 && mb_part_height == 16 && mb_part_idx == 0 && ref_idx_lxa == ref_idx_lx)
     {
       mvp_lx[0] = mv_lxa[0];
       mvp_lx[1] = mv_lxa[1];
-    } else if mb_part_width == 8
-      && mb_part_height == 16
-      && mb_part_idx == 1
-      && ref_idx_lxc == ref_idx_lx
-    {
+    } else if mb_part_width == 8 && mb_part_height == 16 && mb_part_idx == 1 && ref_idx_lxc == ref_idx_lx {
       mvp_lx[0] = mv_lxc[0];
       mvp_lx[1] = mv_lxc[1];
     } else {
@@ -158,12 +149,10 @@ impl Frame {
       if ref_idx_lxa == ref_idx_lx && ref_idx_lxb != ref_idx_lx && ref_idx_lxc != ref_idx_lx {
         mvp_lx[0] = mv_lxa[0];
         mvp_lx[1] = mv_lxa[1];
-      } else if ref_idx_lxa != ref_idx_lx && ref_idx_lxb == ref_idx_lx && ref_idx_lxc != ref_idx_lx
-      {
+      } else if ref_idx_lxa != ref_idx_lx && ref_idx_lxb == ref_idx_lx && ref_idx_lxc != ref_idx_lx {
         mvp_lx[0] = mv_lxb[0];
         mvp_lx[1] = mv_lxb[1];
-      } else if ref_idx_lxa != ref_idx_lx && ref_idx_lxb != ref_idx_lx && ref_idx_lxc == ref_idx_lx
-      {
+      } else if ref_idx_lxa != ref_idx_lx && ref_idx_lxb != ref_idx_lx && ref_idx_lxc == ref_idx_lx {
         mvp_lx[0] = mv_lxc[0];
         mvp_lx[1] = mv_lxc[1];
       } else {
@@ -296,19 +285,9 @@ impl Frame {
     let mut ref_idx_col = 0;
     let mut mv_col = [0; 2];
 
-    self.co_located_4x4submb_partitions(
-      slice,
-      dpb,
-      mb_part_idx,
-      sub_mb_part_idx,
-      &mut mv_col,
-      &mut ref_idx_col,
-    );
+    self.co_located_4x4submb_partitions(slice, dpb, mb_part_idx, sub_mb_part_idx, &mut mv_col, &mut ref_idx_col);
 
-    let col_zero_flag = dpb
-      .ref_pic_list1(0)
-      .reference_marked_type
-      .is_short_term_reference()
+    let col_zero_flag = dpb.ref_pic_list1(0).reference_marked_type.is_short_term_reference()
       && ref_idx_col == 0
       && (mv_col[0] >= -1 && mv_col[0] <= 1)
       && (mv_col[1] >= -1 && mv_col[1] <= 1);
@@ -319,15 +298,7 @@ impl Frame {
     } else {
       mb_part_idx = 0;
       sub_mb_part_idx = 0;
-      self.luma_motion_vector_prediction(
-        slice,
-        mb_part_idx,
-        sub_mb_part_idx,
-        curr_sub_mb_type,
-        false,
-        *ref_idxl0,
-        mv_l0,
-      );
+      self.luma_motion_vector_prediction(slice, mb_part_idx, sub_mb_part_idx, curr_sub_mb_type, false, *ref_idxl0, mv_l0);
     }
 
     if direct_zero_prediction_flag || *ref_idxl1 < 0 || (*ref_idxl1 == 0 && col_zero_flag) {
@@ -336,15 +307,7 @@ impl Frame {
     } else {
       mb_part_idx = 0;
       sub_mb_part_idx = 0;
-      self.luma_motion_vector_prediction(
-        slice,
-        mb_part_idx,
-        sub_mb_part_idx,
-        curr_sub_mb_type,
-        true,
-        *ref_idxl1,
-        mv_l1,
-      );
+      self.luma_motion_vector_prediction(slice, mb_part_idx, sub_mb_part_idx, curr_sub_mb_type, true, *ref_idxl1, mv_l1);
     }
 
     if *ref_idxl0 >= 0 && *ref_idxl1 >= 0 {
@@ -381,43 +344,26 @@ impl Frame {
   ) {
     let mut ref_idx_col = 0;
     let mut mv_col = [0; 2];
-    let col_pic = self.co_located_4x4submb_partitions(
-      slice,
-      dpb,
-      mb_part_idx,
-      sub_mb_part_idx,
-      &mut mv_col,
-      &mut ref_idx_col,
-    );
+    let col_pic = self.co_located_4x4submb_partitions(slice, dpb, mb_part_idx, sub_mb_part_idx, &mut mv_col, &mut ref_idx_col);
 
     let mut ref_idxl0_frm = 0;
     for i in 0..dpb.ref_pic_list0.len() {
-      if dpb.ref_pic_list0(i) == col_pic {
+      if std::ptr::eq(dpb.ref_pic_list0(i), col_pic) {
         ref_idxl0_frm = i;
         break;
       }
     }
-    *ref_idxl0 = if ref_idx_col < 0 {
-      0
-    } else {
-      ref_idxl0_frm as isize
-    };
+    *ref_idxl0 = if ref_idx_col < 0 { 0 } else { ref_idxl0_frm as isize };
     *ref_idxl1 = 0;
 
     let pic0 = dpb.ref_pic_list0(*ref_idxl0 as usize);
     let pic1 = dpb.ref_pic_list1(0);
 
-    let curr_pic_order_cnt =
-      std::cmp::min(dpb.poc.top_field_order_cnt, dpb.poc.bottom_field_order_cnt);
+    let curr_pic_order_cnt = std::cmp::min(dpb.top_field_order_cnt, dpb.bottom_field_order_cnt);
     let pic0_pic_order_cnt = std::cmp::min(pic0.top_field_order_cnt, pic0.bottom_field_order_cnt);
     let pic1_pic_order_cnt = std::cmp::min(pic1.top_field_order_cnt, pic1.bottom_field_order_cnt);
 
-    if dpb
-      .ref_pic_list0(*ref_idxl0 as usize)
-      .reference_marked_type
-      .is_long_term_reference()
-      || pic1_pic_order_cnt - pic0_pic_order_cnt == 0
-    {
+    if dpb.ref_pic_list0(*ref_idxl0 as usize).reference_marked_type.is_long_term_reference() || pic1_pic_order_cnt - pic0_pic_order_cnt == 0 {
       mv_l0[0] = mv_col[0];
       mv_l0[1] = mv_col[1];
 
@@ -458,13 +404,11 @@ impl Frame {
       4 * mb_part_idx + sub_mb_part_idx
     } as isize;
 
-    let x_col = inverse_raster_scan(luma4x4_blk_idx / 4, 8, 8, 16, 0)
-      + inverse_raster_scan(luma4x4_blk_idx % 4, 4, 4, 8, 0);
-    let y_col = inverse_raster_scan(luma4x4_blk_idx / 4, 8, 8, 16, 1)
-      + inverse_raster_scan(luma4x4_blk_idx % 4, 4, 4, 8, 1);
+    let x_col = inverse_raster_scan(luma4x4_blk_idx / 4, 8, 8, 16, 0) + inverse_raster_scan(luma4x4_blk_idx % 4, 4, 4, 8, 0);
+    let y_col = inverse_raster_scan(luma4x4_blk_idx / 4, 8, 8, 16, 1) + inverse_raster_scan(luma4x4_blk_idx % 4, 4, 4, 8, 1);
 
     let y_m = y_col;
-    let mut nb = MbNeighbor::new(slice.mb());
+    let mut nb = MbNeighbor::new(&col_pic.macroblocks[slice.curr_mb_addr as usize]);
     slice.mb_and_submb_partition_indices(&mut nb, x_col, y_m);
 
     if nb.mb.mode().is_inter_mode() {

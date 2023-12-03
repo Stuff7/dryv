@@ -35,8 +35,7 @@ impl Frame {
         let x_frac_l = mv_lx[0] & 3;
         let y_frac_l = mv_lx[1] & 3;
 
-        pred_part_lxl[y_l * part_width + x_l] =
-          self.luma_sample_interpolation(slice, dpb, x_int_l, y_int_l, x_frac_l, y_frac_l, ref_pic);
+        pred_part_lxl[y_l * part_width + x_l] = self.luma_sample_interpolation(slice, dpb, x_int_l, y_int_l, x_frac_l, y_frac_l, ref_pic);
       }
     }
 
@@ -65,19 +64,15 @@ impl Frame {
           }
 
           if slice.chroma_array_type != 3 {
-            pred_part_lxcb[(y_c * part_width_c as isize + x_c) as usize] = self
-              .chroma_sample_interpolation(
-                slice, dpb, x_int_c, y_int_c, x_frac_c, y_frac_c, ref_pic, true,
-              );
-            pred_part_lxcr[(y_c * part_width_c as isize + x_c) as usize] = self
-              .chroma_sample_interpolation(
-                slice, dpb, x_int_c, y_int_c, x_frac_c, y_frac_c, ref_pic, false,
-              );
+            pred_part_lxcb[(y_c * part_width_c as isize + x_c) as usize] =
+              self.chroma_sample_interpolation(slice, dpb, x_int_c, y_int_c, x_frac_c, y_frac_c, ref_pic, true);
+            pred_part_lxcr[(y_c * part_width_c as isize + x_c) as usize] =
+              self.chroma_sample_interpolation(slice, dpb, x_int_c, y_int_c, x_frac_c, y_frac_c, ref_pic, false);
           } else {
-            pred_part_lxcb[(y_c * part_width_c as isize + x_c) as usize] = self
-              .luma_sample_interpolation(slice, dpb, x_int_c, y_int_c, x_frac_c, y_frac_c, ref_pic);
-            pred_part_lxcr[(y_c * part_width_c as isize + x_c) as usize] = self
-              .luma_sample_interpolation(slice, dpb, x_int_c, y_int_c, x_frac_c, y_frac_c, ref_pic);
+            pred_part_lxcb[(y_c * part_width_c as isize + x_c) as usize] =
+              self.luma_sample_interpolation(slice, dpb, x_int_c, y_int_c, x_frac_c, y_frac_c, ref_pic);
+            pred_part_lxcr[(y_c * part_width_c as isize + x_c) as usize] =
+              self.luma_sample_interpolation(slice, dpb, x_int_c, y_int_c, x_frac_c, y_frac_c, ref_pic);
           }
         }
       }
@@ -95,7 +90,7 @@ impl Frame {
     y_frac_l: isize,
     ref_pic: &Picture,
   ) -> u8 {
-    if dpb.poc.pic_order_cnt == 16 && slice.mb_x == 3 && slice.mb_y == 10 {
+    if dpb.pic_order_cnt == 16 && slice.mb_x == 3 && slice.mb_y == 10 {
       let mut view = vec![0; ref_pic.frame.width_l * ref_pic.frame.height_l];
       for y in 0..slice.pic_height_in_samples_l {
         for x in 0..slice.pic_width_in_samples_l {
@@ -224,22 +219,11 @@ impl Frame {
     let c = buffer[x_cc as usize][y_cc as usize] as isize;
     let d = buffer[x_dc as usize][y_dc as usize] as isize;
 
-    (((8 - x_frac_c) * (8 - y_frac_c) * a
-      + x_frac_c * (8 - y_frac_c) * b
-      + (8 - x_frac_c) * y_frac_c * c
-      + x_frac_c * y_frac_c * d
-      + 32)
-      >> 6) as u8
+    (((8 - x_frac_c) * (8 - y_frac_c) * a + x_frac_c * (8 - y_frac_c) * b + (8 - x_frac_c) * y_frac_c * c + x_frac_c * y_frac_c * d + 32) >> 6) as u8
   }
 }
 
-fn get_luma_sample(
-  ref_pic: &Picture,
-  x_dzl: isize,
-  y_dzl: isize,
-  x_int_l: isize,
-  y_int_l: isize,
-) -> isize {
+fn get_luma_sample(ref_pic: &Picture, x_dzl: isize, y_dzl: isize, x_int_l: isize, y_int_l: isize) -> isize {
   ref_pic.frame.luma_data[clamp(x_int_l + x_dzl, 0, ref_pic.frame.width_l as isize - 1) as usize]
     [clamp(y_int_l + y_dzl, 0, ref_pic.frame.height_l as isize - 1) as usize] as isize
 }
