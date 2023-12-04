@@ -1,4 +1,5 @@
 use crate::{
+  display::display_array3d,
   log,
   math::{clamp, inverse_raster_scan, median, min_positive},
   video::slice::{
@@ -408,7 +409,7 @@ impl Frame {
     let y_col = inverse_raster_scan(luma4x4_blk_idx / 4, 8, 8, 16, 1) + inverse_raster_scan(luma4x4_blk_idx % 4, 4, 4, 8, 1);
 
     let y_m = y_col;
-    let mut nb = MbNeighbor::new(&col_pic.macroblocks[slice.curr_mb_addr as usize]);
+    let mut nb = MbNeighbor::new(slice.mb());
     slice.mb_and_submb_partition_indices(&mut nb, x_col, y_m);
 
     if nb.mb.mode().is_inter_mode() {
@@ -416,16 +417,17 @@ impl Frame {
       mv_col[1] = 0;
       *ref_idx_col = -1;
     } else {
-      let pred_flagl0_col = nb.mb.pred_flagl0[nb.mb_part_idx as usize];
+      let mb = &col_pic.macroblocks[slice.curr_mb_addr as usize];
+      let pred_flagl0_col = mb.pred_flagl0[nb.mb_part_idx as usize];
 
       if pred_flagl0_col == 1 {
-        mv_col[0] = nb.mb.mv_l0[nb.mb_part_idx as usize][nb.sub_mb_part_idx as usize][0];
-        mv_col[1] = nb.mb.mv_l0[nb.mb_part_idx as usize][nb.sub_mb_part_idx as usize][1];
-        *ref_idx_col = nb.mb.ref_idxl0[nb.mb_part_idx as usize];
+        mv_col[0] = mb.mv_l0[nb.mb_part_idx as usize][nb.sub_mb_part_idx as usize][0];
+        mv_col[1] = mb.mv_l0[nb.mb_part_idx as usize][nb.sub_mb_part_idx as usize][1];
+        *ref_idx_col = mb.ref_idxl0[nb.mb_part_idx as usize];
       } else {
-        mv_col[0] = nb.mb.mv_l1[nb.mb_part_idx as usize][nb.sub_mb_part_idx as usize][0];
-        mv_col[1] = nb.mb.mv_l1[nb.mb_part_idx as usize][nb.sub_mb_part_idx as usize][1];
-        *ref_idx_col = nb.mb.ref_idxl1[nb.mb_part_idx as usize];
+        mv_col[0] = mb.mv_l1[nb.mb_part_idx as usize][nb.sub_mb_part_idx as usize][0];
+        mv_col[1] = mb.mv_l1[nb.mb_part_idx as usize][nb.sub_mb_part_idx as usize][1];
+        *ref_idx_col = mb.ref_idxl1[nb.mb_part_idx as usize];
       }
     }
     col_pic

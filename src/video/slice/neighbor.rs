@@ -5,16 +5,11 @@ use super::{
   macroblock::{Macroblock, MbPosition, SubMbType},
   Slice,
 };
-use crate::math::inverse_raster_scan;
+use crate::{log, math::inverse_raster_scan};
 
 impl<'a> Slice<'a> {
   /// 6.4.11.7 Derivation process for neighbouring partitions
-  pub fn neighboring_partitions(
-    &'a self,
-    mb_part_idx: usize,
-    sub_mb_part_idx: usize,
-    curr_sub_mb_type: SubMbType,
-  ) -> MbNeighbors<'a> {
+  pub fn neighboring_partitions(&'a self, mb_part_idx: usize, sub_mb_part_idx: usize, curr_sub_mb_type: SubMbType) -> MbNeighbors<'a> {
     let mb_part_width = self.mb().mb_part_width();
     let mb_part_height = self.mb().mb_part_height();
     let sub_mb_part_width = self.mb().sub_mb_type[mb_part_idx].sub_mb_part_width as isize;
@@ -25,34 +20,16 @@ impl<'a> Slice<'a> {
 
     let x_s;
     let y_s;
-    if self.mb().mb_type.is_p8x8()
-      || self.mb().mb_type.is_p_8x8ref0()
-      || self.mb().mb_type.is_b8x8()
-    {
-      x_s = inverse_raster_scan(
-        sub_mb_part_idx as isize,
-        sub_mb_part_width,
-        sub_mb_part_height,
-        8,
-        0,
-      );
-      y_s = inverse_raster_scan(
-        sub_mb_part_idx as isize,
-        sub_mb_part_width,
-        sub_mb_part_height,
-        8,
-        1,
-      );
+    if self.mb().mb_type.is_p8x8() || self.mb().mb_type.is_p_8x8ref0() || self.mb().mb_type.is_b8x8() {
+      x_s = inverse_raster_scan(sub_mb_part_idx as isize, sub_mb_part_width, sub_mb_part_height, 8, 0);
+      y_s = inverse_raster_scan(sub_mb_part_idx as isize, sub_mb_part_width, sub_mb_part_height, 8, 1);
     } else {
       x_s = 0;
       y_s = 0;
     }
 
     let pred_part_width;
-    if self.mb().mb_type.is_p_skip()
-      || self.mb().mb_type.is_b_skip()
-      || self.mb().mb_type.is_b_direct_16x16()
-    {
+    if self.mb().mb_type.is_p_skip() || self.mb().mb_type.is_b_skip() || self.mb().mb_type.is_b_direct_16x16() {
       pred_part_width = 16;
     } else if self.mb().mb_type.is_b8x8() {
       if curr_sub_mb_type.is_b_direct8x8() {
@@ -118,20 +95,14 @@ impl<'a> Slice<'a> {
       mb.mb_part_idx = (16 / mb_part_width) * (y_w / mb_part_height) + (x_w / mb_part_width);
     }
 
-    if !mb_type.is_p8x8()
-      && !mb_type.is_p_8x8ref0()
-      && !mb_type.is_b8x8()
-      && !mb_type.is_b_skip()
-      && !mb_type.is_b_direct_16x16()
-    {
+    if !mb_type.is_p8x8() && !mb_type.is_p_8x8ref0() && !mb_type.is_b8x8() && !mb_type.is_b_skip() && !mb_type.is_b_direct_16x16() {
       mb.sub_mb_part_idx = 0;
     } else if mb_type.is_b_skip() || mb_type.is_b_direct_16x16() {
       mb.sub_mb_part_idx = 2 * ((y_w % 8) / 4) + ((x_w % 8) / 4);
     } else {
       let mb_part_width = mb.sub_mb_type[mb.mb_part_idx as usize].sub_mb_part_width as isize;
       let mb_part_height = mb.sub_mb_type[mb.mb_part_idx as usize].sub_mb_part_height as isize;
-      mb.sub_mb_part_idx =
-        (8 / mb_part_width) * ((y_w % 8) / mb_part_height) + ((x_w % 8) / mb_part_width);
+      mb.sub_mb_part_idx = (8 / mb_part_width) * ((y_w % 8) / mb_part_height) + ((x_w % 8) / mb_part_width);
     }
   }
 }
