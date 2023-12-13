@@ -15,11 +15,10 @@ use super::{
 };
 use crate::{
   byte::BitStream,
-  log,
   math::OffsetArray,
   video::{
     atom::{PicOrderCntTypeOne, PictureParameterSet, SequenceParameterSet},
-    cabac::CabacResult,
+    decoder::DecoderResult,
     frame::Frame,
     sample::{NALUnit, NALUnitType},
   },
@@ -49,12 +48,13 @@ impl DecodedPictureBuffer {
     }
   }
 
-  pub fn push(&mut self, num: usize, data: &[u8], nal: &NALUnit, sps: &SequenceParameterSet, pps: &PictureParameterSet) -> CabacResult {
+  pub fn push(&mut self, num: usize, data: &[u8], nal: &NALUnit, sps: &SequenceParameterSet, pps: &PictureParameterSet) -> DecoderResult {
     let mut stream = BitStream::new(data);
     let mut pic = Picture::new(&mut stream, nal, sps, pps);
     self.init_pic(&mut pic);
     let mut slice = Slice::new(num, stream, &pic.header, nal, sps, pps, &mut pic.macroblocks);
     slice.data(self, &mut pic.frame)?;
+    create_slice_file(slice.num, &pic)?;
     self.previous.copy_pic(&pic);
     if pic.nal_idc != 0 {
       self.buffer.push(pic);
@@ -248,4 +248,19 @@ impl PreviousPicture {
     self.frame_num_offset = pic.frame_num_offset;
     self.header_frame_num = pic.header.frame_num as isize;
   }
+}
+
+fn create_slice_file(i: usize, pic: &Picture) -> DecoderResult {
+  use std::io::Write;
+  // let name = format!("temp/slice/{}", slice.num);
+  // let mut f = std::fs::File::create(name).expect("SLICE CREATION");
+  // f.write_all(format!("{}\n", slice).as_bytes()).expect("SLICE SAVING");
+  for j in 0..10 {
+    let name = format!("temp/mb/{i}-{j}");
+    let mut f = std::fs::File::create(name).expect("MACROBLOCK CREATION");
+    f.write_all(format!("- MACROBLOCK {j} -\n\n{}", pic.macroblocks[j]).as_bytes())
+      .expect("MACROBLOCK SAVING");
+  }
+  pic.frame.write_to_yuv_file(&format!("temp/frame/{i}"))?;
+  Ok(())
 }
