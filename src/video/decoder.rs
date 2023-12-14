@@ -101,21 +101,6 @@ impl Decoder {
           }
           NALUnitType::NonIDRPicture | NALUnitType::IDRPicture => {
             dpb.push(i, nal.data, &nal, &avc1.avcc.sps, &avc1.avcc.pps)?;
-            let pic = dpb.buffer.last().expect("No pic found");
-            log!(File@"{msg}PICTURE");
-            use std::io::Write;
-            let name = format!("temp/slice/{i}");
-            let mut f = std::fs::File::create(name).expect("SLICE CREATION");
-            f.write_all(format!("{}\n", dpb).as_bytes()).expect("SLICE SAVING");
-            for j in 0..10 {
-              let name = format!("temp/mb/{i}-{j}");
-              let mut f = std::fs::File::create(name).expect("MACROBLOCK CREATION");
-              f.write_all(format!("- MACROBLOCK {j} -\n\n{}", pic.macroblocks[j]).as_bytes())
-                .expect("MACROBLOCK SAVING");
-            }
-            if i < 10 {
-              pic.frame.write_to_yuv_file(&format!("temp/frame/{i}"))?;
-            }
           }
           _ => log!(File@"{msg} [UNUSED]"),
         }

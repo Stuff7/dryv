@@ -127,7 +127,7 @@ impl CabacContext {
     Ok(if (tmp & 1) != 0 { (tmp + 1) >> 1 } else { -(tmp >> 1) })
   }
 
-  #[allow(clippy::cast_ref_to_mut)]
+  #[allow(invalid_reference_casting)]
   pub fn coded_block_pattern(&mut self, slice: &mut Slice, has_chroma: bool) -> CabacResult<u8> {
     let mut bit = [0u8; 6];
     let mut ctx_idx;
