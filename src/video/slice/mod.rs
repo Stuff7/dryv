@@ -404,7 +404,7 @@ impl<'a> Slice<'a> {
           && (self.curr_mb_addr & 1) != 0
           && mbp.mb_field_decoding_flag == mbt.mb_field_decoding_flag
         {
-          mbp.offset(&self.macroblocks, 1)?
+          mbp.offset(self.macroblocks, 1)?
         } else {
           mbp
         }
@@ -415,12 +415,12 @@ impl<'a> Slice<'a> {
             if mbp.mb_type.is_unavailable() || (self.curr_mb_addr & 1 == 0 && mbp.mb_field_decoding_flag) {
               mbp
             } else {
-              mbp.offset(&self.macroblocks, 1)?
+              mbp.offset(self.macroblocks, 1)?
             }
           } else if (self.curr_mb_addr & 1) != 0 {
-            mbt.offset(&self.macroblocks, -1)?
+            mbt.offset(self.macroblocks, -1)?
           } else if mbp.mb_type.is_available() {
-            mbp.offset(&self.macroblocks, 1)?
+            mbp.offset(self.macroblocks, 1)?
           } else {
             mbp
           }
@@ -462,7 +462,7 @@ impl<'a> Slice<'a> {
               }
               MbMode::FieldFromFrame => {
                 *pidx = (idx << 2 & 8) + 5;
-                Ok(mb_p.offset(&self.macroblocks, idx >> 3)?)
+                Ok(mb_p.offset(self.macroblocks, idx >> 3)?)
               }
             }
           }
@@ -483,7 +483,7 @@ impl<'a> Slice<'a> {
               }
               MbMode::FieldFromFrame => {
                 *pidx = (idx << 1 & 4) + 1;
-                Ok(mb_p.offset(&self.macroblocks, idx >> 2)?)
+                Ok(mb_p.offset(self.macroblocks, idx >> 2)?)
               }
             }
           }
@@ -504,7 +504,7 @@ impl<'a> Slice<'a> {
               }
               MbMode::FieldFromFrame => {
                 *pidx = 1;
-                Ok(mb_p.offset(&self.macroblocks, idx >> 1)?)
+                Ok(mb_p.offset(self.macroblocks, idx >> 1)?)
               }
             }
           }
@@ -616,6 +616,6 @@ impl<'a> Slice<'a> {
 impl<'a> Deref for Slice<'a> {
   type Target = SliceHeader;
   fn deref(&self) -> &Self::Target {
-    &self.header
+    self.header
   }
 }

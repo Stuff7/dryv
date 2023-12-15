@@ -130,39 +130,44 @@ impl CabacContext {
   #[allow(invalid_reference_casting)]
   pub fn coded_block_pattern(&mut self, slice: &mut Slice, has_chroma: bool) -> CabacResult<u8> {
     let mut bit = [0u8; 6];
-    let mut ctx_idx;
-    let mb_t = slice.mb_nb(MbPosition::This, 0)?;
     let mut idx_a = 0;
     let mut idx_b = 0;
-    let mut mb_a;
-    let mut mb_b;
     for i in 0..4 {
-      mb_a = slice.mb_nb_b(MbPosition::A, BlockSize::B8x8, 0, i, &mut idx_a)?;
-      mb_b = slice.mb_nb_b(MbPosition::B, BlockSize::B8x8, 0, i, &mut idx_b)?;
-      let cond_term_flag_a = ((if std::ptr::eq(mb_a as *const _, mb_t as *const _) {
-        bit[idx_a as usize]
-      } else {
-        mb_a.coded_block_pattern >> idx_a & 1
-      }) == 0) as isize;
-      let cond_term_flag_b = ((if std::ptr::eq(mb_b as *const _, mb_t as *const _) {
-        bit[idx_b as usize]
-      } else {
-        mb_b.coded_block_pattern >> idx_b & 1
-      }) == 0) as isize;
-      ctx_idx = CTXIDX_CODED_BLOCK_PATTERN_LUMA + cond_term_flag_a + cond_term_flag_b * 2;
-      bit[i as usize] = self.decision(unsafe { &mut *(slice as *const _ as *mut _) }, ctx_idx)?;
+      let ctx_idx = {
+        let mb_t = slice.mb();
+        let mb_a = slice.mb_nb_b(MbPosition::A, BlockSize::B8x8, 0, i, &mut idx_a)?;
+        let mb_b = slice.mb_nb_b(MbPosition::B, BlockSize::B8x8, 0, i, &mut idx_b)?;
+        let cond_term_flag_a = ((if std::ptr::eq(mb_a as *const _, mb_t as *const _) {
+          bit[idx_a as usize]
+        } else {
+          mb_a.coded_block_pattern >> idx_a & 1
+        }) == 0) as isize;
+        let cond_term_flag_b = ((if std::ptr::eq(mb_b as *const _, mb_t as *const _) {
+          bit[idx_b as usize]
+        } else {
+          mb_b.coded_block_pattern >> idx_b & 1
+        }) == 0) as isize;
+        CTXIDX_CODED_BLOCK_PATTERN_LUMA + cond_term_flag_a + cond_term_flag_b * 2
+      };
+      bit[i as usize] = self.decision(slice, ctx_idx)?;
     }
     if has_chroma {
-      mb_a = slice.mb_nb(MbPosition::A, 0)?;
-      mb_b = slice.mb_nb(MbPosition::B, 0)?;
-      let cond_term_flag_a = ((mb_a.coded_block_pattern >> 4) > 0) as isize;
-      let cond_term_flag_b = ((mb_b.coded_block_pattern >> 4) > 0) as isize;
-      ctx_idx = CTXIDX_CODED_BLOCK_PATTERN_CHROMA + cond_term_flag_a + cond_term_flag_b * 2;
-      bit[4] = self.decision(unsafe { &mut *(slice as *const _ as *mut _) }, ctx_idx)?;
+      let (ctx_idx, coded_block_pattern_a, coded_block_pattern_b) = {
+        let mb_a = slice.mb_nb(MbPosition::A, 0)?;
+        let mb_b = slice.mb_nb(MbPosition::B, 0)?;
+        let cond_term_flag_a = ((mb_a.coded_block_pattern >> 4) > 0) as isize;
+        let cond_term_flag_b = ((mb_b.coded_block_pattern >> 4) > 0) as isize;
+        (
+          CTXIDX_CODED_BLOCK_PATTERN_CHROMA + cond_term_flag_a + cond_term_flag_b * 2,
+          mb_a.coded_block_pattern,
+          mb_b.coded_block_pattern,
+        )
+      };
+      bit[4] = self.decision(slice, ctx_idx)?;
       if bit[4] != 0 {
-        let cond_term_flag_a = ((mb_a.coded_block_pattern >> 4) > 1) as isize;
-        let cond_term_flag_b = ((mb_b.coded_block_pattern >> 4) > 1) as isize;
-        ctx_idx = CTXIDX_CODED_BLOCK_PATTERN_CHROMA + cond_term_flag_a + cond_term_flag_b * 2 + 4;
+        let cond_term_flag_a = ((coded_block_pattern_a >> 4) > 1) as isize;
+        let cond_term_flag_b = ((coded_block_pattern_b >> 4) > 1) as isize;
+        let ctx_idx = CTXIDX_CODED_BLOCK_PATTERN_CHROMA + cond_term_flag_a + cond_term_flag_b * 2 + 4;
         bit[5] = self.decision(slice, ctx_idx)?;
       }
     }
