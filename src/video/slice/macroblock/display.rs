@@ -42,24 +42,39 @@ impl Display for Macroblock {
     f.write_str(&format!("Intra16x16PredMode: {}\n", self.mb_type.intra16x16_pred_mode()))?;
     f.write_str(&format!("mb_skip_flag: {}\n\n", self.mb_skip_flag as u8))?;
 
-    // for i in 0..4 {
-    //   for j in 0..4 {
-    //     f.write_str(&format!("mvd_l0[{i}][{j}]:{:?}\n", DisplayArray(&self.mvd[0][4 * i + j])))?;
-    //   }
-    //   f.write_str("\n")?;
-    // }
-    //
-    // for i in 0..4 {
-    //   for j in 0..4 {
-    //     f.write_str(&format!("mvd_l1[{i}][{j}]:{:?}\n", DisplayArray(&self.mvd[1][4 * i + j])))?;
-    //   }
-    //   f.write_str("\n")?;
-    // }
     // f.write_str(&display_array1d("refIdxL0", &self.ref_idxl0))?;
     // f.write_str(&display_array1d("refIdxL1", &self.ref_idxl1))?;
 
     f.write_str(&display_array3d("mv_l0", &self.mv_l0))?;
     f.write_str(&display_array3d("mv_l1", &self.mv_l1))?;
+    f.write_str("\n")?;
+
+    for i in 0..4 {
+      for j in 0..4 {
+        f.write_str(&format!("mvd_l0[{i}][{j}]:"))?;
+        for z in 0..2 {
+          f.write_str(&format!(
+            " {}",
+            if j > 0 || i >= self.num_mb_part() { 0 } else { self.mvd_lx(0, i, j, z) }
+          ))?;
+        }
+        f.write_str("\n")?;
+      }
+      f.write_str("\n")?;
+    }
+    for i in 0..4 {
+      for j in 0..4 {
+        f.write_str(&format!("mvd_l1[{i}][{j}]:"))?;
+        for z in 0..2 {
+          f.write_str(&format!(
+            " {}",
+            if j > 0 || i >= self.num_mb_part() { 0 } else { self.mvd_lx(1, i, j, z) }
+          ))?;
+        }
+        f.write_str("\n")?;
+      }
+      f.write_str("\n")?;
+    }
 
     match self.mb_type.mode() {
       PartPredMode::Intra4x4 => {

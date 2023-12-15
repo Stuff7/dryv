@@ -58,7 +58,9 @@ impl MbType {
       Ordering::Equal => MbType::Pcm,
       Ordering::Greater => {
         let (num_mb_part, part_pred_mode, part_width, part_height) = mb_type_inter(mb_type);
-        let partitions = if part_width == part_height {
+        let partitions = if num_mb_part < 1 {
+          0
+        } else if part_width == part_height {
           num_mb_part as usize
         } else {
           part_width as usize / num_mb_part as usize

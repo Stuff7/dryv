@@ -2,7 +2,12 @@ use super::*;
 
 impl Macroblock {
   pub fn mvd_lx(&self, x: usize, mb_part_idx: usize, sub_mb_part_idx: usize, y: usize) -> isize {
-    self.mvd[x][mb_part_idx * self.mb_type.partitions() + sub_mb_part_idx][y]
+    let idx = mb_part_idx * self.partitions() + sub_mb_part_idx;
+    if idx > 15 {
+      0
+    } else {
+      self.mvd[x][idx][y]
+    }
   }
 
   pub fn set_mb_type(&mut self, mb_type: u8) {
