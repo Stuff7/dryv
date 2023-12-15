@@ -59,14 +59,22 @@ impl<'a> std::fmt::Display for Slice<'a> {
       // f.write_str(&format!("ref_pic_list_modification_count_l1: {}\n", drpm.ref_pic_list_modification_count_l1))?;
     }
 
-    if let Some(pwt) = &self.pred_weight_table {
-      f.write_str(&format!("luma_log2_weight_denom: {}\n", pwt.luma_log2_weight_denom))?;
-      f.write_str(&format!("chroma_log2_weight_denom: {}\n", pwt.chroma_log2_weight_denom))?;
-      // f.write_str(&format!("luma_weight_l0_flag: {}\n", pwt.luma_weight_l0_flag as u8))?;
-      // f.write_str(&format!("chroma_weight_l0_flag: {}\n", pwt.chroma_weight_l0_flag as u8))?;
-      // f.write_str(&format!("luma_weight_l1_flag: {}\n", pwt.luma_weight_l1_flag as u8))?;
-      // f.write_str(&format!("chroma_weight_l1_flag: {}\n", pwt.chroma_weight_l1_flag as u8))?;
-    }
+    f.write_str(&format!(
+      "luma_log2_weight_denom: {}\n",
+      self.pred_weight_table.as_ref().map(|pwt| pwt.luma_log2_weight_denom).unwrap_or_default()
+    ))?;
+    f.write_str(&format!(
+      "chroma_log2_weight_denom: {}\n",
+      self
+        .pred_weight_table
+        .as_ref()
+        .map(|pwt| pwt.chroma_log2_weight_denom)
+        .unwrap_or_default()
+    ))?;
+    // f.write_str(&format!("luma_weight_l0_flag: {}\n", pwt.luma_weight_l0_flag as u8))?;
+    // f.write_str(&format!("chroma_weight_l0_flag: {}\n", pwt.chroma_weight_l0_flag as u8))?;
+    // f.write_str(&format!("luma_weight_l1_flag: {}\n", pwt.luma_weight_l1_flag as u8))?;
+    // f.write_str(&format!("chroma_weight_l1_flag: {}\n", pwt.chroma_weight_l1_flag as u8))?;
 
     f.write_str(&format!("MbaffFrameFlag: {}\n", self.mbaff_frame_flag as u8))?;
     // f.write_str(&format!("SliceGroupChangeRate: {}\n", self.slice_group_change_rate))?;
@@ -113,7 +121,7 @@ impl<'a> std::fmt::Display for Slice<'a> {
     f.write_str(&format!("constraint_set3_flag: {}\n", self.sps.constraint_set3_flag as u8))?;
     f.write_str(&format!("constraint_set4_flag: {}\n", self.sps.constraint_set4_flag as u8))?;
     f.write_str(&format!("constraint_set5_flag: {}\n", self.sps.constraint_set5_flag as u8))?;
-    f.write_str(&format!("reserved_zero_2bits: {}\n", self.sps.reserved_zero_2bits))?;
+    f.write_str(&format!("reserved_zero_2bits: {}\n", self.sps.reserved_zero_2bits as u8))?;
     f.write_str(&format!("level_idc: {}\n", self.sps.level_idc))?;
     f.write_str(&format!("seq_parameter_set_id: {}\n", self.sps.id))?;
     f.write_str(&format!("chroma_format_idc: {}\n", self.sps.chroma_format_idc))?;
