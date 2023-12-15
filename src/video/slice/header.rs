@@ -288,7 +288,7 @@ impl SliceHeader {
         max_frame_num = 1 << (sps.log2_max_frame_num_minus4 as i16 + 4);
         max_frame_num
       },
-      curr_pic_num: if field_pic_flag {
+      curr_pic_num: if !field_pic_flag {
         frame_num as isize
       } else {
         2 * frame_num as isize + 1
