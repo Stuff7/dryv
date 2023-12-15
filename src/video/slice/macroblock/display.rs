@@ -19,6 +19,8 @@ impl Display for Macroblock {
       }
     }
 
+    f.write_str(&display_array1d("predFlagL0", &self.pred_flagl0))?;
+    f.write_str(&display_array1d("predFlagL1", &self.pred_flagl1))?;
     if self.mb_type.is_pcm() {
       f.write_str(&format!("pcm_sample_chroma:{:?}\n", DisplayArray(&self.pcm_sample_chroma)))?;
     }
