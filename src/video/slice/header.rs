@@ -242,9 +242,14 @@ impl SliceHeader {
         num_ref_idx_active_override_flag
       },
       num_ref_idx_l0_active_minus1: {
-        num_ref_idx_l0_active_minus1 = num_ref_idx_active_override_flag
-          .then(|| data.exponential_golomb())
-          .unwrap_or(pps.num_ref_idx_l0_default_active_minus1);
+        num_ref_idx_l0_active_minus1 =
+          num_ref_idx_active_override_flag
+            .then(|| data.exponential_golomb())
+            .unwrap_or(if slice_type.is_bidirectional() {
+              pps.num_ref_idx_l0_default_active_minus1
+            } else {
+              0
+            });
         num_ref_idx_l0_active_minus1
       },
       num_ref_idx_l1_active_minus1: {

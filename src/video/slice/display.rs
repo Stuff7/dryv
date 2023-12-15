@@ -106,7 +106,7 @@ impl<'a> std::fmt::Display for Slice<'a> {
     // f.write_str(&format!("mbCount: {}\n", self.mbCount))?;
     // f.write_str(&format!("sliceCount: {}\n", self.sliceCount))?;
     // f.write_str(&format!("PicOrderCntMsb: {}\n", self.PicOrderCntMsb))?;
-    f.write_str(&format!("PicOrderCntLsb: {}\n", self.pic_order_cnt_lsb.unwrap_or_default()))?;
+    // f.write_str(&format!("PicOrderCntLsb: {}\n", self.pic_order_cnt_lsb.unwrap_or_default()))?;
     // f.write_str(&format!("TopFieldOrderCnt: {}\n", self.TopFieldOrderCnt))?;
     // f.write_str(&format!("BottomFieldOrderCnt: {}\n", self.BottomFieldOrderCnt))?;
     // f.write_str(&format!("FrameNumOffset: {}\n", self.FrameNumOffset))?;
