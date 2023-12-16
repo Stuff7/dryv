@@ -10,6 +10,18 @@ impl Macroblock {
     }
   }
 
+  pub fn ref_idxlx(&self, x: usize, mb_part_idx: usize) -> isize {
+    if mb_part_idx >= self.num_mb_part() {
+      return 0;
+    }
+    let idx = mb_part_idx * self.partitions() / 4;
+    if idx > 3 {
+      0
+    } else {
+      self.ref_idx[x][idx] as isize
+    }
+  }
+
   pub fn set_mb_type(&mut self, mb_type: u8) {
     self.mb_type = MbType::new(mb_type, self.transform_size_8x8_flag != 0);
   }

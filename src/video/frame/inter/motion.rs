@@ -1,6 +1,4 @@
 use crate::{
-  display::display_array3d,
-  log,
   math::{clamp, inverse_raster_scan, median, min_positive},
   video::slice::{
     dpb::{DecodedPictureBuffer, Picture},
