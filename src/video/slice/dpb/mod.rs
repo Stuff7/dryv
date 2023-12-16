@@ -50,28 +50,26 @@ impl DecodedPictureBuffer {
 
   pub fn push(&mut self, num: usize, data: &[u8], nal: &NALUnit, sps: &SequenceParameterSet, pps: &PictureParameterSet) -> DecoderResult {
     let mut stream = BitStream::new(data);
-    let mut pic = Picture::new(&mut stream, nal, sps, pps);
+    let mut pic = Picture::new(num, &mut stream, nal, sps, pps);
     self.init_pic(&mut pic);
     let mut slice = Slice::new(num, stream, &pic.header, nal, sps, pps, &mut pic.macroblocks);
     slice.data(self, &mut pic.frame)?;
     create_slice_file(&slice, &pic.frame, self)?;
     self.previous.copy_pic(&pic);
     if pic.nal_idc != 0 {
+      self.ref_pic_marking_process(&mut pic);
       self.buffer.push(pic);
     }
     Ok(())
   }
 
   /// 8.2.5 Decoded reference picture marking process
-  pub fn init_pic(&mut self, pic: &mut Picture) {
-    self.decode_pic_order_cnt_type(pic);
-    if pic.header.slice_type.is_predictive() || pic.header.slice_type.is_bidirectional() {
-      self.reference_picture_lists_construction(pic);
-    }
+  pub fn ref_pic_marking_process(&mut self, pic: &mut Picture) {
     if pic.nal_unit_type.is_idr() {
       self.buffer.clear();
       self.ref_pic_list0.clear();
       self.ref_pic_list1.clear();
+
       if pic.header.dec_ref_pic_marking.as_ref().is_some_and(|drpm| drpm.long_term_reference_flag) {
         pic.reference_marked_type = PictureMarking::LongTermReference;
         pic.long_term_frame_idx = 0;
@@ -95,6 +93,13 @@ impl DecodedPictureBuffer {
       pic.reference_marked_type = PictureMarking::ShortTermReference;
       pic.max_long_term_frame_idx = -1;
     }
+  }
+
+  pub fn init_pic(&mut self, pic: &mut Picture) {
+    self.decode_pic_order_cnt_type(pic);
+    if pic.header.slice_type.is_predictive() || pic.header.slice_type.is_bidirectional() {
+      self.reference_picture_lists_construction(pic);
+    }
 
     self.top_field_order_cnt = pic.top_field_order_cnt;
     self.bottom_field_order_cnt = pic.bottom_field_order_cnt;
@@ -107,6 +112,12 @@ impl DecodedPictureBuffer {
 
   pub fn ref_pic_list1(&self, idx: usize) -> &Picture {
     &self.buffer[self.ref_pic_list1[idx]]
+  }
+
+  fn remove_pic(&mut self, idx: usize) {
+    self.buffer.remove(idx);
+    update_ref_pic_list(&mut self.ref_pic_list0, idx);
+    update_ref_pic_list(&mut self.ref_pic_list1, idx);
   }
 
   /// 8.2.5.4 Adaptive memory control decoded reference picture marking process
@@ -124,16 +135,16 @@ impl DecodedPictureBuffer {
           difference_of_pic_nums_minus1,
         } => {
           let pic_num_x = pic.header.curr_pic_num - (*difference_of_pic_nums_minus1 as isize + 1);
-          for j in 0..self.buffer.len() {
+          for j in (0..self.buffer.len()).rev() {
             if self.buffer[j].reference_marked_type.is_short_term_reference() && self.buffer[j].pic_num == pic_num_x {
-              self.buffer.remove(j);
+              self.remove_pic(j);
             }
           }
         }
         Mmco::ForgetLong { long_term_pic_num } => {
           for j in 0..self.buffer.len() {
             if self.buffer[j].reference_marked_type.is_long_term_reference() && self.buffer[j].long_term_pic_num == *long_term_pic_num as isize {
-              self.buffer.remove(j);
+              self.remove_pic(j);
             }
           }
         }
@@ -144,7 +155,7 @@ impl DecodedPictureBuffer {
           let pic_num_x = pic.header.curr_pic_num - (*difference_of_pic_nums_minus1 as isize + 1);
           for j in 0..self.buffer.len() {
             if self.buffer[j].reference_marked_type.is_long_term_reference() && self.buffer[j].long_term_frame_idx == *long_term_frame_idx as isize {
-              self.buffer.remove(j);
+              self.remove_pic(j);
             }
           }
 
@@ -161,7 +172,7 @@ impl DecodedPictureBuffer {
             if (self.buffer[j].long_term_frame_idx > *max_long_term_frame_idx_plus1 as isize - 1)
               && self.buffer[j].reference_marked_type.is_long_term_reference()
             {
-              self.buffer.remove(j);
+              self.remove_pic(j);
             }
           }
           if *max_long_term_frame_idx_plus1 == 0 {
@@ -178,7 +189,7 @@ impl DecodedPictureBuffer {
         Mmco::ThisToLong { long_term_frame_idx } => {
           for j in 0..self.buffer.len() {
             if self.buffer[j].long_term_frame_idx == *long_term_frame_idx as isize && self.buffer[j].reference_marked_type.is_long_term_reference() {
-              self.buffer.remove(j);
+              self.remove_pic(j);
             }
           }
 
@@ -223,7 +234,7 @@ impl DecodedPictureBuffer {
       }
 
       if pic && idx >= 0 {
-        self.buffer.remove(idx as usize);
+        self.remove_pic(idx as usize);
       }
     }
   }
@@ -247,6 +258,25 @@ impl PreviousPicture {
     self.header_pic_order_cnt_lsb = pic.header.pic_order_cnt_lsb.unwrap_or_default() as isize;
     self.frame_num_offset = pic.frame_num_offset;
     self.header_frame_num = pic.header.frame_num as isize;
+  }
+}
+
+fn update_ref_pic_list(list: &mut Vec<usize>, idx: usize) {
+  let mut i = 0;
+
+  while i < list.len() {
+    match list[i].cmp(&idx) {
+      std::cmp::Ordering::Greater => {
+        list[i] -= 1;
+        i += 1;
+      }
+      std::cmp::Ordering::Less => {
+        i += 1;
+      }
+      std::cmp::Ordering::Equal => {
+        list.remove(i);
+      }
+    }
   }
 }
 

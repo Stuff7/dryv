@@ -42,10 +42,11 @@ pub struct Picture {
   pub pic_num: isize,
   pub long_term_pic_num: isize,
   pub frame_num_wrap: isize,
+  pub slice_num: usize,
 }
 
 impl Picture {
-  pub fn new(stream: &mut BitStream, nal: &NALUnit, sps: &SequenceParameterSet, pps: &PictureParameterSet) -> Self {
+  pub fn new(slice_num: usize, stream: &mut BitStream, nal: &NALUnit, sps: &SequenceParameterSet, pps: &PictureParameterSet) -> Self {
     let header = SliceHeader::new(stream, nal, sps, pps);
     Self {
       pic_order_cnt: 0,
@@ -75,6 +76,7 @@ impl Picture {
       frame_num_wrap: 0,
       pic_num: 0,
       long_term_pic_num: 0,
+      slice_num,
     }
   }
 }
