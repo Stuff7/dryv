@@ -318,7 +318,7 @@ impl Frame {
       let sub_mode = &slice.mb().sub_mb_type[mb_part_idx].sub_mb_part_pred_mode;
 
       if mode.is_predl0() || sub_mode.is_predl0() {
-        *ref_idxl0 = slice.mb().ref_idxl0[mb_part_idx];
+        *ref_idxl0 = slice.mb().ref_idx[0][mb_part_idx] as isize;
         *pred_flagl0 = 1;
       } else {
         *ref_idxl0 = -1;
@@ -326,7 +326,7 @@ impl Frame {
       }
 
       if mode.is_predl1() || sub_mode.is_predl1() {
-        *ref_idxl1 = slice.mb().ref_idxl1[mb_part_idx];
+        *ref_idxl1 = slice.mb().ref_idx[1][mb_part_idx] as isize;
         *pred_flagl1 = 1;
       } else {
         *ref_idxl1 = -1;
