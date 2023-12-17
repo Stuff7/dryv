@@ -2,10 +2,11 @@ use super::atom::*;
 use super::cabac::CabacError;
 use super::sample::*;
 use super::slice::dpb::DecodedPictureBuffer;
+use crate::ascii::{BOLD, RESET};
 use crate::byte::{BitStream, Str};
 use crate::log;
 use std::fs::File;
-use std::io::{Read, Seek};
+use std::io::{self, Read, Seek, Write};
 use std::path::Path;
 use thiserror::Error;
 
@@ -100,12 +101,15 @@ impl Decoder {
             }
           }
           NALUnitType::NonIDRPicture | NALUnitType::IDRPicture => {
+            print!("\r{}Saving Frame:{} {} / {}", BOLD, RESET, i + 1, count);
+            io::stdout().flush().expect("Could not flush stdout");
             dpb.push(i, nal.data, &nal, &avc1.avcc.sps, &avc1.avcc.pps)?;
           }
           _ => log!(File@"{msg} [UNUSED]"),
         }
       }
     }
+    println!();
     Ok(())
   }
 

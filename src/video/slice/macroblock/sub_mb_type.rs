@@ -25,8 +25,7 @@ impl PartialEq for SubMbType {
 
 impl SubMbType {
   pub fn new(sub_mb_type: u8) -> Self {
-    let (num_sub_mb_part, sub_mb_part_pred_mode, sub_mb_part_width, sub_mb_part_height) =
-      sub_mb_type_fields(sub_mb_type);
+    let (num_sub_mb_part, sub_mb_part_pred_mode, sub_mb_part_width, sub_mb_part_height) = sub_mb_type_fields(sub_mb_type);
     Self {
       code: sub_mb_type,
       num_sub_mb_part,

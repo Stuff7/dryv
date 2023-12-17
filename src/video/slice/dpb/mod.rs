@@ -287,7 +287,7 @@ fn create_slice_file(slice: &Slice, frame: &Frame, dpb: &DecodedPictureBuffer) -
   let mut f = std::fs::File::create(name).expect("SLICE CREATION");
   f.write_all(format!("{}\n- DPB -\n\n{}\n", slice, dpb).as_bytes()).expect("SLICE SAVING");
 
-  for j in 0..10 {
+  for j in 0..slice.macroblocks.len() {
     let name = format!("temp/mb/{i}-{j}");
     let mut f = std::fs::File::create(name).expect("MACROBLOCK CREATION");
     f.write_all(format!("- MACROBLOCK {j} -\n\n{}", slice.macroblocks[j]).as_bytes())
