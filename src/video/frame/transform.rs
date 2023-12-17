@@ -21,14 +21,7 @@ impl Frame {
     let idx = (i_y_cb_cr + if mb_is_inter_flag { 3 } else { 0 }) as usize;
     let weight_scale4x4 = inverse_scanner4x4(&slice.scaling_list4x4[idx]);
 
-    const V4X4: [[isize; 3]; 6] = [
-      [10, 16, 13],
-      [11, 18, 14],
-      [13, 20, 16],
-      [14, 23, 18],
-      [16, 25, 20],
-      [18, 29, 23],
-    ];
+    const V4X4: [[isize; 3]; 6] = [[10, 16, 13], [11, 18, 14], [13, 20, 16], [14, 23, 18], [16, 25, 20], [18, 29, 23]];
 
     for m in 0..6 {
       for i in 0..4 {
@@ -87,8 +80,7 @@ impl Frame {
 
         if slice.mb().transform_bypass_mode_flag
           && slice.mb().mb_type.mode().is_intra_4x4()
-          && (slice.mb().intra4x4_pred_mode[luma4x4_blk_idx] == 0
-            || slice.mb().intra4x4_pred_mode[luma4x4_blk_idx] == 1)
+          && (slice.mb().intra4x4_pred_mode[luma4x4_blk_idx] == 0 || slice.mb().intra4x4_pred_mode[luma4x4_blk_idx] == 1)
         {
           todo!("Bypass transform decoding");
         }
@@ -113,17 +105,10 @@ impl Frame {
   }
 
   /// 8.5.12 Scaling and transformation process for residual 4x4 blocks
-  pub fn scaling_and_transform4x4(
-    &self,
-    slice: &mut Slice,
-    c: &[[isize; 4]; 4],
-    is_luma: bool,
-    is_chroma_cb: bool,
-  ) -> [[isize; 4]; 4] {
+  pub fn scaling_and_transform4x4(&self, slice: &mut Slice, c: &[[isize; 4]; 4], is_luma: bool, is_chroma_cb: bool) -> [[isize; 4]; 4] {
     chroma_quantization_parameters(slice, is_chroma_cb);
 
-    let s_mb_flag = slice.mb().mb_type.is_si()
-      || (slice.slice_type.is_switching_p() && slice.mb().mb_type.mode().is_inter_frame());
+    let s_mb_flag = slice.mb().mb_type.is_si() || (slice.slice_type.is_switching_p() && slice.mb().mb_type.mode().is_inter_frame());
 
     let q_p = if is_luma && !s_mb_flag {
       slice.mb().qp1y
@@ -147,9 +132,7 @@ impl Frame {
           } else if q_p >= 24 {
             d[i][j] = (c[i][j] * self.level_scale4x4[q_p as usize % 6][i][j]) << (q_p / 6 - 4);
           } else {
-            d[i][j] = (c[i][j] * self.level_scale4x4[q_p as usize % 6][i][j]
-              + (1 << (3 - q_p as u32 / 6)))
-              >> (4 - q_p / 6);
+            d[i][j] = (c[i][j] * self.level_scale4x4[q_p as usize % 6][i][j] + (1 << (3 - q_p as u32 / 6))) >> (4 - q_p / 6);
           }
         }
       }
@@ -208,9 +191,7 @@ pub fn get_qpc(slice: &Slice, qpy: isize, is_chroma_cb: bool) -> isize {
   if qpi < 30 {
     qpi
   } else {
-    const QPCS: [isize; 22] = [
-      29, 30, 31, 32, 32, 33, 34, 34, 35, 35, 36, 36, 37, 37, 37, 38, 38, 38, 39, 39, 39, 39,
-    ];
+    const QPCS: [isize; 22] = [29, 30, 31, 32, 32, 33, 34, 34, 35, 35, 36, 36, 37, 37, 37, 38, 38, 38, 39, 39, 39, 39];
     QPCS[qpi as usize - 30]
   }
 }
