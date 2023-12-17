@@ -152,8 +152,8 @@ impl Frame {
 
         for i in 0..mb_width_c {
           for j in 0..mb_height_c {
-            chroma_data[(x_p / slice.sub_width_c as isize + x_o + j as isize) as usize]
-              [(y_p / slice.sub_height_c as isize + y_o + i as isize) as usize] = u[i * mb_width_c + j] as u8;
+            chroma_data[(x_p / slice.sub_width_c + x_o + j as isize) as usize][(y_p / slice.sub_height_c + y_o + i as isize) as usize] =
+              u[i * mb_width_c + j] as u8;
           }
         }
       }

@@ -220,8 +220,7 @@ impl Frame {
     if pred_flag_l0 == 1 && pred_flag_l1 == 0 {
       for y in 0..part_height {
         for x in 0..part_width {
-          pred_part_l[(x_p + x_s + x) as usize][(y_p + y_s + y) as usize] =
-            pred_part_l0l[(y * part_width + x) as usize];
+          pred_part_l[(x_p + x_s + x) as usize][(y_p + y_s + y) as usize] = pred_part_l0l[(y * part_width + x) as usize];
         }
       }
 
@@ -229,19 +228,16 @@ impl Frame {
         for y in 0..part_height_c {
           for x in 0..part_width_c {
             pred_part_cb[(x_p / slice.sub_width_c + x_s / slice.sub_width_c + x) as usize]
-              [(y_p / slice.sub_height_c + y_s / slice.sub_height_c + y) as usize] =
-              pred_part_l0cb[(y * part_width_c + x) as usize];
+              [(y_p / slice.sub_height_c + y_s / slice.sub_height_c + y) as usize] = pred_part_l0cb[(y * part_width_c + x) as usize];
             pred_part_cr[(x_p / slice.sub_width_c + x_s / slice.sub_width_c + x) as usize]
-              [(y_p / slice.sub_height_c + y_s / slice.sub_height_c + y) as usize] =
-              pred_part_l0cr[(y * part_width_c + x) as usize];
+              [(y_p / slice.sub_height_c + y_s / slice.sub_height_c + y) as usize] = pred_part_l0cr[(y * part_width_c + x) as usize];
           }
         }
       }
     } else if pred_flag_l0 == 0 && pred_flag_l1 == 1 {
       for y in 0..part_height {
         for x in 0..part_width {
-          pred_part_l[(x_p + x_s + x) as usize][(y_p + y_s + y) as usize] =
-            pred_part_l1l[(y * part_width + x) as usize];
+          pred_part_l[(x_p + x_s + x) as usize][(y_p + y_s + y) as usize] = pred_part_l1l[(y * part_width + x) as usize];
         }
       }
 
@@ -249,22 +245,17 @@ impl Frame {
         for y in 0..part_height_c {
           for x in 0..part_width_c {
             pred_part_cb[(x_p / slice.sub_width_c + x_s / slice.sub_width_c + x) as usize]
-              [(y_p / slice.sub_height_c + y_s / slice.sub_height_c + y) as usize] =
-              pred_part_l1cb[(y * part_width_c + x) as usize];
+              [(y_p / slice.sub_height_c + y_s / slice.sub_height_c + y) as usize] = pred_part_l1cb[(y * part_width_c + x) as usize];
             pred_part_cr[(x_p / slice.sub_width_c + x_s / slice.sub_width_c + x) as usize]
-              [(y_p / slice.sub_height_c + y_s / slice.sub_height_c + y) as usize] =
-              pred_part_l1cr[(y * part_width_c + x) as usize];
+              [(y_p / slice.sub_height_c + y_s / slice.sub_height_c + y) as usize] = pred_part_l1cr[(y * part_width_c + x) as usize];
           }
         }
       }
     } else {
       for y in 0..part_height {
         for x in 0..part_width {
-          pred_part_l[(x_p + x_s + x) as usize][(y_p + y_s + y) as usize] = (pred_part_l0l
-            [(y * part_width + x) as usize]
-            + pred_part_l1l[(y * part_width + x) as usize]
-            + 1)
-            >> 1;
+          pred_part_l[(x_p + x_s + x) as usize][(y_p + y_s + y) as usize] =
+            (pred_part_l0l[(y * part_width + x) as usize] + pred_part_l1l[(y * part_width + x) as usize] + 1) >> 1;
         }
       }
 
@@ -272,17 +263,11 @@ impl Frame {
         for y in 0..part_height_c {
           for x in 0..part_width_c {
             pred_part_cb[(x_p / slice.sub_width_c + x_s / slice.sub_width_c + x) as usize]
-              [(y_p / slice.sub_height_c + y_s / slice.sub_height_c + y) as usize] = (pred_part_l0cb
-              [(y * part_width_c + x) as usize]
-              + pred_part_l1cb[(y * part_width_c + x) as usize]
-              + 1)
-              >> 1;
+              [(y_p / slice.sub_height_c + y_s / slice.sub_height_c + y) as usize] =
+              (pred_part_l0cb[(y * part_width_c + x) as usize] + pred_part_l1cb[(y * part_width_c + x) as usize] + 1) >> 1;
             pred_part_cr[(x_p / slice.sub_width_c + x_s / slice.sub_width_c + x) as usize]
-              [(y_p / slice.sub_height_c + y_s / slice.sub_height_c + y) as usize] = (pred_part_l0cr
-              [(y * part_width_c + x) as usize]
-              + pred_part_l1cr[(y * part_width_c + x) as usize]
-              + 1)
-              >> 1;
+              [(y_p / slice.sub_height_c + y_s / slice.sub_height_c + y) as usize] =
+              (pred_part_l0cr[(y * part_width_c + x) as usize] + pred_part_l1cr[(y * part_width_c + x) as usize] + 1) >> 1;
           }
         }
       }
@@ -331,12 +316,9 @@ impl Frame {
     if pred_flag_l0 == 1 && pred_flag_l1 == 0 {
       for y in 0..part_height {
         for x in 0..part_width {
-          if (log_wdl >= 1) {
+          if log_wdl >= 1 {
             pred_part_l[(x_p + x_s + x) as usize][(y_p + y_s + y) as usize] = clamp(
-              ((pred_part_l0l[(y * part_width + x) as usize] as isize * w0_l
-                + (1 << (log_wdl - 1)))
-                >> log_wdl)
-                + o0_l,
+              ((pred_part_l0l[(y * part_width + x) as usize] as isize * w0_l + (1 << (log_wdl - 1))) >> log_wdl) + o0_l,
               0,
               (1 << slice.bit_depth_y) - 1,
             ) as u8;
@@ -356,43 +338,33 @@ impl Frame {
             if log_wdcb >= 1 {
               pred_part_cb[(x_p / slice.sub_width_c + x_s / slice.sub_width_c + x) as usize]
                 [(y_p / slice.sub_height_c + y_s / slice.sub_height_c + y) as usize] = clamp(
-                ((pred_part_l0cb[(y * part_width_c + x) as usize] as isize * w0_cb
-                  + (1 << (log_wdcb - 1)))
-                  >> log_wdcb)
-                  + o0_cb,
+                ((pred_part_l0cb[(y * part_width_c + x) as usize] as isize * w0_cb + (1 << (log_wdcb - 1))) >> log_wdcb) + o0_cb,
                 0,
                 (1 << slice.bit_depth_c) - 1,
-              )
-                as u8;
+              ) as u8;
             } else {
               pred_part_cb[(x_p / slice.sub_width_c + x_s / slice.sub_width_c + x) as usize]
                 [(y_p / slice.sub_height_c + y_s / slice.sub_height_c + y) as usize] = clamp(
                 pred_part_l0cb[(y * part_width_c + x) as usize] as isize * w0_cb + o0_cb,
                 0,
                 (1 << slice.bit_depth_c) - 1,
-              )
-                as u8;
+              ) as u8;
             }
 
             if log_wdcr >= 1 {
               pred_part_cr[(x_p / slice.sub_width_c + x_s / slice.sub_width_c + x) as usize]
                 [(y_p / slice.sub_height_c + y_s / slice.sub_height_c + y) as usize] = clamp(
-                ((pred_part_l0cr[(y * part_width_c + x) as usize] as isize * w0_cr
-                  + (1 << (log_wdcr - 1)))
-                  >> log_wdcr)
-                  + o0_cr,
+                ((pred_part_l0cr[(y * part_width_c + x) as usize] as isize * w0_cr + (1 << (log_wdcr - 1))) >> log_wdcr) + o0_cr,
                 0,
                 (1 << slice.bit_depth_c) - 1,
-              )
-                as u8;
+              ) as u8;
             } else {
               pred_part_cr[(x_p / slice.sub_width_c + x_s / slice.sub_width_c + x) as usize]
                 [(y_p / slice.sub_height_c + y_s / slice.sub_height_c + y) as usize] = clamp(
                 pred_part_l0cr[(y * part_width_c + x) as usize] as isize * w0_cr + o0_cr,
                 0,
                 (1 << slice.bit_depth_c) - 1,
-              )
-                as u8;
+              ) as u8;
             }
           }
         }
@@ -400,12 +372,9 @@ impl Frame {
     } else if pred_flag_l0 == 0 && pred_flag_l1 == 1 {
       for y in 0..part_height {
         for x in 0..part_width {
-          if (log_wdl >= 1) {
+          if log_wdl >= 1 {
             pred_part_l[(x_p + x_s + x) as usize][(y_p + y_s + y) as usize] = clamp(
-              ((pred_part_l1l[(y * part_width + x) as usize] as isize * w0_l
-                + (1 << (log_wdl - 1)))
-                >> log_wdl)
-                + o0_l,
+              ((pred_part_l1l[(y * part_width + x) as usize] as isize * w0_l + (1 << (log_wdl - 1))) >> log_wdl) + o0_l,
               0,
               (1 << slice.bit_depth_y) - 1,
             ) as u8;
@@ -425,43 +394,33 @@ impl Frame {
             if log_wdcb >= 1 {
               pred_part_cb[(x_p / slice.sub_width_c + x_s / slice.sub_width_c + x) as usize]
                 [(y_p / slice.sub_height_c + y_s / slice.sub_height_c + y) as usize] = clamp(
-                ((pred_part_l1cb[(y * part_width_c + x) as usize] as isize * w1_cb
-                  + (1 << (log_wdcb - 1)))
-                  >> log_wdcb)
-                  + o1_cb,
+                ((pred_part_l1cb[(y * part_width_c + x) as usize] as isize * w1_cb + (1 << (log_wdcb - 1))) >> log_wdcb) + o1_cb,
                 0,
                 (1 << slice.bit_depth_c) - 1,
-              )
-                as u8;
+              ) as u8;
             } else {
               pred_part_cb[(x_p / slice.sub_width_c + x_s / slice.sub_width_c + x) as usize]
                 [(y_p / slice.sub_height_c + y_s / slice.sub_height_c + y) as usize] = clamp(
                 pred_part_l1cb[(y * part_width_c + x) as usize] as isize * w1_cb + o1_cb,
                 0,
                 (1 << slice.bit_depth_c) - 1,
-              )
-                as u8;
+              ) as u8;
             }
 
             if log_wdcr >= 1 {
               pred_part_cr[(x_p / slice.sub_width_c + x_s / slice.sub_width_c + x) as usize]
                 [(y_p / slice.sub_height_c + y_s / slice.sub_height_c + y) as usize] = clamp(
-                ((pred_part_l1cr[(y * part_width_c + x) as usize] as isize * w1_cr
-                  + (1 << (log_wdcr - 1)))
-                  >> log_wdcr)
-                  + o1_cr,
+                ((pred_part_l1cr[(y * part_width_c + x) as usize] as isize * w1_cr + (1 << (log_wdcr - 1))) >> log_wdcr) + o1_cr,
                 0,
                 (1 << slice.bit_depth_c) - 1,
-              )
-                as u8;
+              ) as u8;
             } else {
               pred_part_cr[(x_p / slice.sub_width_c + x_s / slice.sub_width_c + x) as usize]
                 [(y_p / slice.sub_height_c + y_s / slice.sub_height_c + y) as usize] = clamp(
                 pred_part_l1cr[(y * part_width_c + x) as usize] as isize * w1_cr + o1_cr,
                 0,
                 (1 << slice.bit_depth_c) - 1,
-              )
-                as u8;
+              ) as u8;
             }
           }
         }
@@ -493,8 +452,7 @@ impl Frame {
                 + ((o0_cb + o1_cb + 1) >> 1),
               0,
               (1 << slice.bit_depth_c) - 1,
-            )
-              as u8;
+            ) as u8;
 
             pred_part_cr[(x_p / slice.sub_width_c + x_s / slice.sub_width_c + x) as usize]
               [(y_p / slice.sub_height_c + y_s / slice.sub_height_c + y) as usize] = clamp(
@@ -505,8 +463,7 @@ impl Frame {
                 + ((o0_cr + o1_cr + 1) >> 1),
               0,
               (1 << slice.bit_depth_c) - 1,
-            )
-              as u8;
+            ) as u8;
           }
         }
       }

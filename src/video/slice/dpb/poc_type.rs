@@ -1,5 +1,3 @@
-use crate::log;
-
 use super::*;
 
 impl DecodedPictureBuffer {

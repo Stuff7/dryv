@@ -15,8 +15,6 @@ impl Frame {
     dpb: &DecodedPictureBuffer,
     x_al: isize,
     y_al: isize,
-    mb_part_idx: isize,
-    sub_mb_part_idx: isize,
     part_width: usize,
     part_height: usize,
     part_width_c: usize,
@@ -65,9 +63,9 @@ impl Frame {
 
           if slice.chroma_array_type != 3 {
             pred_part_lxcb[(y_c * part_width_c as isize + x_c) as usize] =
-              self.chroma_sample_interpolation(slice, dpb, x_int_c, y_int_c, x_frac_c, y_frac_c, ref_pic, true);
+              self.chroma_sample_interpolation(slice, x_int_c, y_int_c, x_frac_c, y_frac_c, ref_pic, true);
             pred_part_lxcr[(y_c * part_width_c as isize + x_c) as usize] =
-              self.chroma_sample_interpolation(slice, dpb, x_int_c, y_int_c, x_frac_c, y_frac_c, ref_pic, false);
+              self.chroma_sample_interpolation(slice, x_int_c, y_int_c, x_frac_c, y_frac_c, ref_pic, false);
           } else {
             pred_part_lxcb[(y_c * part_width_c as isize + x_c) as usize] =
               self.luma_sample_interpolation(slice, dpb, x_int_c, y_int_c, x_frac_c, y_frac_c, ref_pic);
@@ -188,7 +186,6 @@ impl Frame {
   pub fn chroma_sample_interpolation(
     &mut self,
     slice: &mut Slice,
-    dpb: &DecodedPictureBuffer,
     x_int_c: isize,
     y_int_c: isize,
     x_frac_c: isize,

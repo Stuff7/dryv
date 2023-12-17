@@ -5,7 +5,7 @@ use super::{
   macroblock::{Macroblock, MbPosition, SubMbType},
   Slice,
 };
-use crate::{log, math::inverse_raster_scan};
+use crate::math::inverse_raster_scan;
 
 impl<'a> Slice<'a> {
   /// 6.4.11.7 Derivation process for neighbouring partitions
