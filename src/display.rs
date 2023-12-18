@@ -70,6 +70,19 @@ pub fn display_array1d<T: Display>(name: &str, arr: &[T]) -> String {
   s
 }
 
+#[allow(dead_code)]
+pub fn display_array2d<T: Display, const D1: usize, const D2: usize>(name: &str, arr: &[[T; D2]; D1]) -> String {
+  let mut s = String::new();
+  for (i, x) in arr.iter().enumerate() {
+    s += &format!("{name}[{i}]:");
+    for y in x.iter() {
+      s += &format!(" {}", y);
+    }
+    s += "\n";
+  }
+  s
+}
+
 pub fn display_array3d<T: Display, const D1: usize, const D2: usize>(name: &str, arr: &[[[T; D2]; D1]]) -> String {
   let mut s = String::new();
   for (i, x) in arr.iter().enumerate() {
