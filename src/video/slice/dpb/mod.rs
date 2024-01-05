@@ -23,6 +23,7 @@ use crate::{
     sample::{NALUnit, NALUnitType},
   },
 };
+use std::io::Write;
 
 #[derive(Debug)]
 pub struct DecodedPictureBuffer {
@@ -54,12 +55,13 @@ impl DecodedPictureBuffer {
     self.init_pic(&mut pic);
     let mut slice = Slice::new(num, stream, &pic.header, nal, sps, pps, &mut pic.macroblocks);
     slice.data(self, &mut pic.frame)?;
-    create_slice_file(&slice, &pic.frame, self)?;
+    create_slice_file(&slice, &pic.frame)?;
     self.previous.copy_pic(&pic);
     if pic.nal_idc != 0 {
       self.ref_pic_marking_process(&mut pic);
       self.buffer.push(pic);
     }
+    create_dpb_file(num, self)?;
     Ok(())
   }
 
@@ -280,21 +282,27 @@ fn update_ref_pic_list(list: &mut Vec<usize>, idx: usize) {
   }
 }
 
-fn create_slice_file(slice: &Slice, frame: &Frame, dpb: &DecodedPictureBuffer) -> DecoderResult {
-  use std::io::Write;
+fn create_slice_file(slice: &Slice, frame: &Frame) -> DecoderResult {
   let i = slice.num;
   let name = format!("temp/slice/{i}");
-  let mut f = std::fs::File::create(name).expect("SLICE CREATION");
-  f.write_all(format!("{}\n- DPB -\n\n{}\n", slice, dpb).as_bytes()).expect("SLICE SAVING");
+  let mut f = std::fs::File::create(name).expect("SLICE FILE CREATION");
+  f.write_all(format!("{}\n", slice).as_bytes()).expect("SLICE FILE SAVING");
 
   for j in 0..slice.macroblocks.len() {
     let name = format!("temp/mb/{i}-{j}");
-    let mut f = std::fs::File::create(name).expect("MACROBLOCK CREATION");
+    let mut f = std::fs::File::create(name).expect("MACROBLOCK FILE CREATION");
     f.write_all(format!("- MACROBLOCK {j} -\n\n{}", slice.macroblocks[j]).as_bytes())
-      .expect("MACROBLOCK SAVING");
+      .expect("MACROBLOCK FILE SAVING");
   }
 
   frame.write_to_yuv_file(&format!("temp/frame/{i}"))?;
 
+  Ok(())
+}
+
+fn create_dpb_file(i: usize, dpb: &DecodedPictureBuffer) -> DecoderResult {
+  let name = format!("temp/slice/{i}");
+  let mut f = std::fs::OpenOptions::new().append(true).open(name).expect("DPB FILE CREATION");
+  f.write_all(format!("\n- DPB -\n\n{}\n", dpb).as_bytes()).expect("DPB FILE SAVING");
   Ok(())
 }

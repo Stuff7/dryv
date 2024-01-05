@@ -44,12 +44,12 @@ impl Display for DecodedPictureBuffer {
     for i in 0..self.buffer.len() {
       f.write_str(&format!("# dpb[{i}]\n{}\n", self.buffer[i]))?;
     }
-    for i in 0..self.ref_pic_list0.len() {
-      f.write_str(&format!("# RefPicList0[{i}]\n{}\n", self.ref_pic_list0(i)))?;
-    }
-    for i in 0..self.ref_pic_list1.len() {
-      f.write_str(&format!("# RefPicList1[{i}]\n{}\n", self.ref_pic_list1(i)))?;
-    }
+    // for i in 0..self.ref_pic_list0.len() {
+    //   f.write_str(&format!("# RefPicList0[{i}]\n{}\n", self.ref_pic_list0(i)))?;
+    // }
+    // for i in 0..self.ref_pic_list1.len() {
+    //   f.write_str(&format!("# RefPicList1[{i}]\n{}\n", self.ref_pic_list1(i)))?;
+    // }
     Ok(())
   }
 }
