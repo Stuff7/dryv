@@ -26,7 +26,7 @@ Dryv is a video decoder implemented entirely in Rust, free from third-party depe
 dryv <video-path> [-d]
 ```
 
-After running it you'll find the first frame from the video in `./temp/yuv_frame`.
+After running it you'll find the first frame from the video in `./tmp/yuv_frame`.
 
 ### Options
 

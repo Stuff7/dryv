@@ -4,6 +4,7 @@ impl<'a> std::fmt::Display for Slice<'a> {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     f.write_str("- SLICE HEADER -\n\n")?;
 
+    f.write_str(&format!("nal_idc:  {}\n", self.nal_idc))?;
     f.write_str(&format!("slice_type: {:?}\n", self.slice_type))?;
     f.write_str(&format!("first_mb_in_slice: {}\n", self.first_mb_in_slice))?;
     // f.write_str(&format!("pic_parameter_set_id: {}\n", self.pic_parameter_set_id))?;

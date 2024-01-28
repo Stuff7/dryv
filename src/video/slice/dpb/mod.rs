@@ -22,6 +22,7 @@ use crate::{
     frame::Frame,
     sample::{NALUnit, NALUnitType},
   },
+  OUTDIR,
 };
 use std::io::Write;
 
@@ -284,24 +285,24 @@ fn update_ref_pic_list(list: &mut Vec<usize>, idx: usize) {
 
 fn create_slice_file(slice: &Slice, frame: &Frame) -> DecoderResult {
   let i = slice.num;
-  let name = format!("temp/slice/{i}");
+  let name = format!("{OUTDIR}/slice/{i}");
   let mut f = std::fs::File::create(name).expect("SLICE FILE CREATION");
   f.write_all(format!("{}\n", slice).as_bytes()).expect("SLICE FILE SAVING");
 
   for j in 0..slice.macroblocks.len() {
-    let name = format!("temp/mb/{i}-{j}");
+    let name = format!("{OUTDIR}/mb/{i}-{j}");
     let mut f = std::fs::File::create(name).expect("MACROBLOCK FILE CREATION");
     f.write_all(format!("- MACROBLOCK {j} -\n\n{}", slice.macroblocks[j]).as_bytes())
       .expect("MACROBLOCK FILE SAVING");
   }
 
-  frame.write_to_yuv_file(&format!("temp/frame/{i}"))?;
+  frame.write_to_yuv_file(&format!("{OUTDIR}/frame/{i}"))?;
 
   Ok(())
 }
 
 fn create_dpb_file(i: usize, dpb: &DecodedPictureBuffer) -> DecoderResult {
-  let name = format!("temp/slice/{i}");
+  let name = format!("{OUTDIR}/slice/{i}");
   let mut f = std::fs::OpenOptions::new().append(true).open(name).expect("DPB FILE CREATION");
   f.write_all(format!("\n- DPB -\n\n{}\n", dpb).as_bytes()).expect("DPB FILE SAVING");
   Ok(())

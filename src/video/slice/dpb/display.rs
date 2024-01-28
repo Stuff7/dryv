@@ -4,6 +4,7 @@ use super::*;
 
 impl Display for Picture {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.write_str(&format!("nal_idc: {}\n", self.nal_idc))?;
     f.write_str(&format!("PicSizeInMbs: {}\n", self.header.pic_size_in_mbs))?;
     f.write_str(&format!("PicWidthInSamplesL: {}\n", self.header.pic_width_in_samples_l))?;
     f.write_str(&format!("PicHeightInSamplesL: {}\n", self.header.pic_height_in_samples_l))?;

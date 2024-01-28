@@ -30,6 +30,7 @@ macro_rules! unwrap {
   };
 }
 
+pub const OUTDIR: &str = "tmp";
 static LOG_FILE_PTR: AtomicPtr<File> = AtomicPtr::new(ptr::null_mut());
 
 fn main() {
